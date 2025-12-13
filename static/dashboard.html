@@ -2,448 +2,56 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Babalara Özel Profesyonel Dashboard</title>
+<title>BIST Sinyal Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<!-- GOOGLE FONTS -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-
 <style>
-/* --- Temel Stil --- */
 body {
-    font-family: 'Inter', sans-serif;
-    background: #0d1117;
-    color: #c9d1d9;
-    margin: 0;
-    padding: 0;
-    transition: all 0.3s ease;
+    background:#0d1117;
+    color:#c9d1d9;
+    font-family:Arial, sans-serif;
+    margin:0;
 }
-
-body.light-mode {
-    background: #f4f4f4;
-    color: #111;
+h1 { text-align:center; margin:15px; color:#58a6ff; }
+.card {
+    background:#161b22;
+    border-left:5px solid #58a6ff;
+    padding:15px;
+    margin:10px;
+    border-radius:10px;
 }
-
-h1 {
-    text-align: center;
-    font-weight: 700;
-    margin-top: 20px;
-    color: #58a6ff;
-    transition: color 0.3s ease;
-}
-
-body.light-mode h1 { color: #007acc; }
-
-/* --- ÜST BAR --- */
-.top-bar {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    background: #161b22;
-    padding: 12px 20px;
-    border-bottom: 1px solid #30363d;
-    font-size: 14px;
-    color: #8b949e;
-    transition: background 0.3s ease, color 0.3s ease;
-}
-
-body.light-mode .top-bar {
-    background: #eaeaea;
-    color: #333;
-    border-bottom: 1px solid #ccc;
-}
-
-/* --- FİLTRELER --- */
-.filter-box {
-    background: #161b22;
-    padding: 15px;
-    margin: 15px;
-    border-radius: 12px;
-    border: 1px solid #30363d;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-    transition: background 0.3s ease, border-color 0.3s ease;
-}
-
-body.light-mode .filter-box {
-    background: #f4f4f4;
-    border: 1px solid #ccc;
-}
-
-select, input {
-    background: #0d1117;
-    color: #c9d1d9;
-    border: 1px solid #30363d;
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 14px;
-    outline: none;
-    transition: all 0.2s;
-}
-
-body.light-mode select, body.light-mode input {
-    background: #fff;
-    color: #111;
-    border: 1px solid #aaa;
-}
-
-select:focus, input:focus {
-    border-color: #58a6ff;
-    box-shadow: 0 0 5px #58a6ff55;
-}
-
-/* --- SİNYAL KATEGORİLERİ --- */
-.signal-section {
-    margin: 20px;
-}
-
-.signal-section h2 {
-    color: #58a6ff;
-    margin-bottom: 10px;
-    font-size: 18px;
-}
-
-body.light-mode .signal-section h2 { color: #007acc; }
-
-/* --- SİNYAL KARTLARI --- */
-.signal-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 15px;
-}
-
-.signal-card {
-    background: #161b22;
-    border-radius: 16px;
-    padding: 20px;
-    position: relative;
-    overflow: hidden;
-    border-left: 6px solid #58a6ff;
-    transition: transform 0.3s, box-shadow 0.3s, border-color 0.4s;
-}
-
-body.light-mode .signal-card { background: #fff; }
-
-.signal-card:hover {
-    transform: translateY(-5px) scale(1.02);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.5);
-}
-
-.signal-card.flash {
-    animation: flash 1.2s ease-out;
-}
-
-@keyframes flash {
-    0% { border-left-color: #2ea043; }
-    50% { border-left-color: #58a6ff; }
-    100% { border-left-color: #2ea043; }
-}
-
-.signal-card.new {
-    animation: pulse 1s ease;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.03); }
-    100% { transform: scale(1); }
-}
-
-.signal-card .symbol {
-    font-weight: 700;
-    font-size: 18px;
-    display: inline-block;
-}
-
-.signal-card .type {
-    font-size: 14px;
-    color: #8b949e;
-    margin-left: 5px;
-}
-
-body.light-mode .signal-card .type { color: #555; }
-
-.signal-card .price, 
-.signal-card .rsi, 
-.signal-card .trend {
-    font-weight: 600;
-}
-
-.signal-card.green { border-left-color: #2ea043; }
-.signal-card.red { border-left-color: #f85149; }
-.signal-card.yellow { border-left-color: #e3b341; }
-
-.trend-icon {
-    font-size: 16px;
-    margin-left: 5px;
-}
-
-/* --- Ek göstergeler --- */
-.indicators {
-    margin-top: 8px;
-    font-size: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.indicators span {
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 12px;
-}
-
-.indicators .up { background: #2ea043; color: #fff; }
-.indicators .down { background: #f85149; color: #fff; }
-.indicators .neutral { background: #e3b341; color: #000; }
-
-.chartCanvas {
-    width: 100%;
-    height: 50px;
-    margin-top: 10px;
-}
-
-@media (max-width: 600px) {
-    .filter-box { flex-direction: column; }
-    select, input { width: 100%; }
-}
-
-/* --- Tema Toggle --- */
-#themeToggle {
-    cursor: pointer;
-    background: #161b22;
-    color: #58a6ff;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 14px;
-    transition: all 0.3s ease;
-}
-#themeToggle:hover { background: #0d1117; }
-body.light-mode #themeToggle { background: #e0e0e0; color: #007acc; }
+.green { border-color:#2ea043; }
+.red { border-color:#f85149; }
+.yellow { border-color:#e3b341; }
+.small { font-size:12px; color:#8b949e; }
 </style>
-
 </head>
 <body>
 
-<h1>📈 Babalara Özel Dashboard</h1>
-
-<div class="top-bar">
-    <div>🔄 Son Tarama: <span id="scanTime">Yükleniyor...</span></div>
-    <div>📥 Son Veri: <span id="fetchTime">Yükleniyor...</span></div>
-    <button id="themeToggle">🌞 / 🌙</button>
-</div>
-
-<div class="filter-box">
-    <select id="symbolFilter">
-        <option value="">Hisse Seç</option>
-    </select>
-
-    <select id="signalFilter">
-        <option value="">Sinyal Türü</option>
-        <option value="green">Yeşil Sinyal</option>
-        <option value="red">Kırmızı Sinyal</option>
-        <option value="yellow">Uyarı</option>
-    </select>
-
-    <input type="number" id="rsiMin" placeholder="RSI min">
-    <input type="number" id="rsiMax" placeholder="RSI max">
-
-    <select id="sortFilter">
-        <option value="">Sırala</option>
-        <option value="rsi-desc">RSI ↓</option>
-        <option value="rsi-asc">RSI ↑</option>
-        <option value="price-desc">Fiyat ↓</option>
-        <option value="price-asc">Fiyat ↑</option>
-    </select>
-</div>
-
-<div id="greenSignals" class="signal-section">
-    <h2>✅ Yeşil Sinyaller</h2>
-    <div class="signal-container" id="greenContainer">
-        <p style="text-align:center;color:#777;">Yükleniyor...</p>
-    </div>
-</div>
-
-<div id="redSignals" class="signal-section">
-    <h2>❌ Kırmızı Sinyaller</h2>
-    <div class="signal-container" id="redContainer">
-        <p style="text-align:center;color:#777;">Yükleniyor...</p>
-    </div>
-</div>
-
-<div id="yellowSignals" class="signal-section">
-    <h2>⚠️ Uyarılar</h2>
-    <div class="signal-container" id="yellowContainer">
-        <p style="text-align:center;color:#777;">Yükleniyor...</p>
-    </div>
-</div>
+<h1>📈 BIST Sinyal Dashboard</h1>
+<div id="signals"></div>
 
 <script>
-/* --- Tema Toggle --- */
-document.getElementById('themeToggle').onclick = () => {
-    document.body.classList.toggle('light-mode');
-};
+async function load() {
+    const r = await fetch("/latest-data");
+    const j = await r.json();
+    const box = document.getElementById("signals");
+    box.innerHTML = "";
 
-/* --- Veri Yükleme --- */
-async function loadSignals() {
-    const res = await fetch("/latest-data");
-    if (!res.ok) return;
-    const data = await res.json();
-
-    const signals = data.signals || [];
-    const scan_time = data.last_scan || "—";
-    const fetch_time = data.last_fetch || "—";
-
-    document.getElementById("scanTime").innerText = scan_time;
-    document.getElementById("fetchTime").innerText = fetch_time;
-
-    const symbolSelect = document.getElementById("symbolFilter");
-    const uniqueSymbols = [...new Set(signals.map(s => s.symbol))];
-    symbolSelect.innerHTML = `<option value="">Hisse Seç</option>`;
-    uniqueSymbols.forEach(sym => {
-        symbolSelect.innerHTML += `<option value="${sym}">${sym}</option>`;
-    });
-
-    renderSignalsByCategory(signals);
-}
-
-/* --- Kategoriye göre render --- */
-function renderSignalsByCategory(signals) {
-    const containers = {
-        green: document.getElementById("greenContainer"),
-        red: document.getElementById("redContainer"),
-        yellow: document.getElementById("yellowContainer")
-    };
-
-    const sFilter = document.getElementById("symbolFilter").value;
-    const sigFilter = document.getElementById("signalFilter").value;
-    const rsiMin = parseFloat(document.getElementById("rsiMin").value);
-    const rsiMax = parseFloat(document.getElementById("rsiMax").value);
-    const sortType = document.getElementById("sortFilter").value;
-
-    Object.keys(containers).forEach(key => containers[key].innerHTML = "");
-
-    let filtered = signals.filter(sig => {
-        if (sFilter && sig.symbol !== sFilter) return false;
-        if (sigFilter && sig.color !== sigFilter) return false;
-        if (!isNaN(rsiMin) && sig.rsi < rsiMin) return false;
-        if (!isNaN(rsiMax) && sig.rsi > rsiMax) return false;
-        return true;
-    });
-
-    if (sortType) {
-        if (sortType === "rsi-desc") filtered.sort((a,b)=>b.rsi-a.rsi);
-        if (sortType === "rsi-asc") filtered.sort((a,b)=>a.rsi-b.rsi);
-        if (sortType === "price-desc") filtered.sort((a,b)=>b.price-a.price);
-        if (sortType === "price-asc") filtered.sort((a,b)=>a.price-b.price);
-    }
-
-    ["green","red","yellow"].forEach(color => {
-        const container = containers[color];
-        const colorSignals = filtered.filter(sig => sig.color === color);
-        if (colorSignals.length === 0) {
-            container.innerHTML = `<p style='text-align:center;color:#777;'>Henüz sinyal yok...</p>`;
-            return;
-        }
-
-        colorSignals.forEach(sig => {
-            const div = document.createElement("div");
-            div.className = `signal-card ${sig.color} flash`;
-
-            let trendIcon = "";
-            if (sig.trend.toLowerCase().includes("up") || sig.trend.toLowerCase().includes("yukarı")) trendIcon = "⬆️";
-            else if (sig.trend.toLowerCase().includes("down") || sig.trend.toLowerCase().includes("aşağı")) trendIcon = "⬇️";
-
-            // MA Durumu göstergesi
-            let maHtml = '';
-            if(sig.ma) {
-                maHtml = '<div class="indicators">';
-                ["ma20","ma50","ma100","ma200"].forEach(maKey=>{
-                    if(sig.ma[maKey]!==undefined){
-                        let statusClass = sig.ma[maKey] ? 'up' : 'down';
-                        maHtml += `<span class="${statusClass}">${maKey.toUpperCase()}</span>`;
-                    }
-                });
-                maHtml += '</div>';
-            }
-
-            // Günlük değişim yüzdesi
-            let changeHtml = '';
-            if(sig.changePercent!==undefined){
-                let changeClass = sig.changePercent>=0?'up':'down';
-                changeHtml = `<span class="indicators"><span class="${changeClass}">Δ ${sig.changePercent.toFixed(2)}%</span></span>`;
-            }
-
-            div.innerHTML = `
-                <div class="symbol">${sig.symbol}<span class="type">${sig.type}</span></div>
-                <div>Fiyat: <span class="price">${sig.price}</span> | RSI: <span class="rsi">${sig.rsi.toFixed(2)}</span> | Trend: <span class="trend">${sig.trend} <span class="trend-icon">${trendIcon}</span></span></div>
-                ${sig.volume ? `<div>Hacim: ${sig.volume}</div>` : ''}
-                ${maHtml}
-                ${changeHtml}
-                <small>${sig.time}</small>
-                <canvas class="chartCanvas" id="chart_${sig.symbol}"></canvas>
+    (j.data || []).forEach(it => {
+        (it.signals || []).forEach(s => {
+            const d = document.createElement("div");
+            d.className = "card " + (s.color || "");
+            d.innerHTML = `
+                <b>${it.symbol}</b><br>
+                ${s.message.replaceAll("\n","<br>")}
+                <div class="small">${s.time}</div>
             `;
-
-            container.appendChild(div);
-            drawMiniChart(`chart_${sig.symbol}`, sig.spark || [], sig.color);
-
-            if (sig.is_new && Notification.permission === 'granted') {
-                new Notification(`${sig.symbol} - Yeni Sinyal!`);
-            }
+            box.appendChild(d);
         });
     });
 }
-
-/* --- Mini Chart --- */
-function drawMiniChart(canvasId, data, color) {
-    if (!data || data.length === 0) return;
-
-    const canvas = document.getElementById(canvasId);
-    const ctx = canvas.getContext("2d");
-
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    const max = Math.max(...data);
-    const min = Math.min(...data);
-
-    const gradient = ctx.createLinearGradient(0, 0, w, 0);
-    gradient.addColorStop(0, color === "green" ? "#2ea043" : color === "red" ? "#f85149" : "#e3b341");
-    gradient.addColorStop(1, "#58a6ff");
-
-    ctx.beginPath();
-    data.forEach((val, i) => {
-        let x = (i / (data.length - 1)) * w;
-        let y = h - ((val - min) / (max - min)) * h;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-    });
-
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.lineTo(w, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
-    ctx.fillStyle = gradient + '55';
-    ctx.fill();
-}
-
-/* --- Bildirim izni --- */
-if (Notification.permission !== 'granted') {
-    Notification.requestPermission();
-}
-
-setInterval(loadSignals, 4000);
-loadSignals();
+setInterval(load, 5000);
+load();
 </script>
 
 </body>
