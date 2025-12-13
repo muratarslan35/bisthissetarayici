@@ -36,22 +36,7 @@ def telegram_send(text):
         except Exception as e:
             app.logger.error(f"[TELEGRAM ERROR] {e}")
 
-# ================== 09:00 RESET ==================
-def check_daily_reset():
-    """
-    Her gün SAAT 09:00 (TR) olduğunda
-    gönderilmiş sinyalleri sıfırlar
-    """
-    global sent_signals, last_reset_date
 
-    now_tr = to_tr_timezone(datetime.now(timezone.utc))
-    today = now_tr.date()
-
-    if now_tr.hour >= 9:
-        if last_reset_date != today:
-            sent_signals = {}
-            last_reset_date = today
-            app.logger.info("🔄 09:00 reset yapıldı – sinyaller sıfırlandı")
 
 # ================== MA FORMAT ==================
 def fmt_ma(ma):
