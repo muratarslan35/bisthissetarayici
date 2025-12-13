@@ -18,9 +18,21 @@ data_lock = threading.Lock()
 TELEGRAM_TOKEN = "8588829956:AAEK2-wa75CoHQPjPFEAUU_LElRBduC-_TU"
 CHAT_IDS = [661794787]
 
-# Aynı gün içinde tekrar gitmemesi için
-sent_signals = {}   # { symbol: set(signal_keys) }
+sent_signals = {}
 last_reset_date = None
+
+# ================== JSON SAFE ==================
+def json_safe(obj):
+    """
+    numpy / bool / non-serializable tipleri JSON uyumlu hale getirir
+    """
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [json_safe(v) for v in obj]
+    if hasattr(obj, "item"):  # numpy scalar
+        return obj.item()
+    return obj
 
 # ================== TELEGRAM ==================
 def telegram_send(text):
@@ -35,8 +47,6 @@ def telegram_send(text):
             requests.post(url, json=payload, timeout=8)
         except Exception as e:
             app.logger.error(f"[TELEGRAM ERROR] {e}")
-
-
 
 # ================== MA FORMAT ==================
 def fmt_ma(ma):
@@ -55,8 +65,6 @@ def fmt_ma(ma):
 # ================== SIGNAL PROCESS ==================
 def process_and_notify(data):
     global sent_signals
-
-    check_daily_reset()
 
     for item in data:
         symbol = item.get("symbol")
@@ -77,7 +85,6 @@ def process_and_notify(data):
 
         messages = []
 
-        # AL / SAT
         if item.get("last_signal") == "AL" and "AL" not in sent_signals[symbol]:
             messages.append("🟢 AL Sinyali")
             sent_signals[symbol].add("AL")
@@ -86,21 +93,13 @@ def process_and_notify(data):
             messages.append("🔴 SAT Sinyali")
             sent_signals[symbol].add("SAT")
 
-        # Kombine
         if item.get("composite_signal") and "COMBO" not in sent_signals[symbol]:
             messages.append("🚀🚀🚀 Kombine Sinyal")
             sent_signals[symbol].add("COMBO")
 
-        # 3’lü tepe
         if item.get("three_peak_break") and "TT" not in sent_signals[symbol]:
             messages.append("🔥🔥 3'lü tepe kırılımı")
             sent_signals[symbol].add("TT")
-
-        # 11 / 15 mumlar (sadece kombineye etki ediyor, spam yok)
-        if item.get("green_mum_11"):
-            sent_signals[symbol].add("G11")
-        if item.get("green_mum_15"):
-            sent_signals[symbol].add("G15")
 
         if not messages:
             continue
@@ -154,4 +153,4 @@ def dashboard():
 @app.route("/api")
 def api():
     with data_lock:
-        return jsonify(LATEST_DATA)
+        return jsonify(json_safe(LATEST_DATA))
