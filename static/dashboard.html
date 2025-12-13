@@ -1,57 +1,128 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>BIST Sinyal Dashboard</title>
+<title>BIST Profesyonel Tarayıcı</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
 <style>
 body {
-    background:#0d1117;
-    color:#c9d1d9;
-    font-family:Arial, sans-serif;
-    margin:0;
+    font-family: Inter, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    margin: 0;
 }
-h1 { text-align:center; margin:15px; color:#58a6ff; }
+h1 {
+    text-align: center;
+    color: #58a6ff;
+    margin: 20px;
+}
+.top {
+    text-align:center;
+    font-size:13px;
+    color:#8b949e;
+}
+.container {
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px,1fr));
+    gap:15px;
+    padding:20px;
+}
 .card {
     background:#161b22;
-    border-left:5px solid #58a6ff;
+    border-radius:14px;
     padding:15px;
-    margin:10px;
-    border-radius:10px;
+    border-left:5px solid #58a6ff;
 }
-.green { border-color:#2ea043; }
-.red { border-color:#f85149; }
-.yellow { border-color:#e3b341; }
-.small { font-size:12px; color:#8b949e; }
+.card.green { border-color:#2ea043 }
+.card.red { border-color:#f85149 }
+.card.yellow { border-color:#e3b341 }
+
+.symbol {
+    font-weight:700;
+    font-size:18px;
+}
+.small {
+    font-size:12px;
+    color:#8b949e;
+}
+.ma span {
+    display:inline-block;
+    margin-right:6px;
+    font-size:12px;
+}
+.up { color:#2ea043 }
+.down { color:#f85149 }
 </style>
 </head>
+
 <body>
 
-<h1>📈 BIST Sinyal Dashboard</h1>
-<div id="signals"></div>
+<h1>📈 BIST Canlı Tarama</h1>
+<div class="top">
+    Son Tarama: <span id="scan">—</span>
+</div>
+
+<div class="container" id="cards">
+    <p style="text-align:center;color:#777">Yükleniyor...</p>
+</div>
 
 <script>
-async function load() {
-    const r = await fetch("/latest-data");
-    const j = await r.json();
-    const box = document.getElementById("signals");
+async function loadData(){
+    const res = await fetch("/api");
+    const json = await res.json();
+
+    const data = json.data || [];
+    document.getElementById("scan").innerText =
+        new Date(json.timestamp*1000).toLocaleString("tr-TR");
+
+    const box = document.getElementById("cards");
     box.innerHTML = "";
 
-    (j.data || []).forEach(it => {
-        (it.signals || []).forEach(s => {
-            const d = document.createElement("div");
-            d.className = "card " + (s.color || "");
-            d.innerHTML = `
-                <b>${it.symbol}</b><br>
-                ${s.message.replaceAll("\n","<br>")}
-                <div class="small">${s.time}</div>
-            `;
-            box.appendChild(d);
-        });
+    if(data.length === 0){
+        box.innerHTML = "<p>Veri yok</p>";
+        return;
+    }
+
+    data.forEach(item=>{
+        const div = document.createElement("div");
+
+        let color = "yellow";
+        if(item.last_signal === "AL") color="green";
+        if(item.last_signal === "SAT") color="red";
+
+        div.className = "card "+color;
+
+        div.innerHTML = `
+            <div class="symbol">${item.symbol}</div>
+            <div>Fiyat: <b>${item.current_price}</b> TL</div>
+            <div>RSI: ${item.RSI?.toFixed(2)}</div>
+            <div>Trend: ${item.trend}</div>
+            <div>Günlük Değişim: ${item.daily_change}</div>
+            <div>Hacim: ${item.volume ?? "-"}</div>
+
+            <div class="ma">
+                <span class="${item.ma_breaks?.MA20 === 'above'?'up':'down'}">MA20</span>
+                <span class="${item.ma_breaks?.MA50 === 'above'?'up':'down'}">MA50</span>
+                <span class="${item.ma_breaks?.MA100 === 'above'?'up':'down'}">MA100</span>
+                <span class="${item.ma_breaks?.MA200 === 'above'?'up':'down'}">MA200</span>
+            </div>
+
+            <div class="small">
+                ${item.green_mum_11 ? "✅ 11:00 Yeşil Mum<br>" : ""}
+                ${item.green_mum_15 ? "✅ 15:00 Yeşil Mum<br>" : ""}
+                ${item.three_peak_break ? "🔥 3'lü tepe" : ""}
+            </div>
+        `;
+
+        box.appendChild(div);
     });
 }
-setInterval(load, 5000);
-load();
+
+setInterval(loadData, 5000);
+loadData();
 </script>
 
 </body>
