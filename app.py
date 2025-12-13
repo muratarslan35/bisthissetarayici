@@ -178,7 +178,7 @@ def process_and_notify(data_list):
         # The fetch algorithm must set item['composite_signal'] = "A" when conditions met; if present, notify once.
         comp = item.get("composite_signal")
         if comp and f"COMPOSITE_{comp}" not in sent_signals[symbol]:
-            messages.append(f"🔥 {symbol} KOMPOZİT SİNYAL {comp} tetiklendi.")
+            messages.append(f"🔥 {symbol} Kombine Sinyal {comp} algılandı.")
             sent_signals[symbol].add(f"COMPOSITE_{comp}")
 
         # If there are messages to send -> build final text including MA summary, price, trend, RSI, time
@@ -197,7 +197,7 @@ def update_loop():
     app.logger.info("[APP] Background update_loop starting...")
     # send a startup notification once
     try:
-        telegram_send("🤖 Sistem başlatıldı ve tarama başlıyor (Render).")
+        telegram_send("🤖 Sistem başlatıldı ve hisse tarama başlıyor.")
     except Exception:
         app.logger.exception("[APP] Startup telegram send failed.")
 
