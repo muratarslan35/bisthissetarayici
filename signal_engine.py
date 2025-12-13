@@ -115,7 +115,7 @@ def process_signals(item):
 
         # combined A-type (legacy)
         if item.get("composite_signal"):
-            lines.append("🚀 Kombine Sinyal (A-type)")
+            lines.append("🚀 Kombine Sinyal")
 
         # SUPER COMBINED (2. seçenek) => strong signal
         if item.get("super_combined_ok"):
