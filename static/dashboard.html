@@ -2,98 +2,116 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>BIST Profesyonel Sinyal Paneli</title>
+<title>BIST Profesyonel Sinyal Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 :root {
-  --bg: #0e1117;
-  --card: #161b22;
-  --text: #e6edf3;
-  --green: #00c853;
-  --red: #ff5252;
-  --yellow: #ffb300;
-  --border: #30363d;
+    --bg: #0f172a;
+    --card: #111827;
+    --text: #e5e7eb;
+    --accent: #22c55e;
+    --danger: #ef4444;
+    --warning: #facc15;
+    --border: #1f2937;
 }
 
 .light {
-  --bg: #f5f7fa;
-  --card: #ffffff;
-  --text: #111;
-  --border: #ddd;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --accent: #16a34a;
+    --danger: #dc2626;
+    --warning: #ca8a04;
+    --border: #e5e7eb;
 }
 
 body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+    margin: 0;
+    font-family: Inter, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
 }
 
 header {
-  padding: 15px;
-  background: var(--card);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
 }
 
 h1 {
-  font-size: 18px;
+    font-size: 20px;
+    margin: 0;
 }
 
 button {
-  padding: 6px 10px;
-  cursor: pointer;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
 }
 
 .filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
 }
 
 .filters label {
-  font-size: 13px;
+    font-size: 14px;
+    cursor: pointer;
 }
 
-.container {
-  padding: 15px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 15px;
+table {
+    width: 100%;
+    border-collapse: collapse;
 }
 
-.card {
-  background: var(--card);
-  padding: 15px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
+thead {
+    background: var(--card);
 }
 
-.symbol {
-  font-size: 18px;
-  font-weight: bold;
+th, td {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    text-align: center;
 }
 
-.tag {
-  display: inline-block;
-  padding: 3px 8px;
-  margin: 3px 3px 0 0;
-  border-radius: 6px;
-  font-size: 12px;
+th {
+    position: sticky;
+    top: 0;
 }
 
-.green { background: var(--green); color: #fff; }
-.red { background: var(--red); color: #fff; }
-.yellow { background: var(--yellow); color: #000; }
+.badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
 
-small {
-  opacity: 0.8;
+.al { background: var(--accent); color: #000; }
+.sat { background: var(--danger); color: #fff; }
+.combo { background: #6366f1; color: #fff; }
+.super { background: #ec4899; color: #fff; }
+.warn { background: var(--warning); color: #000; }
+
+.star {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.star.active {
+    color: gold;
+}
+
+@media(max-width: 768px) {
+    th, td { font-size: 12px; }
 }
 </style>
 </head>
@@ -101,84 +119,120 @@ small {
 <body>
 
 <header>
-  <h1>📊 BIST Canlı Bist Tarama Paneli</h1>
-  <button onclick="toggleTheme()">🌗 Tema</button>
+    <h1>📊 BIST Profesyonel Sinyal Dashboard</h1>
+    <button onclick="toggleTheme()">🌗 Tema</button>
 </header>
 
 <div class="filters">
-  <label><input type="checkbox" id="f_al"> AL</label>
-  <label><input type="checkbox" id="f_sat"> SAT</label>
-  <label><input type="checkbox" id="f_combo"> Kombine</label>
-  <label><input type="checkbox" id="f_super"> Süper Kombine</label>
-  <label><input type="checkbox" id="f_three"> 3'lü Tepe</label>
-  <label><input type="checkbox" id="f_support"> Destek Kırılımı</label>
-  <label><input type="checkbox" id="f_resistance"> Direnç Kırılımı</label>
+    <label><input type="checkbox" id="f_al" checked> AL</label>
+    <label><input type="checkbox" id="f_sat" checked> SAT</label>
+    <label><input type="checkbox" id="f_combo" checked> Kombine</label>
+    <label><input type="checkbox" id="f_super" checked> Süper Kombine</label>
+    <label><input type="checkbox" id="f_three"> 3’lü Tepe</label>
+    <label><input type="checkbox" id="f_support"> Destek</label>
+    <label><input type="checkbox" id="f_resistance"> Direnç</label>
+    <label><input type="checkbox" id="f_fav"> ⭐ Favoriler</label>
 </div>
 
-<div class="container" id="list"></div>
+<table>
+<thead>
+<tr>
+    <th>⭐</th>
+    <th>Hisse</th>
+    <th>Sinyal</th>
+    <th>Fiyat</th>
+    <th>Trend</th>
+    <th>RSI</th>
+    <th>Günlük %</th>
+    <th>Hacim</th>
+    <th>Zaman</th>
+</tr>
+</thead>
+<tbody id="rows"></tbody>
+</table>
 
 <script>
-let dark = true;
+let theme = localStorage.getItem("theme") || "dark";
+if (theme === "light") document.body.classList.add("light");
+
+let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 
 function toggleTheme() {
-  dark = !dark;
-  document.body.className = dark ? "" : "light";
+    document.body.classList.toggle("light");
+    localStorage.setItem("theme",
+        document.body.classList.contains("light") ? "light" : "dark"
+    );
 }
 
-async function loadData() {
-  try {
-    const res = await fetch("/api");
-    const json = await res.json();
-    const data = json.data || [];
-    render(data);
-  } catch (e) {
-    console.error(e);
-  }
+function toggleFav(sym) {
+    if (favorites.includes(sym)) {
+        favorites = favorites.filter(s => s !== sym);
+    } else {
+        favorites.push(sym);
+    }
+    localStorage.setItem("favorites", JSON.stringify(favorites));
+    render(window.lastData || []);
+}
+
+function badge(text, cls) {
+    return `<span class="badge ${cls}">${text}</span>`;
 }
 
 function render(data) {
-  const list = document.getElementById("list");
-  list.innerHTML = "";
+    window.lastData = data;
+    const rows = document.getElementById("rows");
+    rows.innerHTML = "";
 
-  data.forEach(item => {
+    data.forEach(i => {
+        if (!i.symbol) return;
 
-    if (document.getElementById("f_al").checked && item.last_signal !== "AL") return;
-    if (document.getElementById("f_sat").checked && item.last_signal !== "SAT") return;
-    if (document.getElementById("f_combo").checked && !item.composite_signal) return;
-    if (document.getElementById("f_super").checked && !item.super_combo) return;
-    if (document.getElementById("f_three").checked && !item.three_peak_break) return;
-    if (document.getElementById("f_support").checked && !item.support_break) return;
-    if (document.getElementById("f_resistance").checked && !item.resistance_break) return;
+        if (document.getElementById("f_fav").checked && !favorites.includes(i.symbol)) return;
 
-    const c = document.createElement("div");
-    c.className = "card";
+        let signals = [];
+        if (i.last_signal === "AL" && document.getElementById("f_al").checked)
+            signals.push(badge("AL", "al"));
 
-    let tags = "";
+        if (i.last_signal === "SAT" && document.getElementById("f_sat").checked)
+            signals.push(badge("SAT", "sat"));
 
-    if (item.last_signal === "AL") tags += `<span class="tag green">AL</span>`;
-    if (item.last_signal === "SAT") tags += `<span class="tag red">SAT</span>`;
-    if (item.composite_signal) tags += `<span class="tag yellow">KOMBİNE</span>`;
-    if (item.super_combo) tags += `<span class="tag yellow">SÜPER</span>`;
-    if (item.three_peak_break) tags += `<span class="tag red">3'lü Tepe</span>`;
-    if (item.support_break) tags += `<span class="tag green">Destek</span>`;
-    if (item.resistance_break) tags += `<span class="tag red">Direnç</span>`;
+        if (i.composite_signal && document.getElementById("f_combo").checked)
+            signals.push(badge("KOMBİNE", "combo"));
 
-    c.innerHTML = `
-      <div class="symbol">${item.symbol}</div>
-      ${tags}
-      <p>💰 Fiyat: ${item.current_price}</p>
-      <p>📈 Trend: ${item.trend}</p>
-      <p>📊 RSI: ${item.RSI}</p>
-      <p>📦 Hacim: ${item.volume}</p>
-      <small>🕒 ${item.signal_time || ""}</small>
-    `;
+        if (i.super_combo && document.getElementById("f_super").checked)
+            signals.push(badge("SÜPER", "super"));
 
-    list.appendChild(c);
-  });
+        if (i.three_peak_break && document.getElementById("f_three").checked)
+            signals.push(badge("3’LÜ TEPE", "warn"));
+
+        if (!signals.length) return;
+
+        const fav = favorites.includes(i.symbol) ? "active" : "";
+
+        rows.innerHTML += `
+        <tr>
+            <td><span class="star ${fav}" onclick="toggleFav('${i.symbol}')">★</span></td>
+            <td><b>${i.symbol}</b></td>
+            <td>${signals.join(" ")}</td>
+            <td>${i.current_price}</td>
+            <td>${i.trend}</td>
+            <td>${i.RSI}</td>
+            <td>${i.daily_change}</td>
+            <td>${i.volume}</td>
+            <td>${i.signal_time || "-"}</td>
+        </tr>`;
+    });
 }
 
-setInterval(loadData, 30000);
-loadData();
+async function fetchData() {
+    try {
+        const r = await fetch("/api");
+        const j = await r.json();
+        if (j.data) render(j.data);
+    } catch {}
+}
+
+setInterval(fetchData, 15000);
+fetchData();
 </script>
 
 </body>
