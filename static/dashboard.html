@@ -1,239 +1,228 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>BIST Profesyonel Sinyal Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
-:root {
-    --bg: #0f172a;
-    --card: #111827;
-    --text: #e5e7eb;
-    --accent: #22c55e;
-    --danger: #ef4444;
-    --warning: #facc15;
-    --border: #1f2937;
+:root{
+  --bg:#0f172a;
+  --card:#111827;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+  --green:#22c55e;
+  --red:#ef4444;
+  --yellow:#facc15;
+  --blue:#38bdf8;
 }
 
-.light {
-    --bg: #f8fafc;
-    --card: #ffffff;
-    --text: #0f172a;
-    --accent: #16a34a;
-    --danger: #dc2626;
-    --warning: #ca8a04;
-    --border: #e5e7eb;
+.light{
+  --bg:#f3f4f6;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
 }
 
-body {
-    margin: 0;
-    font-family: Inter, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+body{
+  margin:0;
+  font-family:Inter,Arial;
+  background:var(--bg);
+  color:var(--text);
 }
 
-header {
-    padding: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--border);
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:15px 20px;
+  border-bottom:1px solid #1f2933;
 }
 
-h1 {
-    font-size: 20px;
-    margin: 0;
+button{
+  background:#1f2937;
+  border:none;
+  color:#fff;
+  padding:8px 14px;
+  border-radius:6px;
+  cursor:pointer;
+}
+button:hover{opacity:.9}
+
+.container{
+  display:flex;
 }
 
-button {
-    background: var(--card);
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
+.sidebar{
+  width:260px;
+  padding:15px;
+  border-right:1px solid #1f2933;
 }
 
-.filters {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    flex-wrap: wrap;
-    border-bottom: 1px solid var(--border);
+.sidebar h3{
+  margin-top:0;
 }
 
-.filters label {
-    font-size: 14px;
-    cursor: pointer;
+.sidebar label{
+  display:block;
+  margin:8px 0;
+  font-size:14px;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
+.main{
+  flex:1;
+  padding:20px;
 }
 
-thead {
-    background: var(--card);
+.cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  gap:15px;
 }
 
-th, td {
-    padding: 10px;
-    border-bottom: 1px solid var(--border);
-    font-size: 14px;
-    text-align: center;
+.card{
+  background:var(--card);
+  border-radius:12px;
+  padding:15px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.05);
 }
 
-th {
-    position: sticky;
-    top: 0;
+.card h4{
+  margin:0 0 8px 0;
 }
 
-.badge {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
+.badges{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-bottom:10px;
 }
 
-.al { background: var(--accent); color: #000; }
-.sat { background: var(--danger); color: #fff; }
-.combo { background: #6366f1; color: #fff; }
-.super { background: #ec4899; color: #fff; }
-.warn { background: var(--warning); color: #000; }
-
-.star {
-    cursor: pointer;
-    font-size: 18px;
+.badge{
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:12px;
 }
 
-.star.active {
-    color: gold;
+.green{background:var(--green);color:#000}
+.red{background:var(--red)}
+.yellow{background:var(--yellow);color:#000}
+.blue{background:var(--blue);color:#000}
+
+.kv{
+  font-size:13px;
+  margin:4px 0;
 }
 
-@media(max-width: 768px) {
-    th, td { font-size: 12px; }
-}
+.muted{color:var(--muted)}
 </style>
 </head>
 
 <body>
-
 <header>
-    <h1>📊 BIST Profesyonel Sinyal Dashboard</h1>
-    <button onclick="toggleTheme()">🌗 Tema</button>
+  <h2>📊 BIST Profesyonel Sinyal Dashboard</h2>
+  <button onclick="toggleTheme()">🌗 Tema</button>
 </header>
 
-<div class="filters">
-    <label><input type="checkbox" id="f_al" checked> AL</label>
-    <label><input type="checkbox" id="f_sat" checked> SAT</label>
-    <label><input type="checkbox" id="f_combo" checked> Kombine</label>
-    <label><input type="checkbox" id="f_super" checked> Süper Kombine</label>
-    <label><input type="checkbox" id="f_three"> 3’lü Tepe</label>
-    <label><input type="checkbox" id="f_support"> Destek</label>
-    <label><input type="checkbox" id="f_resistance"> Direnç</label>
-    <label><input type="checkbox" id="f_fav"> ⭐ Favoriler</label>
+<div class="container">
+  <!-- FILTERS -->
+  <div class="sidebar">
+    <h3>Filtreler</h3>
+
+    <label><input type="checkbox" id="f_combo"> Kombine</label>
+    <label><input type="checkbox" id="f_super"> Süper Kombine</label>
+    <label><input type="checkbox" id="f_three"> 3'lü Tepe</label>
+    <label><input type="checkbox" id="f_support"> Destek Kırılımı</label>
+    <label><input type="checkbox" id="f_resistance"> Direnç Kırılımı</label>
+    <label><input type="checkbox" id="f_al"> AL</label>
+    <label><input type="checkbox" id="f_sat"> SAT</label>
+
+    <br>
+    <button onclick="applyFilters()">UYGULA</button>
+  </div>
+
+  <!-- CARDS -->
+  <div class="main">
+    <div class="cards" id="cards"></div>
+  </div>
 </div>
 
-<table>
-<thead>
-<tr>
-    <th>⭐</th>
-    <th>Hisse</th>
-    <th>Sinyal</th>
-    <th>Fiyat</th>
-    <th>Trend</th>
-    <th>RSI</th>
-    <th>Günlük %</th>
-    <th>Hacim</th>
-    <th>Zaman</th>
-</tr>
-</thead>
-<tbody id="rows"></tbody>
-</table>
-
 <script>
-let theme = localStorage.getItem("theme") || "dark";
-if (theme === "light") document.body.classList.add("light");
+let allData=[];
+let filters={};
 
-let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
-
-function toggleTheme() {
-    document.body.classList.toggle("light");
-    localStorage.setItem("theme",
-        document.body.classList.contains("light") ? "light" : "dark"
-    );
+function toggleTheme(){
+  document.body.classList.toggle("light");
+  localStorage.setItem("theme",document.body.className);
 }
 
-function toggleFav(sym) {
-    if (favorites.includes(sym)) {
-        favorites = favorites.filter(s => s !== sym);
-    } else {
-        favorites.push(sym);
-    }
-    localStorage.setItem("favorites", JSON.stringify(favorites));
-    render(window.lastData || []);
+if(localStorage.getItem("theme")){
+  document.body.className=localStorage.getItem("theme");
 }
 
-function badge(text, cls) {
-    return `<span class="badge ${cls}">${text}</span>`;
+async function fetchData(){
+  const r=await fetch("/api");
+  const j=await r.json();
+  allData=j.data||[];
+  render();
 }
 
-function render(data) {
-    window.lastData = data;
-    const rows = document.getElementById("rows");
-    rows.innerHTML = "";
-
-    data.forEach(i => {
-        if (!i.symbol) return;
-
-        if (document.getElementById("f_fav").checked && !favorites.includes(i.symbol)) return;
-
-        let signals = [];
-        if (i.last_signal === "AL" && document.getElementById("f_al").checked)
-            signals.push(badge("AL", "al"));
-
-        if (i.last_signal === "SAT" && document.getElementById("f_sat").checked)
-            signals.push(badge("SAT", "sat"));
-
-        if (i.composite_signal && document.getElementById("f_combo").checked)
-            signals.push(badge("KOMBİNE", "combo"));
-
-        if (i.super_combo && document.getElementById("f_super").checked)
-            signals.push(badge("SÜPER", "super"));
-
-        if (i.three_peak_break && document.getElementById("f_three").checked)
-            signals.push(badge("3’LÜ TEPE", "warn"));
-
-        if (!signals.length) return;
-
-        const fav = favorites.includes(i.symbol) ? "active" : "";
-
-        rows.innerHTML += `
-        <tr>
-            <td><span class="star ${fav}" onclick="toggleFav('${i.symbol}')">★</span></td>
-            <td><b>${i.symbol}</b></td>
-            <td>${signals.join(" ")}</td>
-            <td>${i.current_price}</td>
-            <td>${i.trend}</td>
-            <td>${i.RSI}</td>
-            <td>${i.daily_change}</td>
-            <td>${i.volume}</td>
-            <td>${i.signal_time || "-"}</td>
-        </tr>`;
-    });
+function applyFilters(){
+  filters={
+    combo:f_combo.checked,
+    super:f_super.checked,
+    three:f_three.checked,
+    support:f_support.checked,
+    resistance:f_resistance.checked,
+    al:f_al.checked,
+    sat:f_sat.checked
+  };
+  render();
 }
 
-async function fetchData() {
-    try {
-        const r = await fetch("/api");
-        const j = await r.json();
-        if (j.data) render(j.data);
-    } catch {}
+function pass(item){
+  if(filters.combo && !item.composite_signal) return false;
+  if(filters.super && !item.super_combo) return false;
+  if(filters.three && !item.three_peak_break) return false;
+  if(filters.support && !item.support_break) return false;
+  if(filters.resistance && !item.resistance_break) return false;
+  if(filters.al && item.last_signal!=="AL") return false;
+  if(filters.sat && item.last_signal!=="SAT") return false;
+  return true;
 }
 
-setInterval(fetchData, 15000);
+function render(){
+  const c=document.getElementById("cards");
+  c.innerHTML="";
+  allData.filter(pass).forEach(i=>{
+    const div=document.createElement("div");
+    div.className="card";
+    div.innerHTML=`
+      <h4>${i.symbol}</h4>
+
+      <div class="badges">
+        ${i.last_signal?`<span class="badge ${i.last_signal==="AL"?"green":"red"}">${i.last_signal}</span>`:""}
+        ${i.composite_signal?`<span class="badge blue">Kombine</span>`:""}
+        ${i.super_combo?`<span class="badge yellow">SKOR ${i.super_score}</span>`:""}
+      </div>
+
+      <div class="kv">Fiyat: <b>${i.current_price}</b></div>
+      <div class="kv">RSI: ${i.RSI}</div>
+      <div class="kv">Trend: ${i.trend}</div>
+      <div class="kv">Hacim: ${i.volume}</div>
+
+      <div class="kv muted">
+        Destek: ${i.support||"-"} |
+        Direnç: ${i.resistance||"-"} |
+        Hedef: ${i.target_price||"-"}
+      </div>
+    `;
+    c.appendChild(div);
+  });
+}
+
+setInterval(fetchData,30000);
 fetchData();
 </script>
-
 </body>
 </html>
