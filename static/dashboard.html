@@ -2,171 +2,183 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>BIST Canlı Sinyal Dashboard</title>
+<title>BIST Profesyonel Sinyal Paneli</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
+:root {
+  --bg: #0e1117;
+  --card: #161b22;
+  --text: #e6edf3;
+  --green: #00c853;
+  --red: #ff5252;
+  --yellow: #ffb300;
+  --border: #30363d;
+}
+
+.light {
+  --bg: #f5f7fa;
+  --card: #ffffff;
+  --text: #111;
+  --border: #ddd;
+}
+
 body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #0f172a;
-    color: #e5e7eb;
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
 }
+
 header {
-    padding: 14px;
-    background: #020617;
-    text-align: center;
-    font-size: 20px;
-    font-weight: bold;
-    color: #38bdf8;
+  padding: 15px;
+  background: var(--card);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
 }
+
+h1 {
+  font-size: 18px;
+}
+
+button {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.filters label {
+  font-size: 13px;
+}
+
 .container {
-    padding: 10px;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
 }
-.controls {
-    margin-bottom: 10px;
+
+.card {
+  background: var(--card);
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
 }
-select {
-    padding: 6px;
-    font-size: 14px;
+
+.symbol {
+  font-size: 18px;
+  font-weight: bold;
 }
-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
+
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  margin: 3px 3px 0 0;
+  border-radius: 6px;
+  font-size: 12px;
 }
-th, td {
-    padding: 6px;
-    border-bottom: 1px solid #1e293b;
-    text-align: center;
+
+.green { background: var(--green); color: #fff; }
+.red { background: var(--red); color: #fff; }
+.yellow { background: var(--yellow); color: #000; }
+
+small {
+  opacity: 0.8;
 }
-th {
-    background: #020617;
-    position: sticky;
-    top: 0;
-}
-tr.signal {
-    background: #052e16;
-}
-tr.sell {
-    background: #3f1d1d;
-}
-.badge {
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 11px;
-}
-.buy { background: #16a34a; }
-.sellb { background: #dc2626; }
-.combo { background: #9333ea; }
 </style>
 </head>
 
 <body>
 
-<header>📊 BIST Canlı Hisse Sinyal Dashboard</header>
+<header>
+  <h1>📊 BIST Canlı Bist Tarama Paneli</h1>
+  <button onclick="toggleTheme()">🌗 Tema</button>
+</header>
 
-<div class="container">
-
-<div class="controls">
-    Filtre:
-    <select id="filter">
-        <option value="ALL">Tümü</option>
-        <option value="AL">AL</option>
-        <option value="SAT">SAT</option>
-        <option value="COMBO">Kombine</option>
-    </select>
+<div class="filters">
+  <label><input type="checkbox" id="f_al"> AL</label>
+  <label><input type="checkbox" id="f_sat"> SAT</label>
+  <label><input type="checkbox" id="f_combo"> Kombine</label>
+  <label><input type="checkbox" id="f_super"> Süper Kombine</label>
+  <label><input type="checkbox" id="f_three"> 3'lü Tepe</label>
+  <label><input type="checkbox" id="f_support"> Destek Kırılımı</label>
+  <label><input type="checkbox" id="f_resistance"> Direnç Kırılımı</label>
 </div>
 
-<table>
-<thead>
-<tr>
-    <th>Hisse</th>
-    <th>Fiyat</th>
-    <th>Trend</th>
-    <th>RSI</th>
-    <th>Hacim</th>
-    <th>Değişim %</th>
-    <th>Sinyal</th>
-    <th>MA</th>
-</tr>
-</thead>
-<tbody id="table-body">
-<tr><td colspan="8">Yükleniyor...</td></tr>
-</tbody>
-</table>
-
-</div>
+<div class="container" id="list"></div>
 
 <script>
-async function loadData() {
-    try {
-        const res = await fetch("/api");
-        const json = await res.json();
-        const data = json.data || [];
+let dark = true;
 
-        const filter = document.getElementById("filter").value;
-        const body = document.getElementById("table-body");
-        body.innerHTML = "";
-
-        data.forEach(item => {
-            let signal = "";
-            let cls = "";
-
-            if (item.composite_signal) {
-                signal = "KOMBİNE";
-                cls = "signal";
-            } else if (item.last_signal === "AL") {
-                signal = "AL";
-                cls = "signal";
-            } else if (item.last_signal === "SAT") {
-                signal = "SAT";
-                cls = "sell";
-            }
-
-            if (filter !== "ALL") {
-                if (filter === "AL" && item.last_signal !== "AL") return;
-                if (filter === "SAT" && item.last_signal !== "SAT") return;
-                if (filter === "COMBO" && !item.composite_signal) return;
-            }
-
-            const tr = document.createElement("tr");
-            tr.className = cls;
-
-            tr.innerHTML = `
-                <td>${item.symbol}</td>
-                <td>${item.current_price ?? "-"}</td>
-                <td>${item.trend ?? "-"}</td>
-                <td>${item.RSI?.toFixed(2) ?? "-"}</td>
-                <td>${item.volume ?? "-"}</td>
-                <td>${item.daily_change ?? "-"}</td>
-                <td>
-                    ${signal === "AL" ? "<span class='badge buy'>AL</span>" : ""}
-                    ${signal === "SAT" ? "<span class='badge sellb'>SAT</span>" : ""}
-                    ${signal === "KOMBİNE" ? "<span class='badge combo'>KOMBİNE</span>" : ""}
-                </td>
-                <td>
-                    20:${item.ma_breaks?.MA20 ?? "-"} |
-                    50:${item.ma_breaks?.MA50 ?? "-"}
-                </td>
-            `;
-            body.appendChild(tr);
-        });
-
-        if (body.innerHTML === "") {
-            body.innerHTML = "<tr><td colspan='8'>Filtreye uygun sinyal yok</td></tr>";
-        }
-
-    } catch (e) {
-        document.getElementById("table-body").innerHTML =
-            "<tr><td colspan='8'>API bağlantı hatası</td></tr>";
-    }
+function toggleTheme() {
+  dark = !dark;
+  document.body.className = dark ? "" : "light";
 }
 
-document.getElementById("filter").addEventListener("change", loadData);
+async function loadData() {
+  try {
+    const res = await fetch("/api");
+    const json = await res.json();
+    const data = json.data || [];
+    render(data);
+  } catch (e) {
+    console.error(e);
+  }
+}
 
+function render(data) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  data.forEach(item => {
+
+    if (document.getElementById("f_al").checked && item.last_signal !== "AL") return;
+    if (document.getElementById("f_sat").checked && item.last_signal !== "SAT") return;
+    if (document.getElementById("f_combo").checked && !item.composite_signal) return;
+    if (document.getElementById("f_super").checked && !item.super_combo) return;
+    if (document.getElementById("f_three").checked && !item.three_peak_break) return;
+    if (document.getElementById("f_support").checked && !item.support_break) return;
+    if (document.getElementById("f_resistance").checked && !item.resistance_break) return;
+
+    const c = document.createElement("div");
+    c.className = "card";
+
+    let tags = "";
+
+    if (item.last_signal === "AL") tags += `<span class="tag green">AL</span>`;
+    if (item.last_signal === "SAT") tags += `<span class="tag red">SAT</span>`;
+    if (item.composite_signal) tags += `<span class="tag yellow">KOMBİNE</span>`;
+    if (item.super_combo) tags += `<span class="tag yellow">SÜPER</span>`;
+    if (item.three_peak_break) tags += `<span class="tag red">3'lü Tepe</span>`;
+    if (item.support_break) tags += `<span class="tag green">Destek</span>`;
+    if (item.resistance_break) tags += `<span class="tag red">Direnç</span>`;
+
+    c.innerHTML = `
+      <div class="symbol">${item.symbol}</div>
+      ${tags}
+      <p>💰 Fiyat: ${item.current_price}</p>
+      <p>📈 Trend: ${item.trend}</p>
+      <p>📊 RSI: ${item.RSI}</p>
+      <p>📦 Hacim: ${item.volume}</p>
+      <small>🕒 ${item.signal_time || ""}</small>
+    `;
+
+    list.appendChild(c);
+  });
+}
+
+setInterval(loadData, 30000);
 loadData();
-setInterval(loadData, 60000);
 </script>
 
 </body>
