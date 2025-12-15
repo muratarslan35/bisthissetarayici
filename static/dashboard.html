@@ -43,14 +43,22 @@ header {
 
 <header>
   <b>Yakında Zengin Edecek Sinyaller</b>
-  <button onclick="wake()" class="badge yellow">Sistemi Uyandır</button>
+  <button onclick="wake()" class="badge yellow">
+    Sistemi Uyandır (Sunucuyu Ayakta Tut)
+  </button>
 </header>
 
 <div class="container">
 
   <div class="card">
-    <div>Sistem Durumu: <span id="sys" class="badge yellow">Kontrol</span></div>
-    <div>Tarama Durumu: <span id="scan" class="badge yellow">Bekleniyor</span></div>
+    <div>
+      Sistem Durumu:
+      <span id="sys" class="badge yellow">Kontrol ediliyor</span>
+    </div>
+    <div style="margin-top:6px">
+      Tarama Durumu:
+      <span id="scan" class="badge yellow">Bekleniyor</span>
+    </div>
   </div>
 
   <div id="signals"></div>
@@ -60,28 +68,28 @@ header {
 <script>
 async function wake() {
   await fetch("/wake");
-  alert("Sistem uyandırma isteği gönderildi");
+  alert("Sistem uyandırıldı (tarama sıfırlanmadı)");
 }
 
 async function load() {
   const res = await fetch("/api");
   const j = await res.json();
 
-  const now = Date.now();
+  const now = Date.now() / 1000;
 
-  // SYSTEM
+  // SYSTEM STATUS
   const sys = document.getElementById("sys");
   if (j.system_active) {
-    sys.textContent = "AKTİF (Sunucu Ayakta)";
+    sys.textContent = "AKTİF (Sunucu Çalışıyor)";
     sys.className = "badge green";
   } else {
     sys.textContent = "PASİF";
     sys.className = "badge red";
   }
 
-  // SCAN
+  // SCAN STATUS
   const scan = document.getElementById("scan");
-  if (j.last_fetch && (now - j.last_fetch*1000) < 180000) {
+  if (j.last_scan && (now - j.last_scan) < 180) {
     scan.textContent = "TARAMA AKTİF";
     scan.className = "badge green";
   } else {
@@ -92,10 +100,16 @@ async function load() {
   // SIGNALS
   const box = document.getElementById("signals");
   box.innerHTML = "";
+
   (j.data || []).forEach(s => {
     const c = document.createElement("div");
     c.className = "card";
-    c.innerHTML = `<b>${s.symbol}</b><br>Fiyat: ${s.current_price}`;
+    c.innerHTML = `
+      <b>${s.symbol}</b><br>
+      Fiyat: ${s.current_price ?? "-"}<br>
+      RSI: ${s.rsi_15 ?? "-"}<br>
+      Sinyal: ${s.last_signal ?? "-"}
+    `;
     box.appendChild(c);
   });
 }
