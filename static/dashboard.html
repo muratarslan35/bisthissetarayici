@@ -6,76 +6,128 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-:root{
-  --bg:#0e1117;--card:#161b22;--text:#e6edf3;
-  --green:#2ea043;--red:#f85149;--yellow:#d29922;
+:root {
+  --bg:#0e1117; --card:#161b22; --text:#e6edf3;
+  --green:#2ea043; --red:#f85149; --yellow:#d29922;
 }
-body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial}
-header{background:#010409;padding:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-header h1{font-size:18px;margin:0;flex:1}
-.badge{padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px}
-.green{background:var(--green)}.red{background:var(--red)}.yellow{background:var(--yellow)}
-button{background:var(--green);border:0;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700}
+body {margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial;}
+header {
+  background:#010409;padding:14px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.top-row {
+  display:flex;justify-content:space-between;align-items:center;
+}
+.badge {padding:6px 10px;border-radius:6px;font-size:13px;font-weight:600;}
+.green{background:var(--green)} .red{background:var(--red)} .yellow{background:var(--yellow)}
+
+button {
+  background:var(--green);border:0;color:white;
+  padding:8px 14px;border-radius:8px;font-weight:600;
+}
+
 .container{padding:16px}
-.filters{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
-.filter{background:var(--card);padding:10px;border-radius:8px;font-size:13px}
-.signal-card{background:var(--card);border-left:4px solid var(--green);padding:14px;border-radius:12px;margin-bottom:10px}
-.signal-card.red{border-color:var(--red)}
-.small{opacity:.8;font-size:13px}
-.empty{opacity:.5;text-align:center;padding:40px}
+.menu {
+  display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;
+}
+.menu div {
+  background:var(--card);padding:8px 12px;border-radius:8px;
+  font-size:14px;opacity:.9;
+}
+.signal-card {
+  background:var(--card);padding:14px;border-radius:12px;
+  margin-bottom:10px;border-left:4px solid var(--green);
+}
+.signal-card.red{border-left-color:var(--red)}
+.small{font-size:13px;opacity:.8}
 </style>
 </head>
 
 <body>
 
 <header>
-  <h1>Yakında Zengin Edecek Sinyaller</h1>
-  <span id="sys" class="badge yellow">Kontrol</span>
-  <span id="market" class="badge yellow">Bilinmiyor</span>
-  <button onclick="wake()">UYANDIR</button>
-  <span id="clock"></span>
+  <div class="top-row">
+    <b>Yakında Zengin Edecek Sinyaller</b>
+    <div id="clock"></div>
+  </div>
+
+  <div class="top-row">
+    <div>
+      <span class="badge" id="systemBadge">Sistem?</span>
+      <span class="badge" id="marketBadge">Piyasa?</span>
+    </div>
+    <button onclick="wakeSystem()">SİSTEMİ UYANDIR</button>
+  </div>
+
+  <div class="small">
+    • Sistem: Tarama motoru durumu  
+    • Uyandır: Sistemi yeniden başlatır (eski sinyalleri silmez)
+  </div>
 </header>
 
 <div class="container">
 
-<div class="filters">
-  <div class="filter">🟢 AL</div>
-  <div class="filter">🔥 Kombine</div>
-  <div class="filter">💎 Süper Kombine</div>
-  <div class="filter">⚠️ 3’lü Tepe</div>
-</div>
+  <!-- MENÜLER (HER ZAMAN GÖRÜNÜR) -->
+  <div class="menu">
+    <div>📊 Tüm Sinyaller</div>
+    <div>🚀 Kombine</div>
+    <div>💎 Süper Kombine</div>
+    <div>🔥 3'lü Tepe</div>
+    <div>⭐ Favoriler</div>
+  </div>
 
-<div id="signals"></div>
+  <!-- SİNYAL ALANI -->
+  <div id="signals">
+    <div class="small">Sinyaller yükleniyor veya bugün henüz sinyal yok…</div>
+  </div>
 
 </div>
 
 <script>
-const KEY="cachedSignals";
-
-function nowTR(){
-  return new Date(new Date().toLocaleString("en-US",{timeZone:"Europe/Istanbul"}))
+function updateClock(){
+  document.getElementById("clock").innerText =
+    new Date().toLocaleString("tr-TR");
 }
+setInterval(updateClock,1000);updateClock();
 
-function shouldReset(){
-  const n=nowTR();const r=new Date(n);
-  r.setHours(9,50,0,0);
-  return n>=r;
-}
-
-function marketOpen(){
-  const n=nowTR();const d=n.getDay();
-  if(d===0||d===6)return false;
-  const m=n.getHours()*60+n.getMinutes();
+function isMarketOpen(d){
+  const day=d.getDay(); if(day===0||day===6)return false;
+  const m=d.getHours()*60+d.getMinutes();
   return m>=580&&m<=1090;
 }
 
-function render(list){
+async function wakeSystem(){
+  await fetch("/wake",{method:"POST"});
+  alert("Sistem uyandırma isteği gönderildi");
+}
+
+async function load(){
+  const res=await fetch("/api");
+  const j=await res.json();
+  const now=new Date();
+
+  // MARKET
+  const m=isMarketOpen(now);
+  marketBadge.innerText=m?"BORSA AÇIK":"BORSA KAPALI";
+  marketBadge.className="badge "+(m?"green":"red");
+
+  // SYSTEM
+  const hb=j.system?.last_heartbeat;
+  const active=hb && (Date.now()/1000-hb<180);
+  systemBadge.innerText=active?"SİSTEM AKTİF":"SİSTEM PASİF";
+  systemBadge.className="badge "+(active?"green":"red");
+
+  // SIGNALS
   const box=document.getElementById("signals");
   box.innerHTML="";
+  const list=j.data||[];
   if(!list.length){
-    box.innerHTML='<div class="empty">Henüz sinyal yok</div>';return;
+    box.innerHTML="<div class='small'>Henüz sinyal yok.</div>";
+    return;
   }
+
   list.forEach(s=>{
+    if(!s.last_signal&&!s.composite_signal&&!s.super_score)return;
     const c=document.createElement("div");
     c.className="signal-card"+(s.last_signal==="SAT"?" red":"");
     c.innerHTML=`
@@ -85,38 +137,11 @@ function render(list){
       <div class="small">Skor: ${s.super_score||"-"}</div>
     `;
     box.appendChild(c);
-  })
+  });
 }
 
-async function load(){
-  const res=await fetch("/api");
-  const j=await res.json();
-  const now=Date.now();
-  const ts=j.timestamp?j.timestamp*1000:0;
-
-  document.getElementById("sys").textContent=(now-ts<180000)?"AKTİF":"PASİF";
-  document.getElementById("sys").className="badge "+((now-ts<180000)?"green":"red");
-
-  document.getElementById("market").textContent=marketOpen()?"AÇIK":"KAPALI";
-  document.getElementById("market").className="badge "+(marketOpen()?"green":"red");
-
-  let data=j.data||[];
-
-  if(shouldReset()){
-    localStorage.removeItem(KEY);
-  }else if(!data.length){
-    data=JSON.parse(localStorage.getItem(KEY)||"[]");
-  }else{
-    localStorage.setItem(KEY,JSON.stringify(data));
-  }
-
-  render(data);
-}
-
-function wake(){fetch("/api")}
-
-setInterval(load,5000);load();
-setInterval(()=>document.getElementById("clock").innerText=nowTR().toLocaleString("tr-TR"),1000);
+setInterval(load,5000);
+load();
 </script>
 
 </body>
