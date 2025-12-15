@@ -19,6 +19,7 @@ LATEST_DATA = {
 }
 
 LAST_SCAN_TS = None
+SYSTEM_STARTED = False
 data_lock = threading.Lock()
 
 sent_signals = {}
@@ -57,8 +58,9 @@ def check_daily_reset():
 
 # ================= BACKGROUND LOOP =================
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED
 
+    SYSTEM_STARTED = True
     telegram_send("🤖 Sistem başlatıldı – arka plan taraması aktif")
 
     while True:
@@ -72,7 +74,7 @@ def background_loop():
                     "data": data,
                     "timestamp": int(time.time())
                 }
-                LAST_SCAN_TS = time.time()
+                LAST_SCAN_TS = int(time.time())
 
         except Exception as e:
             with data_lock:
@@ -95,6 +97,7 @@ def start_once():
 def api():
     with data_lock:
         return jsonify({
+            "system_active": SYSTEM_STARTED,
             "status": LATEST_DATA["status"],
             "data": LATEST_DATA["data"],
             "timestamp": LATEST_DATA["timestamp"],
@@ -105,10 +108,10 @@ def api():
 @app.route("/wake")
 def wake():
     global LAST_SCAN_TS
-    LAST_SCAN_TS = time.time()
+    LAST_SCAN_TS = int(time.time())
     return jsonify({
         "ok": True,
-        "message": "Sistem uyandırıldı (tarama sıfırlanmadı)"
+        "message": "Sistem uyandırıldı (mevcut tarama devam ediyor)"
     })
 
 # ================= DASHBOARD =================
