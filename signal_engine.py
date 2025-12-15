@@ -1,10 +1,20 @@
 from datetime import datetime, timezone
 from utils import to_tr_timezone
 
-# --------------------------------------------------
-# EMOJI & FORMAT HELPERS
-# --------------------------------------------------
+# ==================================================
+# SUCCESS TRACKING (IN-MEMORY - DAILY)
+# ==================================================
+# format:
+# success_tracker[symbol][date] = {
+#   "entry": price,
+#   "target": price * 1.02,
+#   "hit": True/False
+# }
+success_tracker = {}
 
+# ==================================================
+# HELPERS
+# ==================================================
 def ma_text(v):
     if v == "above":
         return "🔼 yukarı kırdı"
@@ -26,22 +36,42 @@ def fmt_support_resistance(sr):
         f"• 1D → D: {sr['1D']['support']} | R: {sr['1D']['resistance']}"
     )
 
-# --------------------------------------------------
-# MAIN ENGINE
-# --------------------------------------------------
+# ==================================================
+# SUCCESS LOGIC
+# ==================================================
+def check_success(symbol, price):
+    today = to_tr_timezone(datetime.now(timezone.utc)).date()
 
+    if symbol not in success_tracker:
+        return None
+
+    day_data = success_tracker[symbol].get(today)
+    if not day_data:
+        return None
+
+    if not day_data["hit"] and price >= day_data["target"]:
+        day_data["hit"] = True
+
+    return "BAŞARILI ✅" if day_data["hit"] else "BAŞARISIZ ❌"
+
+def register_signal(symbol, price):
+    today = to_tr_timezone(datetime.now(timezone.utc)).date()
+    success_tracker.setdefault(symbol, {})
+    if today not in success_tracker[symbol]:
+        success_tracker[symbol][today] = {
+            "entry": price,
+            "target": price * 1.02,
+            "hit": False
+        }
+
+# ==================================================
+# MAIN ENGINE
+# ==================================================
 def process_signals(item):
-    """
-    ÇIKTI:
-    [
-      (sig_key, telegram_message),
-      ...
-    ]
-    """
     out = []
 
     symbol = item["symbol"]
-    price = item["current_price"]
+    price = float(item["current_price"])
     rsi = round(item["RSI"], 2)
     trend = item["trend"]
     volume = item.get("volume")
@@ -49,11 +79,12 @@ def process_signals(item):
 
     ma = item.get("ma_breaks", {})
     sr = item.get("support_resistance")
+    score = item.get("super_score")
+
     ts = to_tr_timezone(datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M:%S")
 
-    # --------------------------------------------------
-    # MA BLOĞU
-    # --------------------------------------------------
+    success_status = check_success(symbol, price)
+
     ma_block = (
         f"MA Durumları:\n"
         f"{ma_text(ma.get('MA20'))} MA20\n"
@@ -62,72 +93,56 @@ def process_signals(item):
         f"{ma_text(ma.get('MA200'))} MA200"
     )
 
-    # --------------------------------------------------
-    # TEMEL AL / SAT
-    # --------------------------------------------------
-    if item.get("last_signal") == "AL":
-        msg = (
-            f"Hisse Takip: {symbol}\n"
-            f"🟢⬆️ AL Sinyali\n"
-            f"Fiyat: {price} TL | RSI: {rsi}\n"
-            f"Günlük Değişim: {change} | Hacim: {volume}\n\n"
-            f"{ma_block}\n\n"
-            f"📉 Destek – Direnç:\n{fmt_support_resistance(sr)}\n\n"
-            f"Sinyal zamanı (TR): {ts}"
-        )
-        out.append((f"AL-{symbol}", msg))
-
-    if item.get("last_signal") == "SAT":
-        msg = (
-            f"Hisse Takip: {symbol}\n"
-            f"🔴⬇️ SAT Sinyali\n"
-            f"Fiyat: {price} TL | RSI: {rsi}\n"
-            f"Günlük Değişim: {change} | Hacim: {volume}\n\n"
-            f"{ma_block}\n\n"
-            f"📉 Destek – Direnç:\n{fmt_support_resistance(sr)}\n\n"
-            f"Sinyal zamanı (TR): {ts}"
-        )
-        out.append((f"SAT-{symbol}", msg))
-
-    # --------------------------------------------------
-    # FORMASYONLAR
-    # --------------------------------------------------
-    if item.get("three_peak_break"):
-        out.append((
-            f"3PEAK-{symbol}",
-            f"Hisse Takip: {symbol}\n🔥🔥 3’lü tepe kırılımı!\nSinyal zamanı (TR): {ts}"
-        ))
-
-    # --------------------------------------------------
-    # KOMBİNE SİNYAL
-    # --------------------------------------------------
-    if item.get("composite_signal") == "A":
-        msg = (
-            f"Hisse Takip: {symbol}\n"
-            f"🚀🚀🚀 Kombine Sinyal\n"
-            f"Fiyat: {price} TL | RSI: {rsi}\n"
-            f"Günlük Değişim: {change} | Hacim: {volume}\n\n"
-            f"{ma_block}\n\n"
-            f"📉 Destek – Direnç:\n{fmt_support_resistance(sr)}\n\n"
-            f"Sinyal zamanı (TR): {ts}"
-        )
-        out.append((f"COMBO-{symbol}", msg))
-
-    # --------------------------------------------------
-    # SÜPER KOMBİNE (puanlı)
-    # --------------------------------------------------
-    score = item.get("super_score")
+    # ---------------- SUPER KOMBİNE ----------------
     if score and score >= 80:
+        register_signal(symbol, price)
+
         msg = (
             f"Hisse Takip: {symbol}\n"
             f"💎🚀 SÜPER KOMBİNE SİNYAL\n"
             f"Puan: {score}/100\n"
+            f"{'🎯 ' + success_status if success_status else ''}\n\n"
             f"Fiyat: {price} TL | RSI: {rsi}\n"
             f"Günlük Değişim: {change} | Hacim: {volume}\n\n"
             f"{ma_block}\n\n"
             f"📉 Destek – Direnç:\n{fmt_support_resistance(sr)}\n\n"
             f"Sinyal zamanı (TR): {ts}"
         )
-        out.append((f"SUPER-{symbol}", msg))
+
+        out.append((
+            f"SUPER-{symbol}",
+            msg,
+            {
+                "type": "super",
+                "score": score,
+                "success": success_status
+            }
+        ))
+
+    # ---------------- KOMBİNE ----------------
+    if item.get("composite_signal") == "A":
+        register_signal(symbol, price)
+
+        out.append((
+            f"COMBO-{symbol}",
+            f"🚀 Kombine Sinyal - {symbol}",
+            {
+                "type": "combo",
+                "success": success_status
+            }
+        ))
+
+    # ---------------- 3 TEPE ----------------
+    if item.get("three_peak_break"):
+        register_signal(symbol, price)
+
+        out.append((
+            f"3PEAK-{symbol}",
+            f"🔥 3'lü Tepe Kırılımı - {symbol}",
+            {
+                "type": "3peak",
+                "success": success_status
+            }
+        ))
 
     return out
