@@ -13,7 +13,6 @@
   --green: #2ea043;
   --red: #f85149;
   --yellow: #d29922;
-  --blue: #1f6feb;
 }
 
 body {
@@ -24,25 +23,19 @@ body {
 }
 
 header {
-  padding: 16px;
+  padding: 14px 16px;
   background: #010409;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-button {
-  background: var(--blue);
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-button:hover {
-  opacity: 0.9;
+.left, .right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .badge {
@@ -50,28 +43,24 @@ button:hover {
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-  display: inline-block;
 }
 
 .badge.green { background: var(--green); }
 .badge.red { background: var(--red); }
 .badge.yellow { background: var(--yellow); }
 
+button {
+  background: #238636;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
 .container {
   padding: 16px;
-}
-
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.status-card {
-  background: var(--card);
-  padding: 14px;
-  border-radius: 10px;
 }
 
 .signal-card {
@@ -101,34 +90,21 @@ button:hover {
 <body>
 
 <header>
-  <div><b>Yakında Zengin Edecek Sinyaller</b></div>
-  <div>
+  <div class="left">
+    <b>BIST Sinyal Merkezi</b>
+
+    <span id="systemStatus" class="badge yellow">Sistem</span>
+    <span id="marketStatus" class="badge yellow">Piyasa</span>
+  </div>
+
+  <div class="right">
     <span id="clock"></span>
-    <button onclick="wakeSystem()">Sistemi Uyandır</button>
+    <button onclick="wakeSystem()">UYANDIR</button>
   </div>
 </header>
 
 <div class="container">
-
-  <!-- SİLİSTEM & MARKET -->
-  <div class="status-grid">
-
-    <div class="status-card">
-      <div class="small">Sistem Durumu</div>
-      <div id="systemStatus" class="badge yellow">Kontrol ediliyor</div>
-      <div class="small" id="lastUpdate"></div>
-    </div>
-
-    <div class="status-card">
-      <div class="small">Piyasa Durumu</div>
-      <div id="marketStatus" class="badge yellow">Bilinmiyor</div>
-    </div>
-
-  </div>
-
-  <!-- SİNYALLER -->
   <div id="signals"></div>
-
 </div>
 
 <script>
@@ -140,71 +116,65 @@ setInterval(updateClock, 1000);
 updateClock();
 
 function isMarketOpen(now) {
-  const day = now.getDay();
-  if (day === 0 || day === 6) return false;
-  const min = now.getHours() * 60 + now.getMinutes();
-  return min >= 580 && min <= 1090;
+  const d = now.getDay();
+  if (d === 0 || d === 6) return false;
+  const m = now.getHours() * 60 + now.getMinutes();
+  return m >= 580 && m <= 1090;
+}
+
+function afterResetTime(now) {
+  return now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() >= 50);
 }
 
 async function wakeSystem() {
-  try {
-    await fetch("/ping");
-    alert("Sistem uyandırıldı (ping gönderildi)");
-  } catch {
-    alert("Sistem uyandırılamadı");
-  }
+  await fetch("/api");
 }
 
 async function loadData() {
-  try {
-    const res = await fetch("/api");
-    const json = await res.json();
-    const now = new Date();
+  const res = await fetch("/api");
+  const json = await res.json();
 
-    // MARKET
-    const marketOpen = isMarketOpen(now);
-    const marketEl = document.getElementById("marketStatus");
-    marketEl.innerText = marketOpen ? "AÇIK" : "KAPALI";
-    marketEl.className = "badge " + (marketOpen ? "green" : "red");
+  const now = new Date();
 
-    // SYSTEM
-    const sysEl = document.getElementById("systemStatus");
-    const lastTs = json.timestamp ? new Date(json.timestamp * 1000) : null;
+  // MARKET
+  const marketEl = document.getElementById("marketStatus");
+  const open = isMarketOpen(now);
+  marketEl.innerText = open ? "AÇIK" : "KAPALI";
+  marketEl.className = "badge " + (open ? "green" : "red");
 
-    if (lastTs && (now - lastTs) < 180000) {
-      sysEl.innerText = "AKTİF";
-      sysEl.className = "badge green";
-    } else {
-      sysEl.innerText = "UYKUDA";
-      sysEl.className = "badge red";
-    }
-
-    document.getElementById("lastUpdate").innerText =
-      lastTs ? "Son veri: " + lastTs.toLocaleTimeString("tr-TR") : "";
-
-    // SIGNALS
-    const box = document.getElementById("signals");
-    box.innerHTML = "";
-
-    (json.data || []).forEach(s => {
-      if (!s.last_signal && !s.composite_signal && !s.super_score) return;
-
-      const card = document.createElement("div");
-      card.className = "signal-card" + (s.last_signal === "SAT" ? " red" : "");
-
-      card.innerHTML = `
-        <div class="signal-title">${s.symbol}</div>
-        <div class="small">Fiyat: ${s.current_price} | RSI: ${s.RSI}</div>
-        <div class="small">Trend: ${s.trend}</div>
-        <div class="small">Süper Skor: ${s.super_score || "-"}</div>
-      `;
-
-      box.appendChild(card);
-    });
-
-  } catch (e) {
-    console.error(e);
+  // SYSTEM
+  const sysEl = document.getElementById("systemStatus");
+  const lastTs = json.timestamp ? new Date(json.timestamp * 1000) : null;
+  if (lastTs && (now - lastTs) < 180000) {
+    sysEl.innerText = "AKTİF";
+    sysEl.className = "badge green";
+  } else {
+    sysEl.innerText = "PASİF";
+    sysEl.className = "badge red";
   }
+
+  // SIGNALS
+  const box = document.getElementById("signals");
+
+  if (afterResetTime(now)) {
+    box.innerHTML = ""; // 09:50 sonrası ekran temiz
+  }
+
+  (json.data || []).forEach(s => {
+    if (!s.last_signal && !s.composite_signal && !s.super_score) return;
+
+    const card = document.createElement("div");
+    card.className = "signal-card" + (s.last_signal === "SAT" ? " red" : "");
+
+    card.innerHTML = `
+      <div class="signal-title">${s.symbol}</div>
+      <div class="small">Fiyat: ${s.current_price} | RSI: ${s.RSI}</div>
+      <div class="small">Trend: ${s.trend}</div>
+      <div class="small">Skor: ${s.super_score || "-"}</div>
+    `;
+
+    box.appendChild(card);
+  });
 }
 
 setInterval(loadData, 5000);
