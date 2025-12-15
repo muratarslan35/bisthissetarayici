@@ -8,64 +8,72 @@
 body { margin:0; background:#0e1117; color:#e6edf3; font-family:Arial }
 header { background:#010409; padding:12px; display:flex; justify-content:space-between; align-items:center }
 .badge { padding:6px 10px; border-radius:6px; font-weight:bold }
-.green{background:#2ea043} .red{background:#f85149} .yellow{background:#d29922}
-.container{padding:16px}
-.card{background:#161b22;padding:12px;border-radius:10px;margin-bottom:10px}
+.green { background:#2ea043 }
+.red { background:#f85149 }
+.yellow { background:#d29922 }
+.container { padding:16px }
+.card { background:#161b22; padding:12px; border-radius:10px; margin-bottom:10px }
 </style>
 </head>
 
 <body>
 
 <header>
-  <b>BIST Sinyal Paneli</b>
+  <b>BIST Tarayıcı</b>
   <button onclick="wake()" class="badge yellow">Sistemi Uyandır</button>
 </header>
 
 <div class="container">
 
-<div class="card">
-  Sistem: <span id="sys" class="badge">-</span>
-  Tarama: <span id="scan" class="badge">-</span>
-  Borsa: <span id="market" class="badge">-</span>
-</div>
+  <div class="card">
+    <div>Sistem: <span id="sys" class="badge yellow">Kontrol</span></div>
+    <div>Piyasa: <span id="market" class="badge yellow">Kontrol</span></div>
+    <div>Tarama: <span id="scan" class="badge yellow">Bekleniyor</span></div>
+  </div>
 
-<div id="signals"></div>
-
+  <div id="signals"></div>
 </div>
 
 <script>
-async function wake(){
+async function wake() {
   await fetch("/wake");
-  alert("Uyandırma sinyali gönderildi");
+  alert("Uyandırma isteği gönderildi");
 }
 
-async function load(){
-  const j = await (await fetch("/api")).json();
+async function load() {
+  const res = await fetch("/api");
+  const j = await res.json();
+  const now = Date.now();
 
   // SYSTEM
   sys.textContent = j.system_active ? "AKTİF" : "PASİF";
   sys.className = "badge " + (j.system_active ? "green" : "red");
 
-  // SCAN
-  scan.textContent = j.scan_active ? "TARAMA AKTİF" : "BEKLEME";
-  scan.className = "badge " + (j.scan_active ? "green" : "yellow");
-
   // MARKET
   market.textContent = j.market_open ? "AÇIK" : "KAPALI";
   market.className = "badge " + (j.market_open ? "green" : "red");
 
+  // SCAN
+  if (j.last_scan && (now - j.last_scan * 1000) < 180000) {
+    scan.textContent = "TARAMA AKTİF";
+    scan.className = "badge green";
+  } else {
+    scan.textContent = "BEKLEME";
+    scan.className = "badge yellow";
+  }
+
   // SIGNALS
   const box = document.getElementById("signals");
   box.innerHTML = "";
-  (j.data || []).forEach(s=>{
-    const c=document.createElement("div");
-    c.className="card";
-    c.innerHTML=`<b>${s.symbol}</b><br>Fiyat: ${s.current_price}`;
+  (j.data || []).forEach(s => {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = `<b>${s.symbol}</b><br>Fiyat: ${s.current_price}`;
     box.appendChild(c);
   });
 }
 
-setInterval(load,5000);
+setInterval(load, 5000);
 load();
 </script>
 
