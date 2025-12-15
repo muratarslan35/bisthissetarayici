@@ -2,145 +2,105 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>BIST Profesyonel Sinyal Paneli</title>
+<title>BIST Sinyal Paneli</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-:root {
-  --bg:#0e1117; --card:#161b22; --text:#e6edf3;
-  --green:#2ea043; --red:#f85149; --yellow:#d29922;
+body {
+  margin: 0;
+  background: #0e1117;
+  color: #e6edf3;
+  font-family: Arial;
 }
-body {margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial;}
 header {
-  background:#010409;padding:14px;
-  display:flex;flex-direction:column;gap:10px;
+  background: #010409;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-.top-row {
-  display:flex;justify-content:space-between;align-items:center;
+.badge {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: bold;
 }
-.badge {padding:6px 10px;border-radius:6px;font-size:13px;font-weight:600;}
-.green{background:var(--green)} .red{background:var(--red)} .yellow{background:var(--yellow)}
+.green { background: #2ea043; }
+.red { background: #f85149; }
+.yellow { background: #d29922; }
 
-button {
-  background:var(--green);border:0;color:white;
-  padding:8px 14px;border-radius:8px;font-weight:600;
-}
+.container { padding: 16px; }
 
-.container{padding:16px}
-.menu {
-  display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;
+.card {
+  background: #161b22;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
 }
-.menu div {
-  background:var(--card);padding:8px 12px;border-radius:8px;
-  font-size:14px;opacity:.9;
-}
-.signal-card {
-  background:var(--card);padding:14px;border-radius:12px;
-  margin-bottom:10px;border-left:4px solid var(--green);
-}
-.signal-card.red{border-left-color:var(--red)}
-.small{font-size:13px;opacity:.8}
 </style>
 </head>
 
 <body>
 
 <header>
-  <div class="top-row">
-    <b>Yakında Zengin Edecek Sinyaller</b>
-    <div id="clock"></div>
-  </div>
-
-  <div class="top-row">
-    <div>
-      <span class="badge" id="systemBadge">Sistem?</span>
-      <span class="badge" id="marketBadge">Piyasa?</span>
-    </div>
-    <button onclick="wakeSystem()">SİSTEMİ UYANDIR</button>
-  </div>
-
-  <div class="small">
-    • Sistem: Tarama motoru durumu  
-    • Uyandır: Sistemi yeniden başlatır (eski sinyalleri silmez)
-  </div>
+  <b>Yakında Zengin Edecek Sinyaller</b>
+  <button onclick="wake()" class="badge yellow">Sistemi Uyandır</button>
 </header>
 
 <div class="container">
 
-  <!-- MENÜLER (HER ZAMAN GÖRÜNÜR) -->
-  <div class="menu">
-    <div>📊 Tüm Sinyaller</div>
-    <div>🚀 Kombine</div>
-    <div>💎 Süper Kombine</div>
-    <div>🔥 3'lü Tepe</div>
-    <div>⭐ Favoriler</div>
+  <div class="card">
+    <div>Sistem Durumu: <span id="sys" class="badge yellow">Kontrol</span></div>
+    <div>Tarama Durumu: <span id="scan" class="badge yellow">Bekleniyor</span></div>
   </div>
 
-  <!-- SİNYAL ALANI -->
-  <div id="signals">
-    <div class="small">Sinyaller yükleniyor veya bugün henüz sinyal yok…</div>
-  </div>
+  <div id="signals"></div>
 
 </div>
 
 <script>
-function updateClock(){
-  document.getElementById("clock").innerText =
-    new Date().toLocaleString("tr-TR");
-}
-setInterval(updateClock,1000);updateClock();
-
-function isMarketOpen(d){
-  const day=d.getDay(); if(day===0||day===6)return false;
-  const m=d.getHours()*60+d.getMinutes();
-  return m>=580&&m<=1090;
-}
-
-async function wakeSystem(){
-  await fetch("/wake",{method:"POST"});
+async function wake() {
+  await fetch("/wake");
   alert("Sistem uyandırma isteği gönderildi");
 }
 
-async function load(){
-  const res=await fetch("/api");
-  const j=await res.json();
-  const now=new Date();
+async function load() {
+  const res = await fetch("/api");
+  const j = await res.json();
 
-  // MARKET
-  const m=isMarketOpen(now);
-  marketBadge.innerText=m?"BORSA AÇIK":"BORSA KAPALI";
-  marketBadge.className="badge "+(m?"green":"red");
+  const now = Date.now();
 
   // SYSTEM
-  const hb=j.system?.last_heartbeat;
-  const active=hb && (Date.now()/1000-hb<180);
-  systemBadge.innerText=active?"SİSTEM AKTİF":"SİSTEM PASİF";
-  systemBadge.className="badge "+(active?"green":"red");
-
-  // SIGNALS
-  const box=document.getElementById("signals");
-  box.innerHTML="";
-  const list=j.data||[];
-  if(!list.length){
-    box.innerHTML="<div class='small'>Henüz sinyal yok.</div>";
-    return;
+  const sys = document.getElementById("sys");
+  if (j.system_active) {
+    sys.textContent = "AKTİF (Sunucu Ayakta)";
+    sys.className = "badge green";
+  } else {
+    sys.textContent = "PASİF";
+    sys.className = "badge red";
   }
 
-  list.forEach(s=>{
-    if(!s.last_signal&&!s.composite_signal&&!s.super_score)return;
-    const c=document.createElement("div");
-    c.className="signal-card"+(s.last_signal==="SAT"?" red":"");
-    c.innerHTML=`
-      <b>${s.symbol}</b>
-      <div class="small">Fiyat: ${s.current_price} | RSI: ${s.RSI}</div>
-      <div class="small">Trend: ${s.trend}</div>
-      <div class="small">Skor: ${s.super_score||"-"}</div>
-    `;
+  // SCAN
+  const scan = document.getElementById("scan");
+  if (j.last_fetch && (now - j.last_fetch*1000) < 180000) {
+    scan.textContent = "TARAMA AKTİF";
+    scan.className = "badge green";
+  } else {
+    scan.textContent = "BEKLEME / PİYASA KAPALI";
+    scan.className = "badge yellow";
+  }
+
+  // SIGNALS
+  const box = document.getElementById("signals");
+  box.innerHTML = "";
+  (j.data || []).forEach(s => {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = `<b>${s.symbol}</b><br>Fiyat: ${s.current_price}`;
     box.appendChild(c);
   });
 }
 
-setInterval(load,5000);
+setInterval(load, 5000);
 load();
 </script>
 
