@@ -13,10 +13,12 @@ app = Flask(__name__)
 
 # ================= GLOBAL STATE =================
 LATEST_DATA = []
-LAST_SCAN_TS = None
-SYSTEM_ACTIVE = False
-
+LAST_SCAN_TS = 0
+SYSTEM_STARTED = False
 data_lock = threading.Lock()
+
+sent_signals = {}
+last_reset_date = None
 
 # ================= ENV =================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -37,35 +39,40 @@ def telegram_send(text):
             pass
 
 # ================= MARKET STATUS =================
-def is_market_open():
+def market_open_status():
     now = to_tr_timezone(datetime.now(timezone.utc))
     if now.weekday() >= 5:
-        return False
-    return (now.hour > 9 or (now.hour == 9 and now.minute >= 55)) and now.hour < 18
+        return 0
+    if (now.hour > 9 or (now.hour == 9 and now.minute >= 55)) and now.hour < 18:
+        return 1
+    return 0
+
+# ================= 09:50 RESET =================
+def check_daily_reset():
+    global sent_signals, last_reset_date
+    now_tr = to_tr_timezone(datetime.now(timezone.utc))
+    today = now_tr.date()
+
+    if (now_tr.hour > 9) or (now_tr.hour == 9 and now_tr.minute >= 50):
+        if last_reset_date != today:
+            sent_signals = {}
+            last_reset_date = today
+            telegram_send("🔄 09:50 reset – yeni gün taraması başladı")
 
 # ================= BACKGROUND LOOP =================
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_ACTIVE
-
-    SYSTEM_ACTIVE = True
-    telegram_send("🤖 Sistem aktif – tarama başladı")
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED
+    SYSTEM_STARTED = True
+    telegram_send("🤖 Sistem başlatıldı – tarama aktif")
 
     while True:
         try:
-            if is_market_open():
-                data = fetch_bist_data()
+            check_daily_reset()
+            data = fetch_bist_data()
 
-                # 🔒 JSON SAFE
-                safe_data = []
-                for d in data:
-                    safe_data.append({
-                        k: (bool(v) if isinstance(v, (bool,)) else v)
-                        for k, v in d.items()
-                    })
-
-                with data_lock:
-                    LATEST_DATA = safe_data
-                    LAST_SCAN_TS = int(time.time())
+            with data_lock:
+                LATEST_DATA = data
+                LAST_SCAN_TS = int(time.time())
 
         except Exception as e:
             print("SCAN ERROR:", e)
@@ -85,22 +92,21 @@ def start_once():
 # ================= API =================
 @app.route("/api")
 def api():
-    now = int(time.time())
     with data_lock:
         return jsonify({
-            "system_active": bool(SYSTEM_ACTIVE),
-            "scan_active": bool(LAST_SCAN_TS and (now - LAST_SCAN_TS) < 180),
-            "market_open": bool(is_market_open()),
-            "last_scan": LAST_SCAN_TS,
+            "system_active": int(SYSTEM_STARTED),
+            "market_open": int(market_open_status()),
+            "last_scan": int(LAST_SCAN_TS),
             "data": LATEST_DATA
         })
 
 # ================= WAKE =================
 @app.route("/wake")
 def wake():
-    global LAST_SCAN_TS
-    LAST_SCAN_TS = int(time.time())
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": 1,
+        "message": "Sistem uyandırıldı (restart yok)"
+    })
 
 # ================= DASHBOARD =================
 @app.route("/")
