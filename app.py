@@ -1,3 +1,4 @@
+# app.py
 import os
 import threading
 import time
@@ -14,14 +15,20 @@ app = Flask(__name__)
 LATEST_DATA = {"status": "init", "data": None, "timestamp": None}
 data_lock = threading.Lock()
 
-# ================== ENV SECURE ==================
+# ENV
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_IDS = os.getenv("CHAT_IDS", "")
-CHAT_IDS = [int(x.strip()) for x in CHAT_IDS.split(",") if x.strip()]
+CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
-# ================== SIGNAL STATE ==================
 sent_signals = {}
 last_reset_date = None
+
+SYSTEM_STATE = {
+    "running": False,
+    "sleeping": False,
+    "last_loop": None
+}
+
+wake_event = threading.Event()
 
 # ================== JSON SAFE ==================
 def json_safe(obj):
@@ -35,7 +42,7 @@ def json_safe(obj):
 
 # ================== TELEGRAM ==================
 def telegram_send(text):
-    if not TELEGRAM_TOKEN or not CHAT_IDS:
+    if not TELEGRAM_TOKEN:
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     for cid in CHAT_IDS:
@@ -58,82 +65,46 @@ def check_daily_reset():
         if last_reset_date != today:
             sent_signals = {}
             last_reset_date = today
-            telegram_send("🔄 09:50 reset yapıldı – yeni gün taraması başladı")
+            app.logger.info("🔄 09:50 reset yapıldı")
 
-# ================== SIGNAL PROCESS ==================
-def process_and_notify(data):
-    check_daily_reset()
-
-    for item in data:
-        symbol = item.get("symbol")
-        if not symbol:
-            continue
-
-        sent_signals.setdefault(symbol, set())
-
-        messages = []
-
-        if item.get("last_signal") == "AL" and "AL" not in sent_signals[symbol]:
-            messages.append("🟢 AL Sinyali")
-            sent_signals[symbol].add("AL")
-
-        if item.get("last_signal") == "SAT" and "SAT" not in sent_signals[symbol]:
-            messages.append("🔴 SAT Sinyali")
-            sent_signals[symbol].add("SAT")
-
-        if item.get("composite_signal") and "COMBO" not in sent_signals[symbol]:
-            messages.append("🚀 Kombine Sinyal")
-            sent_signals[symbol].add("COMBO")
-
-        if item.get("three_peak_break") and "TT" not in sent_signals[symbol]:
-            messages.append("🔥 3’lü Tepe Kırılımı")
-            sent_signals[symbol].add("TT")
-
-        if not messages:
-            continue
-
-        dt_tr = to_tr_timezone(datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M:%S (TR)")
-
-        text = (
-            f"<b>{symbol}</b>\n"
-            f"{' | '.join(messages)}\n\n"
-            f"Fiyat: {item.get('current_price')} TL\n"
-            f"RSI: {item.get('RSI')}\n"
-            f"Günlük Değişim: {item.get('daily_change')}\n"
-            f"Hacim: {item.get('volume')}\n\n"
-            f"Sinyal zamanı: {dt_tr}"
-        )
-
-        telegram_send(text)
+# ================== MARKET OPEN ==================
+def market_open():
+    now = to_tr_timezone(datetime.now(timezone.utc))
+    if now.weekday() >= 5:
+        return False
+    return (now.hour > 9 or (now.hour == 9 and now.minute >= 40)) and now.hour < 18
 
 # ================== LOOP ==================
 def update_loop():
-    telegram_send("🤖 Sistem başlatıldı – otomatik tarama aktif")
+    SYSTEM_STATE["running"] = True
+    telegram_send("🤖 Sistem aktif – tarama başladı")
 
     while True:
+        SYSTEM_STATE["last_loop"] = int(time.time())
+
+        if not market_open():
+            SYSTEM_STATE["sleeping"] = True
+            wake_event.wait(timeout=300)
+            wake_event.clear()
+            continue
+
+        SYSTEM_STATE["sleeping"] = False
+        check_daily_reset()
+
         try:
-            now_tr = to_tr_timezone(datetime.now(timezone.utc))
-
-            # Borsa kapalıysa tarama yapma
-            if now_tr.weekday() >= 5:
-                time.sleep(300)
-                continue
-
             data = fetch_bist_data()
             with data_lock:
                 LATEST_DATA.update({
                     "status": "ok",
                     "timestamp": int(time.time()),
-                    "data": json_safe(data)
+                    "data": data
                 })
-            process_and_notify(data)
-
         except Exception as e:
-            app.logger.error(f"[LOOP ERROR] {e}")
+            app.logger.error(e)
 
         time.sleep(60)
 
-# ================== START (ONCE) ==================
+# ================== START ONCE ==================
 threading.Thread(target=update_loop, daemon=True).start()
 start_self_ping()
 
@@ -145,4 +116,14 @@ def dashboard():
 @app.route("/api")
 def api():
     with data_lock:
-        return jsonify(LATEST_DATA)
+        return jsonify(json_safe({
+            "system": SYSTEM_STATE,
+            "market_open": market_open(),
+            "data": LATEST_DATA
+        }))
+
+@app.route("/wake", methods=["POST"])
+def wake():
+    wake_event.set()
+    SYSTEM_STATE["sleeping"] = False
+    return jsonify({"status": "ok", "message": "Sistem uyandırıldı"})
