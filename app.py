@@ -7,14 +7,13 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, send_from_directory
 from fetch_bist import fetch_bist_data
 from utils import to_tr_timezone
-from self_ping import start_self_ping
 
 app = Flask(__name__)
 
 # ================= GLOBAL STATE =================
 LATEST_DATA = []
 LAST_SCAN_TS = 0
-SYSTEM_STARTED = False
+SYSTEM_STARTED = 0
 data_lock = threading.Lock()
 
 sent_signals = {}
@@ -31,10 +30,7 @@ def telegram_send(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     for cid in CHAT_IDS:
         try:
-            requests.post(url, json={
-                "chat_id": cid,
-                "text": text
-            }, timeout=5)
+            requests.post(url, json={"chat_id": cid, "text": text}, timeout=5)
         except:
             pass
 
@@ -62,8 +58,8 @@ def check_daily_reset():
 # ================= BACKGROUND LOOP =================
 def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED
-    SYSTEM_STARTED = True
-    telegram_send("🤖 Sistem başlatıldı – tarama aktif")
+    SYSTEM_STARTED = 1
+    telegram_send("🤖 Sistem başlatıldı – Oracle VM üzerinde aktif")
 
     while True:
         try:
@@ -79,43 +75,30 @@ def background_loop():
 
         time.sleep(60)
 
-# ================= START ONCE =================
-_started = False
-@app.before_request
-def start_once():
-    global _started
-    if not _started:
-        _started = True
-        threading.Thread(target=background_loop, daemon=True).start()
-        start_self_ping()
+# ================= START THREAD IMMEDIATELY =================
+threading.Thread(target=background_loop, daemon=True).start()
 
 # ================= API =================
 @app.route("/api")
 def api():
     with data_lock:
         return jsonify({
-            "system_active": int(SYSTEM_STARTED),
-            "market_open": int(market_open_status()),
-            "last_scan": int(LAST_SCAN_TS),
+            "system_active": SYSTEM_STARTED,
+            "market_open": market_open_status(),
+            "last_scan": LAST_SCAN_TS,
             "data": LATEST_DATA
         })
 
 # ================= WAKE =================
 @app.route("/wake")
 def wake():
-    return jsonify({
-        "ok": 1,
-        "message": "Sistem uyandırıldı (restart yok)"
-    })
+    return jsonify({"ok": 1, "message": "Sistem zaten aktif"})
 
 # ================= DASHBOARD =================
 @app.route("/")
 def dashboard():
     return send_from_directory("static", "dashboard.html")
 
+# ================= MAIN =================
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False
-    )
+    app.run(host="0.0.0.0", port=5000)
