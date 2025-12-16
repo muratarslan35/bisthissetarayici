@@ -13,7 +13,7 @@ app = Flask(__name__)
 # ================= GLOBAL STATE =================
 LATEST_DATA = []
 LAST_SCAN_TS = 0
-SYSTEM_STARTED = 0
+SYSTEM_STARTED = False
 data_lock = threading.Lock()
 
 sent_signals = {}
@@ -25,14 +25,18 @@ CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
 # ================= TELEGRAM =================
 def telegram_send(text):
-    if not TELEGRAM_TOKEN:
+    if not TELEGRAM_TOKEN or not CHAT_IDS:
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     for cid in CHAT_IDS:
         try:
-            requests.post(url, json={"chat_id": cid, "text": text}, timeout=5)
-        except:
-            pass
+            requests.post(
+                url,
+                json={"chat_id": cid, "text": text},
+                timeout=5
+            )
+        except Exception as e:
+            print("Telegram error:", e)
 
 # ================= MARKET STATUS =================
 def market_open_status():
@@ -58,7 +62,8 @@ def check_daily_reset():
 # ================= BACKGROUND LOOP =================
 def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED
-    SYSTEM_STARTED = 1
+
+    SYSTEM_STARTED = True
     telegram_send("🤖 Sistem başlatıldı – Oracle VM üzerinde aktif")
 
     while True:
@@ -70,12 +75,14 @@ def background_loop():
                 LATEST_DATA = data
                 LAST_SCAN_TS = int(time.time())
 
+            print(f"[SCAN] OK | {len(data)} hisse")
+
         except Exception as e:
             print("SCAN ERROR:", e)
 
         time.sleep(60)
 
-# ================= START THREAD IMMEDIATELY =================
+# ================= START AUTOMATIC =================
 threading.Thread(target=background_loop, daemon=True).start()
 
 # ================= API =================
@@ -83,16 +90,19 @@ threading.Thread(target=background_loop, daemon=True).start()
 def api():
     with data_lock:
         return jsonify({
-            "system_active": SYSTEM_STARTED,
-            "market_open": market_open_status(),
-            "last_scan": LAST_SCAN_TS,
+            "system_active": int(SYSTEM_STARTED),
+            "market_open": int(market_open_status()),
+            "last_scan": int(LAST_SCAN_TS),
             "data": LATEST_DATA
         })
 
 # ================= WAKE =================
 @app.route("/wake")
 def wake():
-    return jsonify({"ok": 1, "message": "Sistem zaten aktif"})
+    return jsonify({
+        "ok": 1,
+        "message": "Sistem zaten aktif – yeniden başlatılmadı"
+    })
 
 # ================= DASHBOARD =================
 @app.route("/")
@@ -101,4 +111,8 @@ def dashboard():
 
 # ================= MAIN =================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False
+    )
