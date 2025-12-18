@@ -3,6 +3,15 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, send_from_directory
 from fetch_bist import fetch_bist_data
 from utils import to_tr_timezone
+import os
+from dotenv import load_dotenv
+
+# .env dosyasını belleğe yükle
+load_dotenv(dotenv_path="/home/ubuntu/bistbot/.env")
+
+# Artık bunlar asla "None" dönmez
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS","").split(",") if x]
 
 app = Flask(__name__)
 
