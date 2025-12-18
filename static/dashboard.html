@@ -24,7 +24,6 @@ header { background:#010409; padding:12px; display:flex; justify-content:space-b
 </header>
 
 <div class="container">
-
   <div class="card">
     <div>Sistem: <span id="sys" class="badge yellow">Kontrol</span></div>
     <div>Piyasa: <span id="market" class="badge yellow">Kontrol</span></div>
@@ -45,15 +44,12 @@ async function load() {
   const j = await res.json();
   const now = Date.now();
 
-  // SYSTEM
   sys.textContent = j.system_active ? "AKTİF" : "PASİF";
   sys.className = "badge " + (j.system_active ? "green" : "red");
 
-  // MARKET
   market.textContent = j.market_open ? "AÇIK" : "KAPALI";
   market.className = "badge " + (j.market_open ? "green" : "red");
 
-  // SCAN
   if (j.last_scan && (now - j.last_scan * 1000) < 180000) {
     scan.textContent = "TARAMA AKTİF";
     scan.className = "badge green";
@@ -62,7 +58,6 @@ async function load() {
     scan.className = "badge yellow";
   }
 
-  // SIGNALS
   const box = document.getElementById("signals");
   box.innerHTML = "";
   (j.data || []).forEach(s => {
