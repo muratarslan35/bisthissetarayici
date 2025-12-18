@@ -1,8 +1,14 @@
 from datetime import datetime, timezone
 from utils import to_tr_timezone
 
+# ==================================================
+# SUCCESS TRACKING
+# ==================================================
 success_tracker = {}
 
+# ==================================================
+# HELPERS
+# ==================================================
 def ma_text(v):
     return {
         "above": "🔼 yukarı kırdı",
@@ -21,6 +27,9 @@ def fmt_support_resistance(sr):
         f"• 1D → D: {sr['1D']['support']} | R: {sr['1D']['resistance']}"
     )
 
+# ==================================================
+# SUCCESS LOGIC
+# ==================================================
 def register_signal(symbol, price):
     today = to_tr_timezone(datetime.now(timezone.utc)).date()
     success_tracker.setdefault(symbol, {})
@@ -40,6 +49,9 @@ def check_success(symbol, price):
         d["hit"] = True
     return "BAŞARILI ✅" if d["hit"] else "BAŞARISIZ ❌"
 
+# ==================================================
+# CORE SIGNAL ENGINE (DEĞİŞMEDİ)
+# ==================================================
 def process_signals(item):
     out = []
 
@@ -72,3 +84,26 @@ def process_signals(item):
         out.append((f"SUPER-{symbol}", msg, {"type": "super"}))
 
     return out
+
+# ==================================================
+# 🔒 SAFE WRAPPER (YENİ – AMA ALGORİTMAYA DOKUNMAZ)
+# ==================================================
+def safe_process_bist_data(data_list):
+    """
+    fetch_bist_data() boş veya None dönerse sistem çökmesin.
+    Her item için process_signals() çağrılır.
+    """
+    results = []
+
+    if not data_list:
+        return results
+
+    for item in data_list:
+        try:
+            sigs = process_signals(item)
+            if sigs:
+                results.extend(sigs)
+        except Exception:
+            continue
+
+    return results
