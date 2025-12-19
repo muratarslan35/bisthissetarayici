@@ -88,6 +88,11 @@ def daily_success_summary():
 # ==================================================
 # TECH HELPERS
 # ==================================================
+def ma_direction(ma_current, ma_prev):
+    if ma_current is None or ma_prev is None:
+        return "N/A"
+    return "↑" if ma_current > ma_prev else "↓"
+
 def trend_ma_ok(tf):
     try:
         ma20 = tf.get("ema20")
@@ -115,10 +120,10 @@ def volume_ok(tf15):
 def long_term_trend_ok(item, price):
     trend_ok = False
     trend_type = ""
+    ma_dict = {}
     tf_list = [("1h", item.get("tf", {}).get("1h", {})),
                ("4h", item.get("tf", {}).get("4h", {})),
                ("1d", item.get("tf", {}).get("1d", {}))]
-    ma_dict = {}
     for name, tf in tf_list:
         ma20 = tf.get("ema20")
         ma50 = tf.get("ema50")
@@ -129,29 +134,45 @@ def long_term_trend_ok(item, price):
         golden_cross = ma50 and ma200 and ma50 > ma200
         if price_over_ma or golden_cross:
             trend_ok = True
-            trend_type = "Golden Cross" if golden_cross else "Uptrend"
+            trend_type = "⚔️ Golden Cross" if golden_cross else "↑ Uptrend"
             break
     return trend_ok, trend_type, ma_dict
 
 # ==================================================
 # MESSAGE BUILDING
 # ==================================================
-def fmt_ma_dict(ma_dict):
-    return ", ".join([f"{k}:{fmt_price(v)}" for k,v in ma_dict.items() if v])
+def fmt_ma_dict(ma_dict, prev_ma_dict=None):
+    lines = []
+    for k,v in ma_dict.items():
+        if v:
+            dir_sym = ""
+            if prev_ma_dict and prev_ma_dict.get(k):
+                dir_sym = ma_direction(v, prev_ma_dict.get(k))
+            lines.append(f"{k}: {fmt_price(v)} {dir_sym}")
+    return ", ".join(lines)
 
 def fmt_nearest_sr(item):
     ns = item.get("nearest_support")
-    nr = item.get("nearest_resistance")
-    if not ns and not nr:
-        return "📍 Yakın destek / direnç yok"
-    txt = "📍 Yakın Seviyeler:\n"
-    if ns:
-        txt += f"• Destek: {fmt_price(ns)}\n"
-    if nr:
-        txt += f"• Direnç: {fmt_price(nr)}\n"
-    price = item.get("current_price")
-    if nr and price and (nr - price)/price < 0.01:
-        txt += "⚠️ Direnç çok yakın (riskli)\n"
+    nr1h = item.get("nearest_resistance_1h")
+    nr4h = item.get("nearest_resistance_4h")
+    nr1d = item.get("nearest_resistance_1d")
+    txt = ""
+    if ns or nr1h or nr4h or nr1d:
+        txt += "📍 Yakın Seviyeler:\n"
+        if ns:
+            txt += f"• Destek: {fmt_price(ns)}\n"
+        if nr1h:
+            txt += f"• Direnç 1H: {fmt_price(nr1h)}\n"
+        if nr4h:
+            txt += f"• Direnç 4H: {fmt_price(nr4h)}\n"
+        if nr1d:
+            txt += f"• Direnç 1D: {fmt_price(nr1d)}\n"
+        price = item.get("current_price")
+        for nr in [nr1h, nr4h, nr1d]:
+            if nr and price and (nr - price)/price < 0.01:
+                txt += "⚠️ Direnç çok yakın (riskli)\n"
+    else:
+        txt = "📍 Yakın destek / direnç yok"
     return txt.strip()
 
 def build_signal_message(item, sig_name, sig_type, trend_type, ma_dict):
@@ -160,16 +181,13 @@ def build_signal_message(item, sig_name, sig_type, trend_type, ma_dict):
     tf15 = item.get("tf", {}).get("15m", {})
     vol_ok, vol_data = volume_ok(tf15)
     vol_text = f"{vol_data['volume']} (Ort: {vol_data['avg']})" if vol_data else "N/A"
-    nearest_resistance = item.get("nearest_resistance")
-    nr_text = fmt_price(nearest_resistance) if nearest_resistance else "Yok"
     msg = (
         f"Hisse: {item['symbol']}\n"
-        f"⚡ {sig_name}\n\n"
+        f"{sig_name}\n\n"
         f"Fiyat: {fmt_price(price)} | RSI: {rsi:.2f}\n"
         f"Hacim: {vol_text}\n"
         f"MA Değerleri: {fmt_ma_dict(ma_dict)}\n"
-        f"Trend: {trend_type}\n"
-        f"En yakın direnç (1h/4h/1d): {nr_text}\n\n"
+        f"Trend: {trend_type}\n\n"
         f"{fmt_nearest_sr(item)}"
     )
     return msg
@@ -187,7 +205,7 @@ def detect_pullback_buy(item):
     price = item.get("current_price")
     trend_ok, trend_type, ma_dict = long_term_trend_ok(item, price)
     set_cooldown(symbol)
-    msg = build_signal_message(item, "PULLBACK AL", "pullback", trend_type, ma_dict)
+    msg = build_signal_message(item, "⚡️ PULLBACK AL", "pullback", trend_type, ma_dict)
     return (f"PULL-{symbol}", msg, {"type": "pullback"})
 
 def detect_super_combined(item, market_open=True):
@@ -200,7 +218,7 @@ def detect_super_combined(item, market_open=True):
         return None
     register_signal(symbol, price)
     set_cooldown(symbol)
-    msg = build_signal_message(item, "SÜPER KOMBİNE", "super", trend_type, ma_dict)
+    msg = build_signal_message(item, "🚀🚀🚀 SÜPER KOMBİNE", "super", trend_type, ma_dict)
     return (f"SUPER-{symbol}", msg, {"type": "super"})
 
 def detect_trend_breakout_buy(item):
@@ -220,11 +238,14 @@ def detect_trend_breakout_buy(item):
     if not vol_ok:
         return None
     price = item.get("current_price")
-    nr = item.get("nearest_resistance")
-    if nr and (nr - price)/price < 0.01:
-        return None
+    nr1h = item.get("nearest_resistance_1h")
+    nr4h = item.get("nearest_resistance_4h")
+    nr1d = item.get("nearest_resistance_1d")
+    for nr in [nr1h, nr4h, nr1d]:
+        if nr and (nr - price)/price < 0.01:
+            return None
     set_cooldown(symbol)
-    msg = build_signal_message(item, "TREND + KIRILIM AL", "trend_breakout", trend_type, ma_dict)
+    msg = build_signal_message(item, "🧱 TREND + KIRILIM AL", "trend_breakout", trend_type, ma_dict)
     return (f"TREND-{symbol}", msg, {"type": "trend_breakout"})
 
 def detect_kombine_buy(item, market_open=True):
@@ -247,7 +268,7 @@ def detect_kombine_buy(item, market_open=True):
     if not trend_ok:
         return None
     set_cooldown(cooldown_key)
-    msg = build_signal_message(item, "KOMBINED BUY", "kombine", trend_type, ma_dict)
+    msg = build_signal_message(item, "🚀 KOMBINED BUY", "kombine", trend_type, ma_dict)
     return ("KOMB-" + symbol, msg, {"type": "kombine"})
 
 def detect_three_peak_break_buy(item):
@@ -264,7 +285,7 @@ def detect_three_peak_break_buy(item):
     rsi_ok = rsi and 50 <= rsi <= 70
     if trend_ok and vol_ok and rsi_ok:
         set_cooldown(symbol)
-        msg = build_signal_message(item, "3 LU TEPE KIRILIMI AL", "three_peak_break", trend_type, ma_dict)
+        msg = build_signal_message(item, "🔥 3 LU TEPE KIRILIMI AL", "three_peak_break", trend_type, ma_dict)
         return ("3PEAK-" + symbol, msg, {"type": "three_peak_break"})
     return None
 
@@ -293,7 +314,15 @@ def safe_process_bist_data(data_list, market_open=True):
     if not data_list:
         return results
     for item in data_list:
+        # Hesapla: 1h, 4h, 1d dirençler
         try:
+            for tf_name, tf in [("1h", item.get("tf", {}).get("1h", {})),
+                                ("4h", item.get("tf", {}).get("4h", {})),
+                                ("1d", item.get("tf", {}).get("1d", {}))]:
+                df = tf.get("df")  # fetch_bist.py tarafında df eklenmiş olmalı
+                if df is not None and not df.empty:
+                    ns, nr = nearest_support_resistance_from_history(df)
+                    item[f"nearest_resistance_{tf_name}"] = nr
             results.extend(process_signals(item, market_open))
         except Exception:
             continue
