@@ -197,14 +197,37 @@ def build_signal_message(item, sig_name, sig_type, trend_type, ma_dict):
 # ==================================================
 def detect_pullback_buy(item):
     tf15 = item.get("tf", {}).get("15m", {})
+    symbol = item["symbol"]
+    price = item.get("current_price")
+    rsi = item.get("RSI")
+    
     if not tf15.get("last_green"):
         return None
-    symbol = item["symbol"]
-    if in_cooldown(symbol):
+    
+    cooldown_key = f"{symbol}_pullback"
+    if in_cooldown(cooldown_key):
         return None
-    price = item.get("current_price")
+    
     trend_ok, trend_type, ma_dict = long_term_trend_ok(item, price)
-    set_cooldown(symbol)
+    if not trend_ok:
+        return None
+    
+    if not rsi or rsi < 50 or rsi > 70:
+        return None
+    
+    vol_ok, vol_data = volume_ok(tf15)
+    if not vol_ok:
+        return None
+    
+    ma20 = ma_dict.get("MA20")
+    ma50 = ma_dict.get("MA50")
+    if ma20 and price > ma20 * 1.02:
+        return None
+    if ma50 and price > ma50 * 1.02:
+        return None
+    
+    set_cooldown(cooldown_key)
+    
     msg = build_signal_message(item, "⚡️ PULLBACK AL", "pullback", trend_type, ma_dict)
     return (f"PULL-{symbol}", msg, {"type": "pullback"})
 
@@ -248,27 +271,49 @@ def detect_trend_breakout_buy(item):
     msg = build_signal_message(item, "🧱 TREND + KIRILIM AL", "trend_breakout", trend_type, ma_dict)
     return (f"TREND-{symbol}", msg, {"type": "trend_breakout"})
 
+# ==================================================
+# KOMBİNE SİNYAL (YENİ MANTIK)
+# ==================================================
 def detect_kombine_buy(item, market_open=True):
-    tf15 = item.get("tf", {}).get("15m", {})
-    tf4h = item.get("tf", {}).get("4h", {})
-    tf1d = item.get("tf", {}).get("1d", {})
     symbol = item["symbol"]
-    price = item.get("current_price")
-    kombine_ok = (
-        tf1d.get("last_green") and
-        tf4h.get("last_green") and
-        tf15.get("last_green")
-    )
-    if not kombine_ok or not market_open:
+    tf1d = item.get("tf", {}).get("1d", {})
+    tf4h = item.get("tf", {}).get("4h", {})
+    tf1h = item.get("tf", {}).get("1h", {})
+
+    # 1 Günlük şartlar
+    yesterday_green = tf1d.get("prev_green")          
+    today_open_green = tf1d.get("first_candle_green") 
+    if not (yesterday_green and today_open_green):
         return None
+
+    # 4 Saatlik şart
+    if not tf4h.get("last_green"):
+        return None
+
+    # 1 Saatlik şart
+    if not tf1h.get("last_green"):
+        return None
+
     cooldown_key = f"{symbol}_kombine"
     if in_cooldown(cooldown_key):
         return None
+
+    price = item.get("current_price")
     trend_ok, trend_type, ma_dict = long_term_trend_ok(item, price)
-    if not trend_ok:
-        return None
+
+    bonus = []
+    rsi = item.get("RSI")
+    if rsi and 50 <= rsi <= 70:
+        bonus.append("RSI uygun")
+    if trend_ok:
+        bonus.append("MA uygun")
+
+    bonus_text = f"+ BONUS: {', '.join(bonus)}" if bonus else ""
+
+    msg = f"KOMBİNE SİNYAL TESPİT EDİLDİ\n{bonus_text}"
+
     set_cooldown(cooldown_key)
-    msg = build_signal_message(item, "🚀 KOMBINED BUY", "kombine", trend_type, ma_dict)
+
     return ("KOMB-" + symbol, msg, {"type": "kombine"})
 
 def detect_three_peak_break_buy(item):
@@ -314,12 +359,11 @@ def safe_process_bist_data(data_list, market_open=True):
     if not data_list:
         return results
     for item in data_list:
-        # Hesapla: 1h, 4h, 1d dirençler
         try:
             for tf_name, tf in [("1h", item.get("tf", {}).get("1h", {})),
                                 ("4h", item.get("tf", {}).get("4h", {})),
                                 ("1d", item.get("tf", {}).get("1d", {}))]:
-                df = tf.get("df")  # fetch_bist.py tarafında df eklenmiş olmalı
+                df = tf.get("df")
                 if df is not None and not df.empty:
                     ns, nr = nearest_support_resistance_from_history(df)
                     item[f"nearest_resistance_{tf_name}"] = nr
