@@ -132,7 +132,6 @@ def long_term_trend_ok(item, price):
         ma_dict = {"MA20": ma20, "MA50": ma50, "MA100": ma100, "MA200": ma200}
         price_over_ma = any([ma and price > ma for ma in ma_dict.values() if ma])
         golden_cross = ma50 and ma200 and ma50 > ma200
-        ma_dict["golden_cross"] = golden_cross
         if price_over_ma or golden_cross:
             trend_ok = True
             trend_type = "⚔️ Golden Cross" if golden_cross else "↑ Uptrend"
@@ -144,16 +143,16 @@ def long_term_trend_ok(item, price):
 # ==================================================
 def fmt_ma_dict(ma_dict, prev_ma_dict=None):
     lines = []
-    for k, v in ma_dict.items():
-        if k != "golden_cross" and v is not None:
-            dir_sym = ""
-            if prev_ma_dict and prev_ma_dict.get(k) is not None:
-                dir_sym = ma_direction(v, prev_ma_dict.get(k))
-            lines.append(f"{k}: {fmt_price(v)} {dir_sym}")
-    # Golden Cross durumu varsa ekle
+    for k in ["MA20","MA50","MA100","MA200"]:
+        v = ma_dict.get(k)
+        dir_sym = ""
+        if prev_ma_dict and prev_ma_dict.get(k) and v is not None:
+            dir_sym = ma_direction(v, prev_ma_dict.get(k))
+        val_str = fmt_price(v) if v is not None else "N/A"
+        lines.append(f"{k}: {val_str} {dir_sym}")
+    # Golden cross varsa
     if ma_dict.get("golden_cross"):
         lines.append("⚔️ Golden Cross oluştu")
-    # Alt alta yazdır
     return "\n".join(lines)
 
 def fmt_nearest_sr(item):
@@ -278,9 +277,6 @@ def detect_trend_breakout_buy(item):
     msg = build_signal_message(item, "🧱 TREND + KIRILIM AL", "trend_breakout", trend_type, ma_dict)
     return (f"TREND-{symbol}", msg, {"type": "trend_breakout"})
 
-# ==================================================
-# KOMBİNE SİNYAL (YENİ MANTIK)
-# ==================================================
 def detect_kombine_buy(item, market_open=True):
     symbol = item["symbol"]
     tf1d = item.get("tf", {}).get("1d", {})
