@@ -96,3 +96,21 @@ def to_tr_timezone(dt):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(ZoneInfo("Europe/Istanbul"))
+def detect_three_peaks(close_series):
+    if close_series is None or close_series.empty or len(close_series) < 5:
+        return False
+
+    peaks = (
+        (close_series.shift(1) < close_series) &
+        (close_series.shift(-1) < close_series)
+    )
+
+    peak_prices = close_series[peaks]
+    if len(peak_prices) < 3:
+        return False
+
+    last_three = peak_prices.iloc[-3:]
+    max_peak = last_three.max()
+    current_price = close_series.iloc[-1]
+
+    return current_price > max_peak
