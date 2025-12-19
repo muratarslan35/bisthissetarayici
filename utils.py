@@ -37,7 +37,7 @@ FALLBACK_SYMBOLS = [
 ]
 
 # ==================================================
-# RSI
+# RSI (AYNEN KORUNDU)
 # ==================================================
 def calculate_rsi(series, period=14):
     delta = series.diff()
@@ -49,7 +49,7 @@ def calculate_rsi(series, period=14):
     return (100 - (100 / (1 + rs))).fillna(50)
 
 # ==================================================
-# SUPPORT / RESISTANCE
+# SUPPORT / RESISTANCE BREAK (AYNEN)
 # ==================================================
 def detect_support_resistance_break(df, lookback=20):
     prev_low = df["Low"].iloc[:-1].rolling(lookback, min_periods=1).min().iloc[-1]
@@ -57,23 +57,40 @@ def detect_support_resistance_break(df, lookback=20):
     close = df["Close"].iloc[-1]
     return close < prev_low, close > prev_high
 
+# ==================================================
+# NEAREST SUPPORT / RESISTANCE (MESAJ + DASHBOARD)
+# ==================================================
 def nearest_support_resistance_from_history(df, lookback=100):
     highs = df["High"].rolling(3, center=True).max()
     lows = df["Low"].rolling(3, center=True).min()
     ph = df["High"][df["High"] == highs]
     pl = df["Low"][df["Low"] == lows]
+
     price = df["Close"].iloc[-1]
 
     resistances = [v for v in ph if v > price]
     supports = [v for v in pl if v < price]
 
-    return (
-        max(supports) if supports else None,
-        min(resistances) if resistances else None
-    )
+    nearest_support = max(supports) if supports else None
+    nearest_resistance = min(resistances) if resistances else None
+
+    return nearest_support, nearest_resistance
 
 # ==================================================
-# TIMEZONE
+# RESISTANCE BREAK + DEVAM MESAJI (YENİ)
+# ==================================================
+def resistance_continuation(current_price, nearest_resistance, tolerance_pct=0.3):
+    if not nearest_resistance:
+        return False, False
+
+    broken = current_price > nearest_resistance
+    diff_pct = ((current_price - nearest_resistance) / nearest_resistance) * 100
+    continuation = broken and diff_pct >= tolerance_pct
+
+    return broken, continuation
+
+# ==================================================
+# TIMEZONE (AYNEN)
 # ==================================================
 def to_tr_timezone(dt):
     if dt.tzinfo is None:
