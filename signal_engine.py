@@ -175,7 +175,7 @@ def fmt_nearest_sr(item):
         txt = "📍 Yakın destek / direnç yok"
     return txt.strip()
 
-def build_signal_message(item, sig_name, sig_type, trend_type, ma_dict):
+def build_signal_message(item, sig_name, sig_type, trend_type, ma_dict, bonus_text=""):
     price = item.get("current_price")
     rsi = item.get("RSI")
     tf15 = item.get("tf", {}).get("15m", {})
@@ -190,6 +190,8 @@ def build_signal_message(item, sig_name, sig_type, trend_type, ma_dict):
         f"Trend: {trend_type}\n\n"
         f"{fmt_nearest_sr(item)}"
     )
+    if bonus_text:
+        msg += f"\n\n+ BONUS: {bonus_text}"
     return msg
 
 # ==================================================
@@ -308,9 +310,9 @@ def detect_kombine_buy(item, market_open=True):
     if trend_ok:
         bonus.append("MA uygun")
 
-    bonus_text = f"+ BONUS: {', '.join(bonus)}" if bonus else ""
+    bonus_text = ", ".join(bonus) if bonus else ""
 
-    msg = f"KOMBİNE SİNYAL TESPİT EDİLDİ\n{bonus_text}"
+    msg = build_signal_message(item, "🚀 KOMBİNE SİNYAL TESPİT EDİLDİ", "kombine", trend_type, ma_dict, bonus_text)
 
     set_cooldown(cooldown_key)
 
