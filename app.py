@@ -2,40 +2,57 @@ import os
 import time
 import threading
 import requests
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 from flask import Flask, jsonify, send_from_directory
-from dotenv import load_dotenv
 
 from fetch_bist import fetch_bist_data
-from signal_engine import safe_process_bist_data, success_tracker
+from signal_engine import safe_process_bist_data
 from utils import to_tr_timezone
 
+from dotenv import load_dotenv
+
 # ==================================================
-# ENV
+# ENV (KALICI YÜKLEME)
 # ==================================================
-load_dotenv("/home/ubuntu/bistbot/.env")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
 # ==================================================
-# APP
+# FLASK
 # ==================================================
 app = Flask(__name__)
 
 LATEST_DATA = []
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
-FIRST_SCAN_DONE = False
-TODAY = None
 
 data_lock = threading.Lock()
+
+# ==================================================
+# JSON SAFE HELPER  (🔥 KRİTİK FIX)
+# ==================================================
+def make_json_safe(obj):
+    if isinstance(obj, dict):
+        return {k: make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [make_json_safe(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [make_json_safe(v) for v in obj]
+    if isinstance(obj, (bool, int, float, str)) or obj is None:
+        return obj
+    try:
+        return obj.item()
+    except Exception:
+        return str(obj)
 
 # ==================================================
 # TELEGRAM
 # ==================================================
 def telegram_send(msg):
-    if not TELEGRAM_TOKEN:
+    if not TELEGRAM_TOKEN or not CHAT_IDS:
         return
     for cid in CHAT_IDS:
         try:
@@ -44,95 +61,68 @@ def telegram_send(msg):
                 json={"chat_id": cid, "text": msg},
                 timeout=5
             )
-        except:
+        except Exception:
             pass
 
 # ==================================================
-# MARKET TIME
+# MARKET HOURS
 # ==================================================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
     return (
         now.weekday() < 5 and
-        (
-            now.hour > 9 or
-            (now.hour == 9 and now.minute >= 55)
-        ) and
+        (now.hour > 9 or (now.hour == 9 and now.minute >= 55)) and
         now.hour < 18
     )
-
-# ==================================================
-# DAY END SUMMARY
-# ==================================================
-def send_day_summary():
-    today = to_tr_timezone(datetime.now(timezone.utc)).date()
-    rows = []
-
-    for symbol, days in success_tracker.items():
-        d = days.get(today)
-        if d and d.get("hit"):
-            rows.append(f"• {symbol} 🎯")
-
-    if rows:
-        telegram_send(
-            "📊 GÜN SONU BAŞARILI SİNYALLER\n\n" +
-            "\n".join(rows)
-        )
-    else:
-        telegram_send("📊 Bugün başarılı sinyal olmadı.")
 
 # ==================================================
 # BACKGROUND LOOP
 # ==================================================
 def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED
-    global FIRST_SCAN_DONE, TODAY
 
     SYSTEM_STARTED = True
-    telegram_send("🤖 Sistem başlatıldı – Oracle VM aktif")
+
+    telegram_send(
+        "🤖 BIST BOT AKTİF\n"
+        "• Oracle VM\n"
+        "• Dashboard + Telegram senkron\n"
+        f"• Başlangıç: {to_tr_timezone(datetime.now(timezone.utc)).strftime('%H:%M:%S')}"
+    )
+
+    first_open_scan_done = False
 
     while True:
         try:
-            now_tr = to_tr_timezone(datetime.now(timezone.utc))
-            today = now_tr.date()
-
-            # Yeni gün resetleri
-            if TODAY != today:
-                TODAY = today
-                FIRST_SCAN_DONE = False
-                telegram_send("🌅 Yeni işlem günü başladı")
-
-            data = fetch_bist_data()
-            signals = safe_process_bist_data(data)
+            raw_data = fetch_bist_data()
 
             with data_lock:
-                LATEST_DATA = data
+                LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
-            # ==========================
-            # SABAH İLK TARAMA
-            # ==========================
-            if market_open() and not FIRST_SCAN_DONE:
-                FIRST_SCAN_DONE = True
+            # --------- SABAH AÇILIŞ MESAJI ---------
+            if market_open() and not first_open_scan_done:
+                first_open_scan_done = True
                 telegram_send(
-                    f"⏰ 09:55 İlk tarama tamamlandı\n"
-                    f"📌 Taranan hisse: {len(data)}"
+                    f"📈 PİYASA AÇILDI\n"
+                    f"Taranan hisse sayısı: {len(raw_data)}\n"
+                    f"İlk tarama tamamlandı"
                 )
 
-            # ==========================
-            # GÜN İÇİ YENİ SİNYALLER
-            # ==========================
-            for key, msg, meta in signals:
-                # Sabah açılışta super kombine engeli (15m datasız)
-                if not market_open() and meta.get("type") == "super":
-                    continue
+            # --------- SİNYAL MOTORU ---------
+            signals = safe_process_bist_data(raw_data)
+
+            for _, msg, _ in signals:
                 telegram_send(msg)
 
-            # ==========================
-            # GÜN SONU (18:10)
-            # ==========================
-            if now_tr.hour == 18 and now_tr.minute == 10:
-                send_day_summary()
+            # --------- PİYASA KAPALI ÖZET ---------
+            if not market_open():
+                strong = [x["symbol"] for x in raw_data if x.get("super_combined_ok")]
+                if strong:
+                    telegram_send(
+                        "📊 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
+                        "\n".join(f"• {s}" for s in strong[:5])
+                    )
 
         except Exception as e:
             print("SCAN ERROR:", e)
@@ -140,35 +130,21 @@ def background_loop():
         time.sleep(60)
 
 # ==================================================
-# THREAD
+# THREAD START
 # ==================================================
 threading.Thread(target=background_loop, daemon=True).start()
 
 # ==================================================
-# API (DASHBOARD)
+# API
 # ==================================================
 @app.route("/api")
 def api():
     with data_lock:
-        today = to_tr_timezone(datetime.now(timezone.utc)).date()
-
-        success_today = []
-        for symbol, days in success_tracker.items():
-            d = days.get(today)
-            if d:
-                success_today.append({
-                    "symbol": symbol,
-                    "entry": d["entry"],
-                    "target": d["target"],
-                    "hit": d["hit"]
-                })
-
         return jsonify({
             "system_active": int(SYSTEM_STARTED),
             "market_open": int(market_open()),
             "last_scan": LAST_SCAN_TS,
-            "data": LATEST_DATA,
-            "success_table": success_today
+            "data": make_json_safe(LATEST_DATA)
         })
 
 @app.route("/wake")
@@ -180,7 +156,7 @@ def dashboard():
     return send_from_directory("static", "dashboard.html")
 
 # ==================================================
-# MAIN
+# RUN
 # ==================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
