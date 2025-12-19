@@ -6,37 +6,116 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { margin:0; background:#0e1117; color:#e6edf3; font-family:Arial }
-header { background:#010409; padding:12px; display:flex; justify-content:space-between; align-items:center }
-.badge { padding:6px 10px; border-radius:6px; font-weight:bold }
-.green { background:#2ea043 }
-.red { background:#f85149 }
-.yellow { background:#d29922 }
-.container { padding:16px }
-.card { background:#161b22; padding:12px; border-radius:10px; margin-bottom:10px }
+header { background:#010409; padding:12px; display:flex; justify-content:space-between; align-items:center; }
+.badge { padding:6px 10px; border-radius:6px; font-weight:bold; }
+.green { background:#2ea043; }
+.red { background:#f85149; }
+.yellow { background:#d29922; }
+.container { padding:16px; }
+.card { background:#161b22; padding:12px; border-radius:10px; margin-bottom:10px; transition: transform 0.2s; }
+.card:hover { transform: scale(1.03); }
+.empty { text-align:center; color:#d29922; padding:20px; font-style:italic; }
+
+.navbar { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; background:#161b22; padding:8px; border-radius:10px; }
+.navbar label { display:flex; align-items:center; gap:4px; cursor:pointer; padding:6px 10px; border-radius:6px; transition: all 0.2s; background:#0f131a; }
+.navbar label:hover { background: #f85149; color:#fff; }
+.navbar input { cursor:pointer; }
+
+#applyFilter { margin-left:10px; background:#2e64f8; color:#fff; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; transition: all 0.2s; }
+#applyFilter:hover { background:#f85149; }
+
+.status-cards { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+.status-cards .card { flex:1; text-align:center; position:relative; }
+.status-cards .badge { font-size:14px; }
+
+.update-info { font-size:12px; color:#888; margin-bottom:10px; }
 </style>
 </head>
 
 <body>
 
-<header>
-  <b>BIST Tarayıcı</b>
-  <button onclick="wake()" class="badge yellow">Sistemi Uyandır</button>
-</header>
-
 <div class="container">
-  <div class="card">
-    <div>Sistem: <span id="sys" class="badge yellow">Kontrol</span></div>
-    <div>Piyasa: <span id="market" class="badge yellow">Kontrol</span></div>
-    <div>Tarama: <span id="scan" class="badge yellow">Bekleniyor</span></div>
+  <header>
+    <b>BIST Tarayıcı</b>
+    <button onclick="wake()" class="badge yellow">Sistemi Uyandır</button>
+  </header>
+
+  <!-- Durum Kartları -->
+  <div class="status-cards">
+    <div class="card" id="systemCard">Sistem: <span id="sys" class="badge yellow">Kontrol</span></div>
+    <div class="card" id="marketCard">Piyasa: <span id="market" class="badge yellow">Kontrol</span></div>
+    <div class="card" id="scanCard">Tarama: <span id="scan" class="badge yellow">Bekleniyor</span></div>
   </div>
 
+  <!-- Navbar filtreleri -->
+  <div class="navbar">
+    <label><input type="checkbox" value="buy" class="filter-checkbox"> AL</label>
+    <label><input type="checkbox" value="sell" class="filter-checkbox"> SAT</label>
+    <label><input type="checkbox" value="hacim" class="filter-checkbox"> Hacim</label>
+    <label><input type="checkbox" value="destek" class="filter-checkbox"> Destek</label>
+    <label><input type="checkbox" value="direnc" class="filter-checkbox"> Direnç</label>
+    <label><input type="checkbox" value="kombine" class="filter-checkbox"> Kombine Sinyal</label>
+    <label><input type="checkbox" value="superkombine" class="filter-checkbox"> Süper Kombine</label>
+    <label><input type="checkbox" value="rsi" class="filter-checkbox"> RSI</label>
+    <button id="applyFilter">Uygula</button>
+  </div>
+
+  <!-- Son Güncelleme -->
+  <div class="update-info" id="lastUpdate">Son güncelleme: --:--:--</div>
+
+  <!-- Sinyaller -->
   <div id="signals"></div>
 </div>
 
 <script>
+let lastData = [];
+let activeFilters = [];
+
 async function wake() {
   await fetch("/wake");
   alert("Uyandırma isteği gönderildi");
+}
+
+function renderSignals(data, filters = [], systemActive = true) {
+  const box = document.getElementById("signals");
+  box.innerHTML = "";
+
+  let filtered = data;
+  if (filters.length > 0) {
+    filtered = data.filter(s => s.signal_type && filters.includes(s.signal_type.toLowerCase()));
+  }
+
+  if (filtered.length > 0) {
+    filtered.forEach(s => {
+      const c = document.createElement("div");
+      c.className = "card";
+
+      // Sinyal renkleri
+      let color = 'yellow';
+      if (s.signal_type==='buy') color='green';
+      else if (s.signal_type==='sell') color='red';
+      else if (s.signal_type==='hacim') color='#00bfff';
+      else if (s.signal_type==='destek') color='#ff4500';
+      else if (s.signal_type==='direnc') color='#ff8c00';
+      else if (s.signal_type==='kombine') color='#8a2be2';
+      else if (s.signal_type==='superkombine') color='#ff1493';
+      else if (s.signal_type==='rsi') color='#00fa9a';
+
+      c.innerHTML = `<b>${s.symbol}</b><br>Fiyat: ${s.current_price}<br>Sinyal: <span class="badge" style="background:${color}">${s.signal_type?.toUpperCase() ?? '-'}</span>`;
+      box.appendChild(c);
+    });
+    if (!systemActive) {
+      const info = document.createElement("div");
+      info.className = "empty";
+      info.textContent = "Sistem kapalı, son tarama verileri gösteriliyor.";
+      box.insertBefore(info, box.firstChild);
+    }
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = systemActive ? "Sinyal yok." : "Sistem kapalı, veri yok.";
+    box.appendChild(empty);
+  }
 }
 
 async function load() {
@@ -44,6 +123,7 @@ async function load() {
   const j = await res.json();
   const now = Date.now();
 
+  // Durum kartları
   sys.textContent = j.system_active ? "AKTİF" : "PASİF";
   sys.className = "badge " + (j.system_active ? "green" : "red");
 
@@ -58,15 +138,23 @@ async function load() {
     scan.className = "badge yellow";
   }
 
-  const box = document.getElementById("signals");
-  box.innerHTML = "";
-  (j.data || []).forEach(s => {
-    const c = document.createElement("div");
-    c.className = "card";
-    c.innerHTML = `<b>${s.symbol}</b><br>Fiyat: ${s.current_price}`;
-    box.appendChild(c);
-  });
+  // Son verileri sakla
+  let dataToShow = j.system_active ? (j.data || []) : lastData;
+  if (j.system_active) lastData = dataToShow;
+
+  // Son güncelleme saati
+  const date = new Date();
+  document.getElementById("lastUpdate").textContent = `Son güncelleme: ${date.toLocaleTimeString()}`;
+
+  renderSignals(dataToShow, activeFilters, j.system_active);
 }
+
+// Uygula butonu
+document.getElementById("applyFilter").addEventListener("click", () => {
+  const checked = Array.from(document.querySelectorAll(".filter-checkbox:checked")).map(c => c.value);
+  activeFilters = checked;
+  load();
+});
 
 setInterval(load, 5000);
 load();
