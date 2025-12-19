@@ -19,6 +19,13 @@ yf.pdr_override = False
 
 
 # ==================================================
+# EMA HELPERS
+# ==================================================
+def calculate_ema(series, period):
+    return series.ewm(span=period, adjust=False).mean()
+
+
+# ==================================================
 # SAFE YFINANCE DOWNLOAD
 # ==================================================
 def yf_download_safe(ticker, period, interval):
@@ -89,16 +96,29 @@ def fetch_timeframe_indicators(df):
         return out
 
     try:
-        out["last_close"] = float(df["Close"].iloc[-1])
+        close = df["Close"]
+
+        ema20 = calculate_ema(close, 20)
+        ema50 = calculate_ema(close, 50)
+
+        out["last_close"] = float(close.iloc[-1])
         out["last_open"] = float(df["Open"].iloc[-1])
         out["last_green"] = out["last_close"] > out["last_open"]
-        out["rsi"] = float(calculate_rsi(df["Close"]).iloc[-1])
+
+        out["ema20"] = float(ema20.iloc[-1])
+        out["ema50"] = float(ema50.iloc[-1])
+
+        out["above_ema20"] = out["last_close"] > out["ema20"]
+        out["above_ema50"] = out["last_close"] > out["ema50"]
+
+        out["rsi"] = float(calculate_rsi(close).iloc[-1])
     except Exception:
         pass
 
     try:
         out["volume"] = int(df["Volume"].iloc[-1])
         out["volume_avg_5"] = int(df["Volume"].iloc[-6:-1].mean())
+        out["volume_ok"] = out["volume"] > out["volume_avg_5"]
     except Exception:
         pass
 
@@ -134,7 +154,7 @@ def fetch_one_symbol(sym):
     rsi_15 = tf15.get("rsi")
 
     # ===============================================
-    # NEAREST SUPPORT / RESISTANCE (NEW)
+    # NEAREST SUPPORT / RESISTANCE
     # ===============================================
     ns, nr = nearest_support_resistance_from_history(df_15)
 
@@ -149,7 +169,6 @@ def fetch_one_symbol(sym):
 
     # ===============================================
     # SUPER COMBINED (AYNEN KORUNDU)
-    # Sabah ilk barlarda 15m oturmamışsa üretmez
     # ===============================================
     super_ok = False
     try:
