@@ -132,6 +132,7 @@ def long_term_trend_ok(item, price):
         ma_dict = {"MA20": ma20, "MA50": ma50, "MA100": ma100, "MA200": ma200}
         price_over_ma = any([ma and price > ma for ma in ma_dict.values() if ma])
         golden_cross = ma50 and ma200 and ma50 > ma200
+        ma_dict["golden_cross"] = golden_cross
         if price_over_ma or golden_cross:
             trend_ok = True
             trend_type = "⚔️ Golden Cross" if golden_cross else "↑ Uptrend"
@@ -143,13 +144,17 @@ def long_term_trend_ok(item, price):
 # ==================================================
 def fmt_ma_dict(ma_dict, prev_ma_dict=None):
     lines = []
-    for k,v in ma_dict.items():
-        if v:
+    for k, v in ma_dict.items():
+        if k != "golden_cross" and v is not None:
             dir_sym = ""
-            if prev_ma_dict and prev_ma_dict.get(k):
+            if prev_ma_dict and prev_ma_dict.get(k) is not None:
                 dir_sym = ma_direction(v, prev_ma_dict.get(k))
             lines.append(f"{k}: {fmt_price(v)} {dir_sym}")
-    return ", ".join(lines)
+    # Golden Cross durumu varsa ekle
+    if ma_dict.get("golden_cross"):
+        lines.append("⚔️ Golden Cross oluştu")
+    # Alt alta yazdır
+    return "\n".join(lines)
 
 def fmt_nearest_sr(item):
     ns = item.get("nearest_support")
@@ -181,28 +186,22 @@ def build_signal_message(item, sig_name, sig_type, trend_type, ma_dict, bonus_te
     tf15 = item.get("tf", {}).get("15m", {})
     vol_ok, vol_data = volume_ok(tf15)
     vol_text = f"{vol_data['volume']} (Ort: {vol_data['avg']})" if vol_data else "N/A"
-    
-    msg_lines = [
-        f"Hisse: {item['symbol']}",
-        f"{sig_name}",
-        "",
-        f"Fiyat: {fmt_price(price)} | RSI: {rsi:.2f}",
-        f"Hacim: {vol_text}",
-        f"MA Değerleri: {fmt_ma_dict(ma_dict)}",
-        f"Trend: {trend_type}",
-        "",
+    msg = (
+        f"Hisse: {item['symbol']}\n"
+        f"{sig_name}\n\n"
+        f"Fiyat: {fmt_price(price)} | RSI: {rsi:.2f}\n"
+        f"Hacim: {vol_text}\n"
+        f"MA Değerleri:\n{fmt_ma_dict(ma_dict)}\n"
+        f"Trend: {trend_type}\n\n"
         f"{fmt_nearest_sr(item)}"
-    ]
+    )
     if bonus_text:
-        msg_lines.append(f"\n+ BONUS: {bonus_text}")
-    return "\n".join(msg_lines)
+        msg += f"\n\n+ BONUS: {bonus_text}"
+    return msg
 
 # ==================================================
 # SIGNAL DETECTORS
 # ==================================================
-# Pullback, Trend Breakout, Kombine ve 3 Lu Tepe sinyalleri aynı şekilde korunuyor
-# sadece mesaj formatı tüm sinyaller için build_signal_message ile standart hale getirildi
-
 def detect_pullback_buy(item):
     tf15 = item.get("tf", {}).get("15m", {})
     symbol = item["symbol"]
@@ -236,13 +235,7 @@ def detect_pullback_buy(item):
     
     set_cooldown(cooldown_key)
     
-    bonus_text = []
-    if rsi and 50 <= rsi <= 70:
-        bonus_text.append("RSI uygun")
-    if trend_ok:
-        bonus_text.append("MA uygun")
-    
-    msg = build_signal_message(item, "⚡️ PULLBACK AL", "pullback", trend_type, ma_dict, ", ".join(bonus_text))
+    msg = build_signal_message(item, "⚡️ PULLBACK AL", "pullback", trend_type, ma_dict)
     return (f"PULL-{symbol}", msg, {"type": "pullback"})
 
 def detect_super_combined(item, market_open=True):
@@ -255,15 +248,7 @@ def detect_super_combined(item, market_open=True):
         return None
     register_signal(symbol, price)
     set_cooldown(symbol)
-    
-    bonus_text = []
-    rsi = item.get("RSI")
-    if rsi and 50 <= rsi <= 70:
-        bonus_text.append("RSI uygun")
-    if trend_ok:
-        bonus_text.append("MA uygun")
-    
-    msg = build_signal_message(item, "🚀🚀🚀 SÜPER KOMBİNE", "super", trend_type, ma_dict, ", ".join(bonus_text))
+    msg = build_signal_message(item, "🚀🚀🚀 SÜPER KOMBİNE", "super", trend_type, ma_dict)
     return (f"SUPER-{symbol}", msg, {"type": "super"})
 
 def detect_trend_breakout_buy(item):
@@ -290,18 +275,11 @@ def detect_trend_breakout_buy(item):
         if nr and (nr - price)/price < 0.01:
             return None
     set_cooldown(symbol)
-    
-    bonus_text = []
-    if rsi and 50 <= rsi <= 70:
-        bonus_text.append("RSI uygun")
-    if trend_ok:
-        bonus_text.append("MA uygun")
-    
-    msg = build_signal_message(item, "🧱 TREND + KIRILIM AL", "trend_breakout", trend_type, ma_dict, ", ".join(bonus_text))
+    msg = build_signal_message(item, "🧱 TREND + KIRILIM AL", "trend_breakout", trend_type, ma_dict)
     return (f"TREND-{symbol}", msg, {"type": "trend_breakout"})
 
 # ==================================================
-# Kombine ve 3 Lu Tepe detectorlar aynı şekilde güncellendi
+# KOMBİNE SİNYAL (YENİ MANTIK)
 # ==================================================
 def detect_kombine_buy(item, market_open=True):
     symbol = item["symbol"]
@@ -338,9 +316,11 @@ def detect_kombine_buy(item, market_open=True):
         bonus.append("MA uygun")
 
     bonus_text = ", ".join(bonus) if bonus else ""
+
     msg = build_signal_message(item, "🚀 KOMBİNE SİNYAL TESPİT EDİLDİ", "kombine", trend_type, ma_dict, bonus_text)
 
     set_cooldown(cooldown_key)
+
     return ("KOMB-" + symbol, msg, {"type": "kombine"})
 
 def detect_three_peak_break_buy(item):
@@ -357,12 +337,7 @@ def detect_three_peak_break_buy(item):
     rsi_ok = rsi and 50 <= rsi <= 70
     if trend_ok and vol_ok and rsi_ok:
         set_cooldown(symbol)
-        bonus_text = []
-        if rsi_ok:
-            bonus_text.append("RSI uygun")
-        if trend_ok:
-            bonus_text.append("MA uygun")
-        msg = build_signal_message(item, "🔥 3 LU TEPE KIRILIMI AL", "three_peak_break", trend_type, ma_dict, ", ".join(bonus_text))
+        msg = build_signal_message(item, "🔥 3 LU TEPE KIRILIMI AL", "three_peak_break", trend_type, ma_dict)
         return ("3PEAK-" + symbol, msg, {"type": "three_peak_break"})
     return None
 
