@@ -1,18 +1,16 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from utils import to_tr_timezone
 
 # ==================================================
-# CONFIG
-# ==================================================
-TARGET_PCT = 0.02           # %2 hedef
-COOLDOWN_MINUTES = 30       # aynı sinyal tekrar süresi
-MIN_RESISTANCE_DIST = 0.01  # %1'den yakın dirençte AL üretme
-
-# ==================================================
-# STATE
+# GLOBAL STATE
 # ==================================================
 success_tracker = {}
-signal_cooldowns = {}  # { (symbol, type): datetime }
+signal_cooldown = {}   # { symbol: {"type": "BUY", "ts": timestamp} }
+
+TARGET_PCT = 0.02
+COOLDOWN_SEC = 60 * 30   # 30 dk
+
+MIN_RESISTANCE_DISTANCE_PCT = 0.01  # %1'den yakın direnç varsa BUY yok
 
 # ==================================================
 # HELPERS
@@ -25,28 +23,27 @@ def fmt_price(v):
 
 
 def cooldown_ok(symbol, sig_type):
-    key = (symbol, sig_type)
-    last = signal_cooldowns.get(key)
+    now = datetime.now().timestamp()
+    last = signal_cooldown.get(symbol)
+
     if not last:
         return True
-    return datetime.now(timezone.utc) - last > timedelta(minutes=COOLDOWN_MINUTES)
+
+    # BUY sonrası SELL gelirse cooldown iptal
+    if last["type"] == "BUY" and sig_type == "SELL":
+        return True
+
+    return (now - last["ts"]) > COOLDOWN_SEC
 
 
-def set_cooldown(symbol, sig_type):
-    signal_cooldowns[(symbol, sig_type)] = datetime.now(timezone.utc)
+def register_cooldown(symbol, sig_type):
+    signal_cooldown[symbol] = {
+        "type": sig_type,
+        "ts": datetime.now().timestamp()
+    }
 
 
-def clear_cooldown(symbol, sig_type):
-    signal_cooldowns.pop((symbol, sig_type), None)
-
-
-def too_close_to_resistance(price, resistance):
-    if not resistance or not price:
-        return False
-    return (resistance - price) / price < MIN_RESISTANCE_DIST
-
-
-def fmt_nearest_sr(item):
+def fmt_nearest_sr(item, price):
     ns = item.get("nearest_support")
     nr = item.get("nearest_resistance")
 
@@ -59,18 +56,22 @@ def fmt_nearest_sr(item):
     if nr:
         txt += f"• Direnç: {fmt_price(nr)}\n"
 
+        dist = (nr - price) / price
+        if dist < MIN_RESISTANCE_DISTANCE_PCT:
+            txt += "⚠️ Direnç çok yakın (riskli)\n"
+
     if item.get("resistance_continuation"):
         txt += "🚀 Direnç kırıldı → devam potansiyeli\n"
 
     return txt.strip()
 
-
 # ==================================================
-# SUCCESS LOGIC
+# SUCCESS TRACKING
 # ==================================================
 def register_signal(symbol, price):
     today = to_tr_timezone(datetime.now(timezone.utc)).date()
     success_tracker.setdefault(today, {})
+
     if symbol not in success_tracker[today]:
         success_tracker[today][symbol] = {
             "entry": price,
@@ -83,16 +84,18 @@ def register_signal(symbol, price):
 def update_success(symbol, price):
     today = to_tr_timezone(datetime.now(timezone.utc)).date()
     d = success_tracker.get(today, {}).get(symbol)
+
     if not d:
         return None
+
     d["last_price"] = price
     if not d["hit"] and price >= d["target"]:
         d["hit"] = True
+
     return d["hit"]
 
-
 # ==================================================
-# CORE SIGNAL ENGINE
+# CORE ENGINE
 # ==================================================
 def process_signals(item, market_open=True):
     out = []
@@ -100,56 +103,73 @@ def process_signals(item, market_open=True):
     symbol = item["symbol"]
     price = float(item["current_price"])
     rsi = round(item["RSI"], 2)
-    resistance = item.get("nearest_resistance")
+
+    tf15 = item["tf"]["15m"]
+    tf4h = item["tf"]["4h"]
+    tf1d = item["tf"]["1d"]
+
+    ema_ok = tf15.get("ema20") and tf15.get("ema50") and tf15["ema20"] > tf15["ema50"]
+    volume_ok = tf15.get("volume") and tf15.get("volume_avg_5") and tf15["volume"] > tf15["volume_avg_5"]
+    three_peak = item.get("three_peak_break")
 
     # ==================================================
-    # SUPER KOMBINASYON
+    # SELL – 3LÜ TEPE
     # ==================================================
-    if item.get("super_combined_ok") and market_open:
-
-        # 🔒 çok yakın direnç filtresi
-        if too_close_to_resistance(price, resistance):
-            pass
-        elif cooldown_ok(symbol, "super"):
-            register_signal(symbol, price)
-            success = update_success(symbol, price)
-
-            msg = (
-                f"Hisse: {symbol}\n"
-                f"💎🚀 SÜPER KOMBİNE\n\n"
-                f"Fiyat: {fmt_price(price)} | RSI: {rsi}\n\n"
-                f"{fmt_nearest_sr(item)}"
-            )
-
-            if success:
-                msg += "\n🎯 HEDEF GERÇEKLEŞTİ (%2)"
-
-            out.append((f"SUPER-{symbol}", msg, {"type": "super"}))
-            set_cooldown(symbol, "super")
+    if three_peak and cooldown_ok(symbol, "SELL"):
+        msg = (
+            f"Hisse: {symbol}\n"
+            f"🔴 SAT – 3'LÜ TEPE\n\n"
+            f"Fiyat: {fmt_price(price)} | RSI: {rsi}\n"
+            f"EMA20 < EMA50 veya tepe formasyonu\n\n"
+            f"{fmt_nearest_sr(item, price)}"
+        )
+        register_cooldown(symbol, "SELL")
+        out.append((f"SELL-{symbol}", msg, {"type": "sell"}))
+        return out
 
     # ==================================================
-    # DİRENÇ KIRILIMI
+    # KOMBINED BUY
     # ==================================================
-    if item.get("resistance_break") and cooldown_ok(symbol, "resistance"):
+    if (
+        market_open
+        and tf1d.get("last_green")
+        and tf4h.get("last_green")
+        and tf15.get("last_green")
+        and ema_ok
+        and volume_ok
+        and not three_peak
+        and cooldown_ok(symbol, "BUY")
+    ):
+        register_signal(symbol, price)
+        register_cooldown(symbol, "BUY")
+
+        msg = (
+            f"Hisse: {symbol}\n"
+            f"🟢 AL – KOMBINED\n\n"
+            f"Fiyat: {fmt_price(price)} | RSI: {rsi}\n"
+            f"EMA20 > EMA50 | Hacim onaylı\n\n"
+            f"{fmt_nearest_sr(item, price)}"
+        )
+
+        out.append((f"BUY-{symbol}", msg, {"type": "buy"}))
+        return out
+
+    # ==================================================
+    # DİRENÇ KIRILIMI (BİLGİ)
+    # ==================================================
+    if item.get("resistance_break") and cooldown_ok(symbol, "RES"):
         msg = (
             f"Hisse: {symbol}\n"
             f"📈 Direnç Kırılımı\n\n"
             f"Fiyat: {fmt_price(price)} | RSI: {rsi}\n\n"
-            f"{fmt_nearest_sr(item)}"
+            f"{fmt_nearest_sr(item, price)}"
         )
-
+        register_cooldown(symbol, "RES")
         out.append((f"RES-{symbol}", msg, {"type": "resistance"}))
-        set_cooldown(symbol, "resistance")
-
-        # 🔓 direnç kırıldıysa BUY cooldown iptal
-        clear_cooldown(symbol, "super")
 
     return out
 
 
-# ==================================================
-# SAFE WRAPPER
-# ==================================================
 def safe_process_bist_data(data_list, market_open=True):
     results = []
     if not data_list:
@@ -157,41 +177,10 @@ def safe_process_bist_data(data_list, market_open=True):
 
     for item in data_list:
         try:
-            sigs = process_signals(item, market_open=market_open)
+            sigs = process_signals(item, market_open)
             if sigs:
                 results.extend(sigs)
         except Exception:
             continue
 
     return results
-
-
-# ==================================================
-# DAILY SUMMARY
-# ==================================================
-def daily_success_summary():
-    today = to_tr_timezone(datetime.now(timezone.utc)).date()
-    day = success_tracker.get(today)
-    if not day:
-        return None
-
-    total = len(day)
-    success = sum(1 for d in day.values() if d["hit"])
-
-    lines = [
-        "📊 GÜN SONU SİNYAL ÖZETİ",
-        f"Toplam sinyal: {total}",
-        f"Başarılı: {success}",
-        f"Başarısız: {total - success}",
-        "",
-        "Detaylar:"
-    ]
-
-    for sym, d in day.items():
-        status = "✅" if d["hit"] else "❌"
-        lines.append(
-            f"{sym} {status} | Giriş: {fmt_price(d['entry'])} → "
-            f"Son: {fmt_price(d['last_price'])}"
-        )
-
-    return "\n".join(lines)
