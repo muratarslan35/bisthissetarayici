@@ -32,7 +32,7 @@ SYSTEM_STARTED = False
 data_lock = threading.Lock()
 
 # ==================================================
-# JSON SAFE HELPER  (🔥 KRİTİK FIX)
+# JSON SAFE HELPER
 # ==================================================
 def make_json_safe(obj):
     if isinstance(obj, dict):
@@ -100,8 +100,10 @@ def background_loop():
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
+            is_open = market_open()
+
             # --------- SABAH AÇILIŞ MESAJI ---------
-            if market_open() and not first_open_scan_done:
+            if is_open and not first_open_scan_done:
                 first_open_scan_done = True
                 telegram_send(
                     f"📈 PİYASA AÇILDI\n"
@@ -109,14 +111,17 @@ def background_loop():
                     f"İlk tarama tamamlandı"
                 )
 
-            # --------- SİNYAL MOTORU ---------
-            signals = safe_process_bist_data(raw_data)
+            # --------- SİNYAL MOTORU (🔥 KRİTİK FIX) ---------
+            signals = safe_process_bist_data(
+                raw_data,
+                market_open=is_open
+            )
 
             for _, msg, _ in signals:
                 telegram_send(msg)
 
             # --------- PİYASA KAPALI ÖZET ---------
-            if not market_open():
+            if not is_open:
                 strong = [x["symbol"] for x in raw_data if x.get("super_combined_ok")]
                 if strong:
                     telegram_send(
