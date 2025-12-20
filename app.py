@@ -25,6 +25,7 @@ CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 app = Flask(__name__)
 
 LATEST_DATA = []
+LATEST_SIGNALS = []   # 🔥 DASHBOARD SİNYAL HAVUZU
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
 data_lock = threading.Lock()
@@ -60,7 +61,7 @@ def market_open():
 # BACKGROUND LOOP
 # ==================================================
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS
     SYSTEM_STARTED = True
 
     telegram_send("🤖 BIST BOT AKTİF")
@@ -73,13 +74,28 @@ def background_loop():
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
-            # --- PİYASA AÇIK ---
+            # ------------------ PİYASA AÇIK ------------------
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
-                for _, msg, _ in signals:
+
+                dashboard_signals = []
+                for sid, msg, meta in signals:
                     telegram_send(msg)
 
-            # --- PİYASA KAPALI ---
+                    # 🔥 DASHBOARD FORMAT
+                    dashboard_signals.append({
+                        "symbol": meta.get("symbol"),
+                        "signal_type": meta.get("type"),
+                        "current_price": meta.get("price"),
+                        "rsi": meta.get("rsi"),
+                        "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
+                        "details": meta
+                    })
+
+                with data_lock:
+                    LATEST_SIGNALS = dashboard_signals
+
+            # ------------------ PİYASA KAPALI ------------------
             else:
                 strong = scan_strong_stocks(raw_data)
                 if strong:
@@ -88,8 +104,6 @@ def background_loop():
                         "\n".join(strong)
                     )
 
-            # --- GÜN SONU ---
-            if not market_open():
                 summary = daily_success_summary()
                 if summary:
                     telegram_send(summary)
@@ -114,7 +128,8 @@ def api():
             "system_active": int(SYSTEM_STARTED),
             "market_open": int(market_open()),
             "last_scan": LAST_SCAN_TS,
-            "data": LATEST_DATA
+            "data": LATEST_DATA,          # ham tarama
+            "signals": LATEST_SIGNALS     # 🔥 GERÇEK SİNYALLER
         })
 
 @app.route("/")
