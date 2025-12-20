@@ -6,13 +6,12 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, send_from_directory
 
 from fetch_bist import fetch_bist_data
-from signal_engine import safe_process_bist_data
+from signal_engine import safe_process_bist_data, scan_strong_stocks, daily_success_summary
 from utils import to_tr_timezone
-
 from dotenv import load_dotenv
 
 # ==================================================
-# ENV (KALICI YÜKLEME)
+# ENV
 # ==================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -28,25 +27,7 @@ app = Flask(__name__)
 LATEST_DATA = []
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
-
 data_lock = threading.Lock()
-
-# ==================================================
-# JSON SAFE HELPER
-# ==================================================
-def make_json_safe(obj):
-    if isinstance(obj, dict):
-        return {k: make_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [make_json_safe(v) for v in obj]
-    if isinstance(obj, tuple):
-        return [make_json_safe(v) for v in obj]
-    if isinstance(obj, (bool, int, float, str)) or obj is None:
-        return obj
-    try:
-        return obj.item()
-    except Exception:
-        return str(obj)
 
 # ==================================================
 # TELEGRAM
@@ -80,17 +61,9 @@ def market_open():
 # ==================================================
 def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED
-
     SYSTEM_STARTED = True
 
-    telegram_send(
-        "🤖 BIST BOT AKTİF\n"
-        "• Oracle VM\n"
-        "• Dashboard + Telegram senkron\n"
-        f"• Başlangıç: {to_tr_timezone(datetime.now(timezone.utc)).strftime('%H:%M:%S')}"
-    )
-
-    first_open_scan_done = False
+    telegram_send("🤖 BIST BOT AKTİF")
 
     while True:
         try:
@@ -100,34 +73,26 @@ def background_loop():
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
-            is_open = market_open()
+            # --- PİYASA AÇIK ---
+            if market_open():
+                signals = safe_process_bist_data(raw_data, market_open=True)
+                for _, msg, _ in signals:
+                    telegram_send(msg)
 
-            # --------- SABAH AÇILIŞ MESAJI ---------
-            if is_open and not first_open_scan_done:
-                first_open_scan_done = True
-                telegram_send(
-                    f"📈 PİYASA AÇILDI\n"
-                    f"Taranan hisse sayısı: {len(raw_data)}\n"
-                    f"İlk tarama tamamlandı"
-                )
-
-            # --------- SİNYAL MOTORU (🔥 KRİTİK FIX) ---------
-            signals = safe_process_bist_data(
-                raw_data,
-                market_open=is_open
-            )
-
-            for _, msg, _ in signals:
-                telegram_send(msg)
-
-            # --------- PİYASA KAPALI ÖZET ---------
-            if not is_open:
-                strong = [x["symbol"] for x in raw_data if x.get("super_combined_ok")]
+            # --- PİYASA KAPALI ---
+            else:
+                strong = scan_strong_stocks(raw_data)
                 if strong:
                     telegram_send(
-                        "📊 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
-                        "\n".join(f"• {s}" for s in strong[:5])
+                        "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
+                        "\n".join(strong)
                     )
+
+            # --- GÜN SONU ---
+            if not market_open():
+                summary = daily_success_summary()
+                if summary:
+                    telegram_send(summary)
 
         except Exception as e:
             print("SCAN ERROR:", e)
@@ -135,7 +100,7 @@ def background_loop():
         time.sleep(60)
 
 # ==================================================
-# THREAD START
+# THREAD
 # ==================================================
 threading.Thread(target=background_loop, daemon=True).start()
 
@@ -149,12 +114,8 @@ def api():
             "system_active": int(SYSTEM_STARTED),
             "market_open": int(market_open()),
             "last_scan": LAST_SCAN_TS,
-            "data": make_json_safe(LATEST_DATA)
+            "data": LATEST_DATA
         })
-
-@app.route("/wake")
-def wake():
-    return jsonify({"ok": 1})
 
 @app.route("/")
 def dashboard():
