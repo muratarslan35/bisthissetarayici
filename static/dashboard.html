@@ -21,7 +21,6 @@
   --border:#21262d;
 }
 
-/* ☀️ LIGHT THEME */
 body.light{
   --bg:#f6f8fa;
   --card:#ffffff;
@@ -33,7 +32,7 @@ body.light{
 *{box-sizing:border-box;font-family:'Inter',sans-serif}
 body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
 
-/* ================= NAVBAR ================= */
+/* NAVBAR */
 .navbar{
   display:flex;
   justify-content:space-between;
@@ -43,16 +42,8 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   border-bottom:1px solid var(--border);
 }
 
-.status{
-  display:flex;
-  gap:14px;
-  font-size:13px;
-}
-.badge{
-  padding:4px 8px;
-  border-radius:6px;
-  font-weight:600;
-}
+.status{display:flex;gap:14px;font-size:13px}
+.badge{padding:4px 8px;border-radius:6px;font-weight:600}
 .green{background:var(--green);color:#fff}
 .red{background:var(--red);color:#fff}
 .yellow{background:var(--gold);color:#000}
@@ -66,7 +57,7 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   cursor:pointer;
 }
 
-/* ================= FILTERS ================= */
+/* FILTERS */
 .filters{
   display:flex;
   flex-wrap:wrap;
@@ -85,14 +76,10 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   border:1px solid var(--border);
 }
 
-/* ================= INFO ================= */
-.info-bar{
-  padding:10px 16px;
-  font-size:13px;
-  color:var(--muted);
-}
+/* INFO */
+.info-bar{padding:10px 16px;font-size:13px;color:var(--muted)}
 
-/* ================= CARDS ================= */
+/* CARDS */
 #cards{
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
@@ -106,28 +93,25 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   border-radius:16px;
   padding:14px;
   transition:.25s;
+  position:relative;
 }
-.card:hover{
-  transform:translateY(-4px);
-  box-shadow:0 12px 30px rgba(0,0,0,.3);
-}
-.card.premium{border:1px solid var(--gold)}
+.card:hover{transform:translateY(-4px)}
 
-.card-header{
-  display:flex;
-  justify-content:space-between;
+.fav{
+  position:absolute;
+  top:10px;
+  right:12px;
+  cursor:pointer;
+  font-size:18px;
 }
+.fav.active{color:gold}
+
 .symbol{font-weight:700}
 .price{color:var(--muted)}
 
 .signal{margin-top:6px;font-weight:700}
 .signal.buy{color:var(--green)}
 .signal.sell{color:var(--red)}
-.signal.strong{color:var(--blue)}
-
-.trend{display:flex;gap:6px;margin-top:8px;font-size:13px}
-.arrow.up{color:var(--green)}
-.arrow.down{color:var(--red)}
 
 .progress{
   margin-top:6px;
@@ -135,20 +119,8 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   background:var(--border);
   border-radius:8px;
   overflow:hidden;
-  position:relative;
 }
-.progress span{
-  height:100%;
-  display:block;
-  background:linear-gradient(90deg,#238636,#2ea043);
-}
-.progress b{
-  position:absolute;
-  right:6px;
-  top:-18px;
-  font-size:11px;
-  color:var(--muted);
-}
+.progress span{height:100%;display:block;background:linear-gradient(90deg,#238636,#2ea043)}
 
 .badges{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
 .tag{
@@ -158,125 +130,107 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   background:var(--border);
 }
 .tag.l3,.tag.l4{background:var(--purple);color:#fff}
-.tag.super_kombine{background:var(--gold);color:#000}
+.tag.ob{background:var(--gold);color:#000}
 .tag.target{background:var(--green);color:#000}
-
-.levels{margin-top:6px;font-size:12px;color:var(--muted)}
 </style>
 </head>
 
 <body>
 
-<!-- ================= NAVBAR ================= -->
 <div class="navbar">
   <div class="status">
     <div>Sistem: <span id="sys" class="badge yellow">--</span></div>
     <div>Piyasa: <span id="market" class="badge yellow">--</span></div>
-    <div>Son Tarama: <b id="scan">--:--:--</b></div>
+    <div>Son Tarama: <b id="scan">--</b></div>
   </div>
   <div class="nav-actions">
     <button onclick="toggleTheme()">🌙 / ☀️</button>
   </div>
 </div>
 
-<!-- ================= FILTERS ================= -->
 <div class="filters">
   <label><input type="checkbox" value="buy" checked> AL</label>
   <label><input type="checkbox" value="sell" checked> SAT</label>
-  <label><input type="checkbox" value="pullback"> Pullback</label>
-  <label><input type="checkbox" value="strong_reversal"> Güçlü Dönüş</label>
-  <label><input type="checkbox" value="breakout"> Direnç Kırılım</label>
   <label><input type="checkbox" value="kombine"> Kombine</label>
   <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
-  <label><input type="checkbox" value="l2"> L2</label>
-  <label><input type="checkbox" value="l3"> L3</label>
-  <label><input type="checkbox" value="l4"> L4</label>
+  <label><input type="checkbox" value="l2"> L2 (Teknik)</label>
+  <label><input type="checkbox" value="l3"> L3 (Trend)</label>
+  <label><input type="checkbox" value="l4"> L4 (Smart)</label>
+  <label><input type="checkbox" value="ob"> OB (OrderBlock)</label>
+  <label><input type="checkbox" id="favOnly"> ⭐ Favoriler</label>
 </div>
 
 <div class="info-bar" id="info">Veri bekleniyor...</div>
 <div id="cards"></div>
 
 <script>
-/* ========== THEME ========== */
+let allSignals=[]
+let favs=JSON.parse(localStorage.getItem("favs")||"[]")
+
 function toggleTheme(){
-  document.body.classList.toggle("light");
-  localStorage.setItem("theme",
-    document.body.classList.contains("light")?"light":"dark");
+  document.body.classList.toggle("light")
+  localStorage.setItem("theme",document.body.classList.contains("light")?"light":"dark")
 }
-if(localStorage.getItem("theme")==="light"){
-  document.body.classList.add("light");
-}
+if(localStorage.getItem("theme")==="light"){document.body.classList.add("light")}
 
-/* ========== LOAD DATA ========== */
 async function load(){
-  const res = await fetch("/api");
-  const j = await res.json();
+  const r=await fetch("/api")
+  const j=await r.json()
+  sys.textContent=j.system_active?"AKTİF":"PASİF"
+  sys.className="badge "+(j.system_active?"green":"red")
+  market.textContent=j.market_open?"AÇIK":"KAPALI"
+  market.className="badge "+(j.market_open?"green":"red")
+  scan.textContent=j.last_scan?new Date(j.last_scan*1000).toLocaleTimeString():"--"
+  allSignals=j.signals||[]
+  applyFilters()
+}
 
-  sys.textContent = j.system_active ? "AKTİF" : "PASİF";
-  sys.className = "badge " + (j.system_active?"green":"red");
+function applyFilters(){
+  const checks=[...document.querySelectorAll(".filters input:checked")].map(i=>i.value)
+  const favOnly=document.getElementById("favOnly").checked
+  let data=allSignals.filter(s=>{
+    if(favOnly && !favs.includes(s.symbol)) return false
+    if(checks.includes(s.signal_type)) return true
+    if(checks.includes(s.details?.level?.toLowerCase())) return true
+    if(checks.includes("ob") && s.signal_type==="order_block") return true
+    return false
+  })
+  render(data)
+}
 
-  market.textContent = j.market_open ? "AÇIK" : "KAPALI";
-  market.className = "badge " + (j.market_open?"green":"red");
-
-  if(j.last_scan){
-    scan.textContent = new Date(j.last_scan*1000).toLocaleTimeString();
-  }
-
-  render(j.signals || []);
+function toggleFav(sym){
+  if(favs.includes(sym)) favs=favs.filter(x=>x!==sym)
+  else favs.push(sym)
+  localStorage.setItem("favs",JSON.stringify(favs))
+  applyFilters()
 }
 
 function render(data){
-  const wrap=document.getElementById("cards");
-  wrap.innerHTML="";
-
-  if(data.length===0){
-    info.textContent="Şu an filtrelere uygun sinyal yok.";
-    return;
-  }
-
-  info.textContent=`${data.length} adet sinyal bulundu`;
-
+  const wrap=document.getElementById("cards")
+  wrap.innerHTML=""
+  if(!data.length){info.textContent="Sinyal yok";return}
+  info.textContent=data.length+" sinyal"
   data.forEach(s=>{
-    const card=document.createElement("div");
-    card.className="card premium";
-
-    const trend=s.trend_strength||50;
-    const dir=s.direction==="down"?"down":"up";
-
-    card.innerHTML=`
-      <div class="card-header">
-        <div class="symbol">${s.symbol}</div>
-        <div class="price">${s.current_price}</div>
-      </div>
-
-      <div class="signal ${s.signal_type}">
-        ${s.title || s.signal_type.toUpperCase()}
-      </div>
-
-      <div class="trend">
-        <span class="arrow ${dir}">${dir==="up"?"⬆":"⬇"}</span> Trend Gücü
-      </div>
-
-      <div class="progress">
-        <span style="width:${trend}%"></span>
-        <b>%${trend}</b>
-      </div>
-
+    const fav=favs.includes(s.symbol)
+    wrap.innerHTML+=`
+    <div class="card">
+      <div class="fav ${fav?"active":""}" onclick="toggleFav('${s.symbol}')">⭐</div>
+      <div class="symbol">${s.symbol}</div>
+      <div class="price">${s.current_price}</div>
+      <div class="signal">${s.title}</div>
+      <div class="progress"><span style="width:${s.trend_strength||50}%"></span></div>
       <div class="badges">
-        ${(s.tags||[]).map(t=>`<span class="tag ${t}">${t.toUpperCase()}</span>`).join("")}
-        ${s.target_hit?'<span class="tag target">%2 HEDEF</span>':''}
+        ${s.details?.level?`<span class="tag ${s.details.level.toLowerCase()}">${s.details.level}</span>`:""}
+        ${s.signal_type==="order_block"?`<span class="tag ob">OB</span>`:""}
+        ${s.target_hit?`<span class="tag target">%2 HEDEF</span>`:""}
       </div>
-
-      <div class="levels">
-        Destek: ${s.support||"-"} | Direnç: ${s.resistance||"-"}
-      </div>
-    `;
-    wrap.appendChild(card);
-  });
+    </div>`
+  })
 }
 
-setInterval(load,5000);
-load();
+document.querySelectorAll(".filters input").forEach(i=>i.onchange=applyFilters)
+setInterval(load,5000)
+load()
 </script>
 
 </body>
