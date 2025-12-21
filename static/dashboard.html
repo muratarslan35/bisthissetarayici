@@ -2,162 +2,251 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>BIST Sinyal Paneli</title>
+<title>Profesyonel BIST Sinyal Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
 <style>
-body { margin:0; background:#0e1117; color:#e6edf3; font-family:Arial }
-header { background:#010409; padding:12px; display:flex; justify-content:space-between; align-items:center; }
-.badge { padding:6px 10px; border-radius:6px; font-weight:bold; }
-.green { background:#2ea043; }
-.red { background:#f85149; }
-.yellow { background:#d29922; }
-.container { padding:16px; }
-.card { background:#161b22; padding:12px; border-radius:10px; margin-bottom:10px; transition: transform 0.2s; }
-.card:hover { transform: scale(1.03); }
-.empty { text-align:center; color:#d29922; padding:20px; font-style:italic; }
+:root{
+  --bg:#0d1117;
+  --card:#161b22;
+  --text:#e6edf3;
+  --muted:#8b949e;
+  --green:#2ea043;
+  --red:#f85149;
+  --blue:#1f6feb;
+  --gold:#d29922;
+  --purple:#8957e5;
+}
 
-.navbar { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; background:#161b22; padding:8px; border-radius:10px; }
-.navbar label { display:flex; align-items:center; gap:4px; cursor:pointer; padding:6px 10px; border-radius:6px; transition: all 0.2s; background:#0f131a; }
-.navbar label:hover { background: #f85149; color:#fff; }
-.navbar input { cursor:pointer; }
+*{box-sizing:border-box;font-family:'Inter',sans-serif}
+body{margin:0;background:var(--bg);color:var(--text)}
 
-#applyFilter { margin-left:10px; background:#2e64f8; color:#fff; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; transition: all 0.2s; }
-#applyFilter:hover { background:#f85149; }
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:14px 18px;
+  background:#010409;
+  border-bottom:1px solid #21262d;
+}
+header h1{font-size:18px;margin:0;font-weight:700}
 
-.status-cards { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
-.status-cards .card { flex:1; text-align:center; position:relative; }
-.status-cards .badge { font-size:14px; }
+.filters{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  padding:12px 16px;
+  border-bottom:1px solid #21262d;
+  background:#010409;
+}
+.filters label{
+  font-size:13px;
+  cursor:pointer;
+  color:var(--muted);
+  background:#161b22;
+  padding:6px 10px;
+  border-radius:8px;
+  border:1px solid #21262d;
+}
+.filters input{margin-right:6px}
 
-.update-info { font-size:12px; color:#888; margin-bottom:10px; }
+#cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:16px;
+  padding:16px;
+}
+
+.card{
+  background:linear-gradient(180deg,#161b22,#0d1117);
+  border:1px solid #21262d;
+  border-radius:16px;
+  padding:14px;
+  transition:.25s;
+  position:relative;
+}
+.card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 12px 30px rgba(0,0,0,.6);
+}
+.card.premium{border:1px solid var(--gold)}
+
+.card-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.symbol{font-size:16px;font-weight:700}
+.price{font-size:14px;color:var(--muted)}
+
+.signal{
+  margin-top:6px;
+  font-weight:700;
+  font-size:14px;
+}
+.signal.buy{color:var(--green)}
+.signal.sell{color:var(--red)}
+.signal.strong{color:var(--blue)}
+
+.trend{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin-top:8px;
+  font-size:13px;
+}
+.arrow.up{color:var(--green)}
+.arrow.down{color:var(--red)}
+
+.progress{
+  margin-top:6px;
+  background:#21262d;
+  border-radius:10px;
+  height:12px;
+  overflow:hidden;
+  position:relative;
+}
+.progress span{
+  display:block;
+  height:100%;
+  background:linear-gradient(90deg,#238636,#2ea043);
+}
+.progress b{
+  position:absolute;
+  right:6px;
+  top:-18px;
+  font-size:11px;
+  color:var(--muted);
+}
+
+.badges{
+  margin-top:8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.tag{
+  font-size:11px;
+  padding:3px 6px;
+  border-radius:6px;
+  background:#21262d;
+  border:1px solid #30363d;
+}
+.tag.l3,.tag.l4{background:var(--purple);color:#fff}
+.tag.super_kombine{background:var(--gold);color:#000}
+.tag.target{background:var(--green);color:#000}
+
+.levels{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--muted);
+}
 </style>
 </head>
 
 <body>
 
-<div class="container">
-  <header>
-    <b>BIST Tarayıcı</b>
-    <button onclick="wake()" class="badge yellow">Sistemi Uyandır</button>
-  </header>
+<header>
+  <h1>📊 Zengin Edecek Hisseler</h1>
+</header>
 
-  <!-- Durum Kartları -->
-  <div class="status-cards">
-    <div class="card" id="systemCard">Sistem: <span id="sys" class="badge yellow">Kontrol</span></div>
-    <div class="card" id="marketCard">Piyasa: <span id="market" class="badge yellow">Kontrol</span></div>
-    <div class="card" id="scanCard">Tarama: <span id="scan" class="badge yellow">Bekleniyor</span></div>
-  </div>
+<!-- 🔥 TÜM FİLTRELER -->
+<div class="filters">
+  <label><input type="checkbox" value="buy" checked> AL</label>
+  <label><input type="checkbox" value="sell" checked> SAT</label>
 
-  <!-- Navbar filtreleri -->
-  <div class="navbar">
-    <label><input type="checkbox" value="buy" class="filter-checkbox"> AL</label>
-    <label><input type="checkbox" value="sell" class="filter-checkbox"> SAT</label>
-    <label><input type="checkbox" value="hacim" class="filter-checkbox"> Hacim</label>
-    <label><input type="checkbox" value="destek" class="filter-checkbox"> Destek</label>
-    <label><input type="checkbox" value="direnc" class="filter-checkbox"> Direnç</label>
-    <label><input type="checkbox" value="kombine" class="filter-checkbox"> Kombine Sinyal</label>
-    <label><input type="checkbox" value="superkombine" class="filter-checkbox"> Süper Kombine</label>
-    <label><input type="checkbox" value="rsi" class="filter-checkbox"> RSI</label>
-    <button id="applyFilter">Uygula</button>
-  </div>
+  <label><input type="checkbox" value="pullback"> Pullback</label>
+  <label><input type="checkbox" value="strong_reversal"> Güçlü Dönüş</label>
+  <label><input type="checkbox" value="breakout"> Direnç Kırılım</label>
 
-  <!-- Son Güncelleme -->
-  <div class="update-info" id="lastUpdate">Son güncelleme: --:--:--</div>
+  <label><input type="checkbox" value="kombine"> Kombine</label>
+  <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
 
-  <!-- Sinyaller -->
-  <div id="signals"></div>
+  <label><input type="checkbox" value="l2"> L2</label>
+  <label><input type="checkbox" value="l3"> L3</label>
+  <label><input type="checkbox" value="l4"> L4</label>
+
+  <label><input type="checkbox" value="order_block"> Order Block</label>
+  <label><input type="checkbox" value="kurumsal"> Kurumsal</label>
 </div>
 
+<div id="cards"></div>
+
 <script>
-let lastData = [];
-let activeFilters = [];
-
-async function wake() {
-  await fetch("/wake");
-  alert("Uyandırma isteği gönderildi");
-}
-
-function renderSignals(data, filters = [], systemActive = true) {
-  const box = document.getElementById("signals");
-  box.innerHTML = "";
-
-  let filtered = data;
-  if (filters.length > 0) {
-    filtered = data.filter(s => s.signal_type && filters.includes(s.signal_type.toLowerCase()));
-  }
-
-  if (filtered.length > 0) {
-    filtered.forEach(s => {
-      const c = document.createElement("div");
-      c.className = "card";
-
-      // Sinyal renkleri
-      let color = 'yellow';
-      if (s.signal_type==='buy') color='green';
-      else if (s.signal_type==='sell') color='red';
-      else if (s.signal_type==='hacim') color='#00bfff';
-      else if (s.signal_type==='destek') color='#ff4500';
-      else if (s.signal_type==='direnc') color='#ff8c00';
-      else if (s.signal_type==='kombine') color='#8a2be2';
-      else if (s.signal_type==='superkombine') color='#ff1493';
-      else if (s.signal_type==='rsi') color='#00fa9a';
-
-      c.innerHTML = `<b>${s.symbol}</b><br>Fiyat: ${s.current_price}<br>Sinyal: <span class="badge" style="background:${color}">${s.signal_type?.toUpperCase() ?? '-'}</span>`;
-      box.appendChild(c);
-    });
-    if (!systemActive) {
-      const info = document.createElement("div");
-      info.className = "empty";
-      info.textContent = "Sistem kapalı, son tarama verileri gösteriliyor.";
-      box.insertBefore(info, box.firstChild);
-    }
-  } else {
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = systemActive ? "Sinyal yok." : "Sistem kapalı, veri yok.";
-    box.appendChild(empty);
-  }
-}
-
-async function load() {
+async function loadSignals(){
   const res = await fetch("/api");
-  const j = await res.json();
-  const now = Date.now();
-
-  // Durum kartları
-  sys.textContent = j.system_active ? "AKTİF" : "PASİF";
-  sys.className = "badge " + (j.system_active ? "green" : "red");
-
-  market.textContent = j.market_open ? "AÇIK" : "KAPALI";
-  market.className = "badge " + (j.market_open ? "green" : "red");
-
-  if (j.last_scan && (now - j.last_scan * 1000) < 180000) {
-    scan.textContent = "TARAMA AKTİF";
-    scan.className = "badge green";
-  } else {
-    scan.textContent = "BEKLEME";
-    scan.className = "badge yellow";
-  }
-
-  // Son verileri sakla
-  let dataToShow = j.system_active ? (j.data || []) : lastData;
-  if (j.system_active) lastData = dataToShow;
-
-  // Son güncelleme saati
-  const date = new Date();
-  document.getElementById("lastUpdate").textContent = `Son güncelleme: ${date.toLocaleTimeString()}`;
-
-  renderSignals(dataToShow, activeFilters, j.system_active);
+  const json = await res.json();
+  render(applyFilters(json.signals || []));
 }
 
-// Uygula butonu
-document.getElementById("applyFilter").addEventListener("click", () => {
-  const checked = Array.from(document.querySelectorAll(".filter-checkbox:checked")).map(c => c.value);
-  activeFilters = checked;
-  load();
-});
+function applyFilters(data){
+  const active = Array.from(
+    document.querySelectorAll(".filters input:checked")
+  ).map(i => i.value);
 
-setInterval(load, 5000);
-load();
+  if(active.length === 0) return data;
+
+  return data.filter(s=>{
+    if(active.includes(s.signal_type)) return true;
+    if(s.level && active.includes(s.level.toLowerCase())) return true;
+    if(s.tags && s.tags.some(t=>active.includes(t))) return true;
+    return false;
+  });
+}
+
+function render(data){
+  const wrap=document.getElementById("cards");
+  wrap.innerHTML="";
+
+  if(data.length===0){
+    wrap.innerHTML="<p style='color:#8b949e'>Filtrelere uygun sinyal yok.</p>";
+    return;
+  }
+
+  data.forEach(s=>{
+    const card=document.createElement("div");
+    card.className="card premium";
+
+    const dir=s.direction==="down"?"down":"up";
+    const trend=s.trend_strength||50;
+
+    card.innerHTML=`
+      <div class="card-header">
+        <div class="symbol">${s.symbol}</div>
+        <div class="price">${s.current_price || s.price}</div>
+      </div>
+
+      <div class="signal ${s.signal_type}">
+        ${s.title || s.signal_type.toUpperCase()}
+      </div>
+
+      <div class="trend">
+        <span class="arrow ${dir}">${dir==="up"?"⬆":"⬇"}</span>
+        Trend Gücü
+      </div>
+
+      <div class="progress">
+        <span style="width:${trend}%"></span>
+        <b>%${trend}</b>
+      </div>
+
+      <div class="badges">
+        ${(s.tags||[]).map(t=>`<span class="tag ${t}">${t.toUpperCase()}</span>`).join("")}
+        ${s.target_hit ? `<span class="tag target">%2 HEDEF</span>` : ""}
+      </div>
+
+      <div class="levels">
+        Destek: ${s.support||"-"} | Direnç: ${s.resistance||"-"}
+      </div>
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+setInterval(loadSignals,5000);
+loadSignals();
 </script>
 
 </body>
