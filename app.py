@@ -25,9 +25,10 @@ CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 app = Flask(__name__)
 
 LATEST_DATA = []
-LATEST_SIGNALS = []   # 🔥 DASHBOARD SİNYAL HAVUZU
+LATEST_SIGNALS = []          # 🔥 Dashboard sinyalleri
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
+TEST_MODE = False            # ✅ TEST KORUMA FLAG
 data_lock = threading.Lock()
 
 # ==================================================
@@ -64,7 +65,7 @@ def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS
     SYSTEM_STARTED = True
 
-    telegram_send("🤖 BIST SINYAL BOTU AKTİF")
+    telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
 
     while True:
         try:
@@ -82,7 +83,6 @@ def background_loop():
                 for sid, msg, meta in signals:
                     telegram_send(msg)
 
-                    # 🔥 DASHBOARD UYUMLU MAPPING
                     dashboard_signals.append({
                         "symbol": meta.get("symbol"),
                         "price": meta.get("price"),
@@ -101,8 +101,10 @@ def background_loop():
                         "details": meta
                     })
 
+                # ✅ TEST MODU AÇIKSA EZME
                 with data_lock:
-                    LATEST_SIGNALS = dashboard_signals
+                    if not TEST_MODE:
+                        LATEST_SIGNALS = dashboard_signals
 
             # ------------------ PİYASA KAPALI ------------------
             else:
@@ -128,30 +130,18 @@ def background_loop():
 threading.Thread(target=background_loop, daemon=True).start()
 
 # ==================================================
-# API
-# ==================================================
-@app.route("/api")
-def api():
-    with data_lock:
-        return jsonify({
-            "system_active": int(SYSTEM_STARTED),
-            "market_open": int(market_open()),
-            "last_scan": LAST_SCAN_TS,
-            "data": LATEST_DATA,
-            "signals": LATEST_SIGNALS
-        })
-
-# ==================================================
-# 🧪 TEST SIGNAL ENDPOINT (YENİ - GÜVENLİ)
+# TEST SIGNAL (EZİLMEZ)
 # ==================================================
 @app.route("/api/test_signal")
 def test_signal():
-    global LATEST_SIGNALS
+    global TEST_MODE
+
+    TEST_MODE = True  # 🔥 background loop sinyal ezemez
 
     test_meta = {
         "symbol": "TESTHISSE",
         "type": "strong_reversal",
-        "title": "Güçlü Dönüş",
+        "title": "🧪 TEST – Güçlü Dönüş (L2)",
         "direction": "up",
         "trend_strength": 82,
         "support": 120.0,
@@ -166,13 +156,11 @@ def test_signal():
         "symbol": "TESTHISSE",
         "price": 123.45,
         "type": "strong_reversal",
-        "title": "Güçlü Dönüş (TEST)",
+        "title": "🧪 TEST – Güçlü Dönüş (L2)",
         "direction": "up",
         "trend_strength": 82,
         "support": 120.0,
         "resistance": 135.0,
-
-        # geri uyum
         "signal_type": "strong_reversal",
         "current_price": 123.45,
         "rsi": 49.8,
@@ -181,7 +169,7 @@ def test_signal():
     }
 
     with data_lock:
-        LATEST_SIGNALS = [test_signal]
+        LATEST_SIGNALS.insert(0, test_signal)
 
     telegram_send(
         "🧪 TEST SİNYALİ\n\n"
@@ -192,7 +180,21 @@ def test_signal():
         "RSI: 49.8"
     )
 
-    return jsonify({"ok": 1, "msg": "Test sinyali gönderildi"})
+    return jsonify({"ok": 1, "msg": "Test sinyali üretildi"})
+
+# ==================================================
+# API
+# ==================================================
+@app.route("/api")
+def api():
+    with data_lock:
+        return jsonify({
+            "system_active": int(SYSTEM_STARTED),
+            "market_open": int(market_open()),
+            "last_scan": LAST_SCAN_TS,
+            "data": LATEST_DATA,
+            "signals": LATEST_SIGNALS
+        })
 
 @app.route("/")
 def dashboard():
