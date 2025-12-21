@@ -64,7 +64,7 @@ def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS
     SYSTEM_STARTED = True
 
-    telegram_send("🤖 BIST BOT AKTİF")
+    telegram_send("🤖 BIST SINYAL BOTU AKTİF")
 
     while True:
         try:
@@ -77,14 +77,23 @@ def background_loop():
             # ------------------ PİYASA AÇIK ------------------
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
-
                 dashboard_signals = []
+
                 for sid, msg, meta in signals:
                     telegram_send(msg)
 
-                    # 🔥 DASHBOARD FORMAT
+                    # 🔥 DASHBOARD UYUMLU MAPPING (YENİ)
                     dashboard_signals.append({
                         "symbol": meta.get("symbol"),
+                        "price": meta.get("price"),
+                        "type": meta.get("type"),
+                        "title": meta.get("title", meta.get("type")),
+                        "direction": meta.get("direction", "up"),
+                        "trend_strength": meta.get("trend_strength", 50),
+                        "support": meta.get("support"),
+                        "resistance": meta.get("resistance"),
+
+                        # --- geriye dönük uyum (SİLİNMEDİ)
                         "signal_type": meta.get("type"),
                         "current_price": meta.get("price"),
                         "rsi": meta.get("rsi"),
