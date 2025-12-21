@@ -25,24 +25,23 @@ CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 app = Flask(__name__)
 
 LATEST_DATA = []
-LATEST_SIGNALS = []          # 🔥 Dashboard sinyalleri
+LATEST_SIGNALS = []
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
-TEST_MODE = False            # ✅ TEST KORUMA FLAG
+TEST_MODE = False
 data_lock = threading.Lock()
 
 # ==================================================
-# JSON SAFE (🔥 KRİTİK DÜZELTME)
+# JSON SAFE
 # ==================================================
 def make_json_safe(obj):
     if isinstance(obj, dict):
         return {k: make_json_safe(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [make_json_safe(i) for i in obj]
-    elif hasattr(obj, "item"):   # numpy scalar
+    elif hasattr(obj, "item"):
         return obj.item()
-    else:
-        return obj
+    return obj
 
 # ==================================================
 # TELEGRAM
@@ -50,6 +49,7 @@ def make_json_safe(obj):
 def telegram_send(msg):
     if not TELEGRAM_TOKEN or not CHAT_IDS:
         return
+    print("TELEGRAM >>", msg)  # 🔥 DEBUG
     for cid in CHAT_IDS:
         try:
             requests.post(
@@ -88,7 +88,6 @@ def background_loop():
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
-            # ------------------ PİYASA AÇIK ------------------
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
                 dashboard_signals = []
@@ -105,8 +104,6 @@ def background_loop():
                         "trend_strength": meta.get("trend_strength", 50),
                         "support": meta.get("support"),
                         "resistance": meta.get("resistance"),
-
-                        # --- geriye dönük uyum (SİLİNMEDİ)
                         "signal_type": meta.get("type"),
                         "current_price": meta.get("price"),
                         "rsi": meta.get("rsi"),
@@ -114,12 +111,10 @@ def background_loop():
                         "details": meta
                     })
 
-                # ✅ TEST MODU AÇIKSA EZME
                 with data_lock:
                     if not TEST_MODE:
                         LATEST_SIGNALS = dashboard_signals
 
-            # ------------------ PİYASA KAPALI ------------------
             else:
                 strong = scan_strong_stocks(raw_data)
                 if strong:
@@ -143,29 +138,14 @@ def background_loop():
 threading.Thread(target=background_loop, daemon=True).start()
 
 # ==================================================
-# TEST SIGNAL (🔥 EZİLMEZ + JSON SAFE)
+# TEST SIGNAL (🔥 DÜZELTİLMİŞ – FRONTEND & TELEGRAM UYUMLU)
 # ==================================================
 @app.route("/api/test_signal")
 def test_signal():
     global TEST_MODE
-    TEST_MODE = True  # 🔥 background loop ezemez
+    TEST_MODE = True
 
     now_str = to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S")
-
-    test_meta = {
-        "symbol": "TESTHISSE",
-        "type": "strong_reversal",
-        "title": "🧪 TEST – Güçlü Dönüş (L2)",
-        "direction": "up",
-        "trend_strength": 82,
-        "support": 120.0,
-        "resistance": 135.0,
-        "price": 123.45,
-        "rsi": 49.8,
-        "level": "L2",
-        "target_hit": False,
-        "test": True
-    }
 
     test_signal_obj = {
         "symbol": "TESTHISSE",
@@ -176,11 +156,18 @@ def test_signal():
         "trend_strength": 82,
         "support": 120.0,
         "resistance": 135.0,
-        "signal_type": "strong_reversal",
+
+        # 🔥 FRONTEND UYUMLU
+        "signal_type": "strong",
         "current_price": 123.45,
         "rsi": 49.8,
         "time": now_str,
-        "details": test_meta,
+
+        # 🔥 ETİKETLER
+        "tags": ["l2", "strong_reversal"],
+        "target_hit": False,
+        "level": "L2",
+
         "test": True
     }
 
@@ -195,6 +182,9 @@ def test_signal():
         "Trend Gücü: %82\n"
         "RSI: 49.8"
     )
+
+    # 🔥 2 DK SONRA TEST MODE KAPANSIN
+    threading.Timer(120, lambda: globals().__setitem__("TEST_MODE", False)).start()
 
     return jsonify({"ok": 1, "msg": "Test sinyali üretildi"})
 
