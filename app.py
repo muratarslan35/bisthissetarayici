@@ -82,7 +82,7 @@ def background_loop():
                 for sid, msg, meta in signals:
                     telegram_send(msg)
 
-                    # 🔥 DASHBOARD UYUMLU MAPPING (YENİ)
+                    # 🔥 DASHBOARD UYUMLU MAPPING
                     dashboard_signals.append({
                         "symbol": meta.get("symbol"),
                         "price": meta.get("price"),
@@ -137,9 +137,62 @@ def api():
             "system_active": int(SYSTEM_STARTED),
             "market_open": int(market_open()),
             "last_scan": LAST_SCAN_TS,
-            "data": LATEST_DATA,          # ham tarama
-            "signals": LATEST_SIGNALS     # 🔥 GERÇEK SİNYALLER
+            "data": LATEST_DATA,
+            "signals": LATEST_SIGNALS
         })
+
+# ==================================================
+# 🧪 TEST SIGNAL ENDPOINT (YENİ - GÜVENLİ)
+# ==================================================
+@app.route("/api/test_signal")
+def test_signal():
+    global LATEST_SIGNALS
+
+    test_meta = {
+        "symbol": "TESTHISSE",
+        "type": "strong_reversal",
+        "title": "Güçlü Dönüş",
+        "direction": "up",
+        "trend_strength": 82,
+        "support": 120.0,
+        "resistance": 135.0,
+        "price": 123.45,
+        "rsi": 49.8,
+        "level": "L2",
+        "target_hit": False
+    }
+
+    test_signal = {
+        "symbol": "TESTHISSE",
+        "price": 123.45,
+        "type": "strong_reversal",
+        "title": "Güçlü Dönüş (TEST)",
+        "direction": "up",
+        "trend_strength": 82,
+        "support": 120.0,
+        "resistance": 135.0,
+
+        # geri uyum
+        "signal_type": "strong_reversal",
+        "current_price": 123.45,
+        "rsi": 49.8,
+        "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
+        "details": test_meta
+    }
+
+    with data_lock:
+        LATEST_SIGNALS = [test_signal]
+
+    telegram_send(
+        "🧪 TEST SİNYALİ\n\n"
+        "Hisse: TESTHISSE\n"
+        "📈 Güçlü Dönüş (L2)\n"
+        "Fiyat: 123.45\n"
+        "Trend Gücü: %82\n"
+        "RSI: 49.8"
+    )
+
+    return jsonify({"ok": 1, "msg": "Test sinyali gönderildi"})
 
 @app.route("/")
 def dashboard():
