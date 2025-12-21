@@ -32,6 +32,19 @@ TEST_MODE = False            # ✅ TEST KORUMA FLAG
 data_lock = threading.Lock()
 
 # ==================================================
+# JSON SAFE (🔥 KRİTİK DÜZELTME)
+# ==================================================
+def make_json_safe(obj):
+    if isinstance(obj, dict):
+        return {k: make_json_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_safe(i) for i in obj]
+    elif hasattr(obj, "item"):   # numpy scalar
+        return obj.item()
+    else:
+        return obj
+
+# ==================================================
 # TELEGRAM
 # ==================================================
 def telegram_send(msg):
@@ -130,13 +143,14 @@ def background_loop():
 threading.Thread(target=background_loop, daemon=True).start()
 
 # ==================================================
-# TEST SIGNAL (EZİLMEZ)
+# TEST SIGNAL (🔥 EZİLMEZ + JSON SAFE)
 # ==================================================
 @app.route("/api/test_signal")
 def test_signal():
     global TEST_MODE
+    TEST_MODE = True  # 🔥 background loop ezemez
 
-    TEST_MODE = True  # 🔥 background loop sinyal ezemez
+    now_str = to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S")
 
     test_meta = {
         "symbol": "TESTHISSE",
@@ -149,10 +163,11 @@ def test_signal():
         "price": 123.45,
         "rsi": 49.8,
         "level": "L2",
-        "target_hit": False
+        "target_hit": False,
+        "test": True
     }
 
-    test_signal = {
+    test_signal_obj = {
         "symbol": "TESTHISSE",
         "price": 123.45,
         "type": "strong_reversal",
@@ -164,12 +179,13 @@ def test_signal():
         "signal_type": "strong_reversal",
         "current_price": 123.45,
         "rsi": 49.8,
-        "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
-        "details": test_meta
+        "time": now_str,
+        "details": test_meta,
+        "test": True
     }
 
     with data_lock:
-        LATEST_SIGNALS.insert(0, test_signal)
+        LATEST_SIGNALS.insert(0, test_signal_obj)
 
     telegram_send(
         "🧪 TEST SİNYALİ\n\n"
@@ -188,13 +204,13 @@ def test_signal():
 @app.route("/api")
 def api():
     with data_lock:
-        return jsonify({
+        return jsonify(make_json_safe({
             "system_active": int(SYSTEM_STARTED),
             "market_open": int(market_open()),
             "last_scan": LAST_SCAN_TS,
             "data": LATEST_DATA,
             "signals": LATEST_SIGNALS
-        })
+        }))
 
 @app.route("/")
 def dashboard():
