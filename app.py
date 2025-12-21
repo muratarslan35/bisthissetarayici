@@ -49,7 +49,6 @@ def make_json_safe(obj):
 def telegram_send(msg):
     if not TELEGRAM_TOKEN or not CHAT_IDS:
         return
-    print("TELEGRAM >>", msg)  # 🔥 DEBUG
     for cid in CHAT_IDS:
         try:
             requests.post(
@@ -88,6 +87,7 @@ def background_loop():
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
+            # ------------------ PİYASA AÇIK ------------------
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
                 dashboard_signals = []
@@ -115,17 +115,11 @@ def background_loop():
                     if not TEST_MODE:
                         LATEST_SIGNALS = dashboard_signals
 
+            # ------------------ PİYASA KAPALI ------------------
             else:
-                strong = scan_strong_stocks(raw_data)
-                if strong:
-                    telegram_send(
-                        "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
-                        "\n".join(strong)
-                    )
-
-                summary = daily_success_summary()
-                if summary:
-                    telegram_send(summary)
+                # 🔥 GEÇİCİ OLARAK DEVRE DIŞI
+                # Test sinyallerinin ezilmesini önlemek için
+                pass
 
         except Exception as e:
             print("SCAN ERROR:", e)
@@ -138,7 +132,7 @@ def background_loop():
 threading.Thread(target=background_loop, daemon=True).start()
 
 # ==================================================
-# TEST SIGNAL (🔥 DÜZELTİLMİŞ – FRONTEND & TELEGRAM UYUMLU)
+# TEST SIGNAL
 # ==================================================
 @app.route("/api/test_signal")
 def test_signal():
@@ -146,6 +140,21 @@ def test_signal():
     TEST_MODE = True
 
     now_str = to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S")
+
+    test_meta = {
+        "symbol": "TESTHISSE",
+        "type": "strong_reversal",
+        "title": "🧪 TEST – Güçlü Dönüş (L2)",
+        "direction": "up",
+        "trend_strength": 82,
+        "support": 120.0,
+        "resistance": 135.0,
+        "price": 123.45,
+        "rsi": 49.8,
+        "level": "L2",
+        "target_hit": False,
+        "test": True
+    }
 
     test_signal_obj = {
         "symbol": "TESTHISSE",
@@ -156,18 +165,11 @@ def test_signal():
         "trend_strength": 82,
         "support": 120.0,
         "resistance": 135.0,
-
-        # 🔥 FRONTEND UYUMLU
-        "signal_type": "strong",
+        "signal_type": "strong_reversal",
         "current_price": 123.45,
         "rsi": 49.8,
         "time": now_str,
-
-        # 🔥 ETİKETLER
-        "tags": ["l2", "strong_reversal"],
-        "target_hit": False,
-        "level": "L2",
-
+        "details": test_meta,
         "test": True
     }
 
@@ -182,9 +184,6 @@ def test_signal():
         "Trend Gücü: %82\n"
         "RSI: 49.8"
     )
-
-    # 🔥 2 DK SONRA TEST MODE KAPANSIN
-    threading.Timer(120, lambda: globals().__setitem__("TEST_MODE", False)).start()
 
     return jsonify({"ok": 1, "msg": "Test sinyali üretildi"})
 
