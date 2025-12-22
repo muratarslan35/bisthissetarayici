@@ -15,7 +15,7 @@ from utils import (
 )
 
 # ==================================================
-# TRADINGVIEW PSEUDO LIVE PRICE (CACHE'Lİ)
+# TRADINGVIEW PSEUDO LIVE PRICE (CACHE)
 # ==================================================
 _TV_CACHE = {}
 _TV_CACHE_TTL = 60  # saniye
@@ -91,7 +91,7 @@ def get_bist_symbols():
 
 
 # ==================================================
-# TF INDICATORS (PSEUDO LIVE PATCH)
+# TF INDICATORS (PSEUDO LIVE)
 # ==================================================
 def fetch_timeframe_indicators(df, symbol=None):
     out = {}
@@ -100,7 +100,7 @@ def fetch_timeframe_indicators(df, symbol=None):
 
     close = df["Close"].copy()
 
-    # 🔥 pseudo-live close override
+    # 🔥 pseudo-live fiyat
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
         if live:
@@ -108,16 +108,12 @@ def fetch_timeframe_indicators(df, symbol=None):
 
     ema20 = calculate_ema(close, 20)
     ema50 = calculate_ema(close, 50)
-    ema100 = calculate_ema(close, 100)
-    ema200 = calculate_ema(close, 200)
 
     out["last_close"] = float(close.iloc[-1])
     out["last_open"] = float(df["Open"].iloc[-1])
     out["last_green"] = out["last_close"] > out["last_open"]
     out["ema20"] = float(ema20.iloc[-1])
     out["ema50"] = float(ema50.iloc[-1])
-    out["ema100"] = float(ema100.iloc[-1])
-    out["ema200"] = float(ema200.iloc[-1])
     out["rsi"] = float(calculate_rsi(close).iloc[-1])
 
     try:
@@ -139,7 +135,7 @@ def fetch_timeframe_indicators(df, symbol=None):
 
 
 # ==================================================
-# FETCH ONE SYMBOL
+# FETCH ONE SYMBOL (FIXED)
 # ==================================================
 def fetch_one_symbol(sym):
     df_15 = yf_download_safe(sym, "7d", "15m")
@@ -147,11 +143,10 @@ def fetch_one_symbol(sym):
         raise ValueError("no 15m")
 
     df_1h = yf_download_safe(sym, "14d", "60m")
-
-    # ✅ BURASI DÜZELTİLDİ
-    df_4h = yf_download_safe(sym, "60d", "4h")
-
     df_1d = yf_download_safe(sym, "120d", "1d")
+
+    # ❗ 4H FIX: Yahoo desteklemiyor → 1H kullanıyoruz
+    df_4h = df_1h
 
     tf15 = fetch_timeframe_indicators(df_15, sym)
     tf1h = fetch_timeframe_indicators(df_1h)
