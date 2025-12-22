@@ -1,7 +1,10 @@
 import time
+import json
+import os
 import requests
 import pandas as pd
 import yfinance as yf
+from datetime import datetime
 
 from utils import (
     FALLBACK_SYMBOLS,
@@ -12,17 +15,35 @@ from utils import (
 )
 
 # ==================================================
+# STATE FILE
+# ==================================================
+STATE_DIR = "data"
+STATE_FILE = os.path.join(STATE_DIR, "fallback_state.json")
+os.makedirs(STATE_DIR, exist_ok=True)
+
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_state(state):
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
+
+STATE = load_state()
+
+# ==================================================
 # TRADINGVIEW PSEUDO LIVE PRICE (CACHE)
 # ==================================================
 _TV_CACHE = {}
-_TV_CACHE_TTL = 60  # saniye
+_TV_CACHE_TTL = 60
 
 def tv_live_price(symbol):
     now = time.time()
     c = _TV_CACHE.get(symbol)
     if c and now - c["ts"] < _TV_CACHE_TTL:
         return c["price"]
-
     try:
         r = requests.get(
             "https://scanner.tradingview.com/symbol",
@@ -38,16 +59,14 @@ def tv_live_price(symbol):
         pass
     return None
 
-
 # ==================================================
 # EMA
 # ==================================================
 def calculate_ema(series, period):
     return series.ewm(span=period, adjust=False).mean()
 
-
 # ==================================================
-# SAFE YFINANCE (SESSİZ)
+# SAFE YFINANCE
 # ==================================================
 def yf_download_safe(ticker, period, interval):
     try:
@@ -66,34 +85,26 @@ def yf_download_safe(ticker, period, interval):
     except Exception:
         return None
 
-
 # ==================================================
-# SYMBOL LIST — SADECE FALLBACK
+# SYMBOL LIST (DİNAMİK FALLBACK)
 # ==================================================
 def get_bist_symbols():
-    # 🔥 YF uyumlu, stabil, kontrollü liste
     return FALLBACK_SYMBOLS.copy()
 
-
 # ==================================================
-# TF INDICATORS (15M PSEUDO LIVE)
+# TF INDICATORS
 # ==================================================
 def fetch_timeframe_indicators(df, symbol=None):
     if df is None or df.empty:
         return None
 
     close = df["Close"].copy()
-
-    # pseudo-live sadece son mum
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
         if live:
             close.iloc[-1] = live
 
-    ema20 = calculate_ema(close, 20)
-    ema50 = calculate_ema(close, 50)
     rsi = calculate_rsi(close)
-
     if rsi.isna().all():
         return None
 
@@ -101,8 +112,8 @@ def fetch_timeframe_indicators(df, symbol=None):
         "last_close": float(close.iloc[-1]),
         "last_open": float(df["Open"].iloc[-1]),
         "last_green": close.iloc[-1] > df["Open"].iloc[-1],
-        "ema20": float(ema20.iloc[-1]),
-        "ema50": float(ema50.iloc[-1]),
+        "ema20": float(calculate_ema(close, 20).iloc[-1]),
+        "ema50": float(calculate_ema(close, 50).iloc[-1]),
         "rsi": float(rsi.iloc[-1]),
     }
 
@@ -113,19 +124,14 @@ def fetch_timeframe_indicators(df, symbol=None):
     except Exception:
         pass
 
-    try:
-        s_break, r_break = detect_support_resistance_break(df)
-        out["support_break"] = s_break
-        out["resistance_break"] = r_break
-    except Exception:
-        out["support_break"] = False
-        out["resistance_break"] = False
+    s_break, r_break = detect_support_resistance_break(df)
+    out["support_break"] = s_break
+    out["resistance_break"] = r_break
 
     return out
 
-
 # ==================================================
-# FETCH ONE SYMBOL (SİNYAL GARANTİLİ)
+# FETCH ONE SYMBOL + STATE TRACK
 # ==================================================
 def fetch_one_symbol(sym):
     df_15 = yf_download_safe(sym, "7d", "15m")
@@ -136,38 +142,57 @@ def fetch_one_symbol(sym):
     if tf15 is None:
         return None
 
+    symbol = sym.replace(".IS", "")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    s = STATE.setdefault(symbol, {
+        "inactive_days": 0,
+        "active_days": 0,
+        "last_day": today
+    })
+
+    active = (
+        tf15["resistance_break"]
+        or tf15["support_break"]
+        or tf15["rsi"] < 30
+        or tf15["rsi"] > 70
+    )
+
+    if s["last_day"] != today:
+        if active:
+            s["active_days"] += 1
+            s["inactive_days"] = 0
+        else:
+            s["inactive_days"] += 1
+        s["last_day"] = today
+
+    STATE[symbol] = s
+    save_state(STATE)
+
     df_1h = yf_download_safe(sym, "14d", "60m")
     df_4h = yf_download_safe(sym, "60d", "4h")
     df_1d = yf_download_safe(sym, "120d", "1d")
 
-    tf1h = fetch_timeframe_indicators(df_1h)
-    tf4h = fetch_timeframe_indicators(df_4h)
-    tf1d = fetch_timeframe_indicators(df_1d)
-
-    ns, nr = nearest_support_resistance_from_history(df_15)
-    three_peak = detect_three_peaks(df_15["Close"])
-
     return {
-        "symbol": sym.replace(".IS", ""),
-        "current_price": tf15.get("last_close"),
-        "RSI": tf15.get("rsi"),
+        "symbol": symbol,
+        "current_price": tf15["last_close"],
+        "RSI": tf15["rsi"],
         "volume": tf15.get("volume"),
-        "three_peak_break": three_peak,
-        "support_break": tf15.get("support_break"),
-        "resistance_break": tf15.get("resistance_break"),
-        "nearest_support": ns,
-        "nearest_resistance": nr,
+        "three_peak_break": detect_three_peaks(df_15["Close"]),
+        "support_break": tf15["support_break"],
+        "resistance_break": tf15["resistance_break"],
+        "nearest_support": nearest_support_resistance_from_history(df_15)[0],
+        "nearest_resistance": nearest_support_resistance_from_history(df_15)[1],
         "tf": {
             "15m": tf15,
-            "1h": tf1h,
-            "4h": tf4h,
-            "1d": tf1d
+            "1h": fetch_timeframe_indicators(df_1h),
+            "4h": fetch_timeframe_indicators(df_4h),
+            "1d": fetch_timeframe_indicators(df_1d)
         }
     }
 
-
 # ==================================================
-# FETCH ALL (HIZLI + STABİL)
+# FETCH ALL
 # ==================================================
 def fetch_bist_data():
     out = []
