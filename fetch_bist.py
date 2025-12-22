@@ -15,7 +15,7 @@ from utils import (
 )
 
 # ==================================================
-# TRADINGVIEW PSEUDO LIVE PRICE (CACHE'Lİ)
+# TRADINGVIEW PSEUDO LIVE PRICE (CACHE)
 # ==================================================
 _TV_CACHE = {}
 _TV_CACHE_TTL = 60  # saniye
@@ -50,7 +50,7 @@ def calculate_ema(series, period):
 
 
 # ==================================================
-# SAFE YFINANCE
+# SAFE YFINANCE (SESSİZ FAIL)
 # ==================================================
 def yf_download_safe(ticker, period, interval):
     try:
@@ -59,8 +59,7 @@ def yf_download_safe(ticker, period, interval):
             period=period,
             interval=interval,
             auto_adjust=True,
-            progress=False,
-            threads=False
+            progress=False
         )
         if df is None or df.empty:
             return None
@@ -136,15 +135,15 @@ def fetch_timeframe_indicators(df, symbol=None):
 
 
 # ==================================================
-# FETCH ONE SYMBOL
+# FETCH ONE SYMBOL (STABİL)
 # ==================================================
 def fetch_one_symbol(sym):
     df_15 = yf_download_safe(sym, "7d", "15m")
     if df_15 is None:
-        raise ValueError("no 15m")
+        return None  # ❗ sessiz skip
 
     df_1h = yf_download_safe(sym, "14d", "60m")
-    df_4h = yf_download_safe(sym, "60d", "4h")   # 🔴 FIX BURADA
+    df_4h = yf_download_safe(sym, "60d", "4h")   # 🔴 240m → 4h FIX
     df_1d = yf_download_safe(sym, "120d", "1d")
 
     tf15 = fetch_timeframe_indicators(df_15, sym)
@@ -176,14 +175,16 @@ def fetch_one_symbol(sym):
 
 
 # ==================================================
-# FETCH ALL
+# FETCH ALL (KIRILMA YOK)
 # ==================================================
 def fetch_bist_data():
     out = []
     for s in get_bist_symbols():
         try:
-            out.append(fetch_one_symbol(s))
+            r = fetch_one_symbol(s)
+            if r:
+                out.append(r)
         except Exception:
-            continue
+            pass
         time.sleep(0.15)
     return out
