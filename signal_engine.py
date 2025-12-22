@@ -11,7 +11,6 @@ from utils import (
 # ==================================================
 success_tracker = {}
 cooldowns = {}
-ob_memory = {}   # 🔥 OB HAFIZA (symbol bazlı)
 TARGET_PCT = 0.02
 COOLDOWN_MINUTES = 30
 
@@ -57,6 +56,20 @@ def update_success(symbol, price):
     if not d["hit"] and price >= d["target"]:
         d["hit"] = True
 
+def daily_success_summary():
+    today = now_tr().date()
+    d = success_tracker.get(today)
+    if not d:
+        return None
+    total = len(d)
+    success = sum(1 for x in d.values() if x["hit"])
+    return (
+        "📊 GÜN SONU ÖZET\n\n"
+        f"Toplam AL: {total}\n"
+        f"%2 Başarılı: {success}\n"
+        f"Başarısız: {total - success}"
+    )
+
 # ==================================================
 # TREND CHECK (MA BAZLI)
 # ==================================================
@@ -79,7 +92,7 @@ def long_term_trend_ok(item, price):
     return False, "", {}
 
 # ==================================================
-# ORDER BLOCK (L4 – OLUŞUM)
+# ORDER BLOCK (L4 – SMART MONEY)
 # ==================================================
 def detect_order_block(df):
     if df is None or len(df) < 30:
@@ -90,9 +103,11 @@ def detect_order_block(df):
     for i in range(len(df) - 5, 10, -1):
         c = df.iloc[i]
 
+        # Son kırmızı mum
         if c["close"] >= c["open"]:
             continue
 
+        # Hacim filtresi
         if c["volume"] < vol_avg.iloc[i] * 1.8:
             continue
 
@@ -102,17 +117,14 @@ def detect_order_block(df):
             if (df.iloc[j]["close"] - base) / base >= 0.015:
                 impulse = True
                 break
-
         if not impulse:
             continue
 
         return {
             "low": min(c["open"], c["close"]),
             "high": max(c["open"], c["close"]),
-            "volume_ratio": round(c["volume"] / vol_avg.iloc[i], 2),
-            "created_at": df.index[i]
+            "volume_ratio": round(c["volume"] / vol_avg.iloc[i], 2)
         }
-
     return None
 
 def order_block_signal(item):
@@ -124,7 +136,7 @@ def order_block_signal(item):
     if df is None or in_cooldown(symbol):
         return None
 
-    trend_ok, trend_type, _ = long_term_trend_ok(item, price)
+    trend_ok, trend_type, ma_dict = long_term_trend_ok(item, price)
     if not trend_ok:
         return None
 
@@ -132,10 +144,10 @@ def order_block_signal(item):
     if not ob:
         return None
 
-    ob_memory[symbol] = ob  # 🔥 OB hafızaya alındı
-
     if not (ob["low"] * 0.995 <= price <= ob["high"] * 1.01):
         return None
+
+    strength = min(100, int(30 + ob["volume_ratio"] * 20 + 30))
 
     register_signal(symbol, price)
     set_cooldown(symbol, 45)
@@ -146,70 +158,24 @@ def order_block_signal(item):
         f"Fiyat: {fmt_price(price)}\n"
         f"OB: {fmt_price(ob['low'])} – {fmt_price(ob['high'])}\n"
         f"Hacim: {ob['volume_ratio']}x\n"
-        f"Trend: {trend_type}"
+        f"Trend: {trend_type}\n"
+        f"Güç: %{strength}"
     )
 
-    return (f"OB-{symbol}", msg, {"type": "order_block", "level": "L4"})
+    return (f"OB-{symbol}", msg, {"type": "order_block", "strength": strength})
 
 # ==================================================
-# 🔥 OB REACTION (L3+)
-# ==================================================
-def order_block_reaction(item):
-    symbol = item["symbol"]
-    price = item["current_price"]
-    tf15 = item.get("tf", {}).get("15m", {})
-    df = tf15.get("df")
-
-    ob = ob_memory.get(symbol)
-    if not ob or df is None or len(df) < 5:
-        return None
-
-    # OB bölgesine tekrar giriş
-    if not (ob["low"] * 0.997 <= price <= ob["high"] * 1.01):
-        return None
-
-    last = df.iloc[-1]
-    prev = df.iloc[-2]
-
-    # 🔥 REAKSİYON ŞARTLARI
-    bullish = last["close"] > last["open"]
-    momentum = last["close"] > prev["high"]
-    volume_ok = last["volume"] > df["volume"].rolling(20).mean().iloc[-1] * 1.3
-
-    if not (bullish and momentum and volume_ok):
-        return None
-
-    register_signal(symbol, price)
-    set_cooldown(symbol, 30)
-
-    msg = (
-        f"⚡ OB REACTION (L3+)\n\n"
-        f"Hisse: {symbol}\n"
-        f"Fiyat: {fmt_price(price)}\n"
-        f"OB Tepki Alımı\n"
-        f"Momentum + Hacim Onaylı"
-    )
-
-    return (f"OBR-{symbol}", msg, {
-        "type": "order_block_reaction",
-        "level": "L3+"
-    })
-
-# ==================================================
-# PROCESS SIGNALS
+# PROCESS SIGNALS (MEVCUTLAR + OB)
 # ==================================================
 def process_signals(item, market_open=True):
     out = []
 
-    # 🚫 MEVCUT TÜM SİNYALLER BURADA AYNI ŞEKİLDE DURUYOR
+    # ⛔ BURADA MEVCUT TÜM SİNYALLERİN ÇAĞRILDIĞINI VARSAYIYORUZ
+    # (pullback, güçlü dönüş, kombine, süper kombine vs.)
 
     ob_sig = order_block_signal(item)
     if ob_sig:
         out.append(ob_sig)
-
-    ob_react = order_block_reaction(item)
-    if ob_react:
-        out.append(ob_react)
 
     return out
 
@@ -224,3 +190,14 @@ def safe_process_bist_data(data_list, market_open=True):
         except Exception:
             continue
     return res
+
+# ==================================================
+# PİYASA KAPALI – GÜÇLÜ HİSSELER
+# ==================================================
+def scan_strong_stocks(data):
+    strong = []
+    for i in data:
+        ok, _, _ = long_term_trend_ok(i, i.get("current_price"))
+        if ok:
+            strong.append(f"• {i['symbol']}")
+    return strong[:10]
