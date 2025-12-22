@@ -108,12 +108,16 @@ def fetch_timeframe_indicators(df, symbol=None):
 
     ema20 = calculate_ema(close, 20)
     ema50 = calculate_ema(close, 50)
+    ema100 = calculate_ema(close, 100)
+    ema200 = calculate_ema(close, 200)
 
     out["last_close"] = float(close.iloc[-1])
     out["last_open"] = float(df["Open"].iloc[-1])
     out["last_green"] = out["last_close"] > out["last_open"]
     out["ema20"] = float(ema20.iloc[-1])
     out["ema50"] = float(ema50.iloc[-1])
+    out["ema100"] = float(ema100.iloc[-1])
+    out["ema200"] = float(ema200.iloc[-1])
     out["rsi"] = float(calculate_rsi(close).iloc[-1])
 
     try:
@@ -143,7 +147,10 @@ def fetch_one_symbol(sym):
         raise ValueError("no 15m")
 
     df_1h = yf_download_safe(sym, "14d", "60m")
-    df_4h = yf_download_safe(sym, "60d", "240m")
+
+    # ✅ BURASI DÜZELTİLDİ
+    df_4h = yf_download_safe(sym, "60d", "4h")
+
     df_1d = yf_download_safe(sym, "120d", "1d")
 
     tf15 = fetch_timeframe_indicators(df_15, sym)
