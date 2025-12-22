@@ -1,9 +1,7 @@
 import time
 import requests
 import pandas as pd
-import numpy as np
 import yfinance as yf
-from datetime import datetime, timezone, timedelta
 
 from utils import (
     FALLBACK_SYMBOLS,
@@ -11,7 +9,6 @@ from utils import (
     detect_three_peaks,
     detect_support_resistance_break,
     nearest_support_resistance_from_history,
-    to_tr_timezone,
 )
 
 # ==================================================
@@ -50,7 +47,7 @@ def calculate_ema(series, period):
 
 
 # ==================================================
-# SAFE YFINANCE (SESSİZ FAIL)
+# SAFE YFINANCE
 # ==================================================
 def yf_download_safe(ticker, period, interval):
     try:
@@ -71,7 +68,7 @@ def yf_download_safe(ticker, period, interval):
 
 
 # ==================================================
-# BIST SYMBOLS
+# BIST SYMBOLS (FALLBACK GARANTİLİ)
 # ==================================================
 def get_bist_symbols():
     try:
@@ -91,16 +88,15 @@ def get_bist_symbols():
 
 
 # ==================================================
-# TF INDICATORS (PSEUDO LIVE PATCH)
+# TF INDICATORS (PSEUDO LIVE SADECE 15M)
 # ==================================================
 def fetch_timeframe_indicators(df, symbol=None):
-    out = {}
     if df is None or df.empty:
-        return out
+        return None
 
     close = df["Close"].copy()
 
-    # 🔥 pseudo-live close override
+    # pseudo-live override (sadece son mum)
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
         if live:
@@ -108,13 +104,19 @@ def fetch_timeframe_indicators(df, symbol=None):
 
     ema20 = calculate_ema(close, 20)
     ema50 = calculate_ema(close, 50)
+    rsi = calculate_rsi(close)
 
-    out["last_close"] = float(close.iloc[-1])
-    out["last_open"] = float(df["Open"].iloc[-1])
-    out["last_green"] = out["last_close"] > out["last_open"]
-    out["ema20"] = float(ema20.iloc[-1])
-    out["ema50"] = float(ema50.iloc[-1])
-    out["rsi"] = float(calculate_rsi(close).iloc[-1])
+    if rsi.isna().all():
+        return None
+
+    out = {
+        "last_close": float(close.iloc[-1]),
+        "last_open": float(df["Open"].iloc[-1]),
+        "last_green": close.iloc[-1] > df["Open"].iloc[-1],
+        "ema20": float(ema20.iloc[-1]),
+        "ema50": float(ema50.iloc[-1]),
+        "rsi": float(rsi.iloc[-1]),
+    }
 
     try:
         out["volume"] = int(df["Volume"].iloc[-1])
@@ -135,29 +137,31 @@ def fetch_timeframe_indicators(df, symbol=None):
 
 
 # ==================================================
-# FETCH ONE SYMBOL (STABİL)
+# FETCH ONE SYMBOL (SİNYAL GARANTİLİ)
 # ==================================================
 def fetch_one_symbol(sym):
     df_15 = yf_download_safe(sym, "7d", "15m")
     if df_15 is None:
-        return None  # ❗ sessiz skip
-
-    df_1h = yf_download_safe(sym, "14d", "60m")
-    df_4h = yf_download_safe(sym, "60d", "4h")   # 🔴 240m → 4h FIX
-    df_1d = yf_download_safe(sym, "120d", "1d")
+        return None
 
     tf15 = fetch_timeframe_indicators(df_15, sym)
+    if tf15 is None:
+        return None  # 🔥 KRİTİK: sinyal motoruna çöp veri gitmez
+
+    df_1h = yf_download_safe(sym, "14d", "60m")
+    df_4h = yf_download_safe(sym, "60d", "4h")
+    df_1d = yf_download_safe(sym, "120d", "1d")
+
     tf1h = fetch_timeframe_indicators(df_1h)
     tf4h = fetch_timeframe_indicators(df_4h)
     tf1d = fetch_timeframe_indicators(df_1d)
 
-    price = tf15.get("last_close")
     ns, nr = nearest_support_resistance_from_history(df_15)
     three_peak = detect_three_peaks(df_15["Close"])
 
     return {
         "symbol": sym.replace(".IS", ""),
-        "current_price": price,
+        "current_price": tf15.get("last_close"),
         "RSI": tf15.get("rsi"),
         "volume": tf15.get("volume"),
         "three_peak_break": three_peak,
@@ -175,7 +179,7 @@ def fetch_one_symbol(sym):
 
 
 # ==================================================
-# FETCH ALL (KIRILMA YOK)
+# FETCH ALL (GERÇEK VERİ AKIŞI)
 # ==================================================
 def fetch_bist_data():
     out = []
