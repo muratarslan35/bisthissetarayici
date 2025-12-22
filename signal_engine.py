@@ -81,14 +81,9 @@ def long_term_trend_ok(item, price):
             d.get("ema20"), d.get("ema50"), d.get("ema100"), d.get("ema200")
         )
         if ma50 and ma200 and ma50 > ma200:
-            return True, "Golden Cross", {
-                "MA20": ma20, "MA50": ma50, "MA100": ma100, "MA200": ma200,
-                "golden_cross": True
-            }
+            return True, "Golden Cross", {}
         if all([ma20, ma50, ma100, ma200]) and ma20 > ma50 > ma100 > ma200:
-            return True, "Uptrend", {
-                "MA20": ma20, "MA50": ma50, "MA100": ma100, "MA200": ma200
-            }
+            return True, "Uptrend", {}
     return False, "", {}
 
 # ==================================================
@@ -103,11 +98,9 @@ def detect_order_block(df):
     for i in range(len(df) - 5, 10, -1):
         c = df.iloc[i]
 
-        # Son kırmızı mum
         if c["close"] >= c["open"]:
             continue
 
-        # Hacim filtresi
         if c["volume"] < vol_avg.iloc[i] * 1.8:
             continue
 
@@ -127,7 +120,43 @@ def detect_order_block(df):
         }
     return None
 
-def order_block_signal(item):
+# ==================================================
+# OB REACTION (TEPKİ)
+# ==================================================
+def detect_ob_reaction(df, ob):
+    if df is None or ob is None or len(df) < 5:
+        return False
+
+    last = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    # OB bölgesinden yukarı yönlü net dönüş
+    if (
+        prev["low"] <= ob["high"] * 1.01 and
+        last["close"] > prev["high"] and
+        last["close"] > last["open"]
+    ):
+        return True
+
+    return False
+
+# ==================================================
+# L3 – KISA VADELİ MOMENTUM
+# ==================================================
+def l3_reaction_ok(item):
+    tf5 = item.get("tf", {}).get("5m", {})
+    rsi = tf5.get("rsi")
+    ema20 = tf5.get("ema20")
+    ema50 = tf5.get("ema50")
+
+    if rsi and ema20 and ema50:
+        return rsi > 50 and ema20 > ema50
+    return False
+
+# ==================================================
+# OB + REACTION + L3 SİNYALİ
+# ==================================================
+def order_block_reaction_signal(item):
     symbol = item["symbol"]
     price = item["current_price"]
     tf15 = item.get("tf", {}).get("15m", {})
@@ -136,7 +165,7 @@ def order_block_signal(item):
     if df is None or in_cooldown(symbol):
         return None
 
-    trend_ok, trend_type, ma_dict = long_term_trend_ok(item, price)
+    trend_ok, trend_type, _ = long_term_trend_ok(item, price)
     if not trend_ok:
         return None
 
@@ -144,25 +173,27 @@ def order_block_signal(item):
     if not ob:
         return None
 
-    if not (ob["low"] * 0.995 <= price <= ob["high"] * 1.01):
+    if not detect_ob_reaction(df, ob):
         return None
 
-    strength = min(100, int(30 + ob["volume_ratio"] * 20 + 30))
+    if not l3_reaction_ok(item):
+        return None
+
+    strength = min(100, int(60 + ob["volume_ratio"] * 15))
 
     register_signal(symbol, price)
     set_cooldown(symbol, 45)
 
     msg = (
-        f"💼 ORDER BLOCK AL (L4)\n\n"
+        f"⚡ OB REACTION + L3 (L4)\n\n"
         f"Hisse: {symbol}\n"
         f"Fiyat: {fmt_price(price)}\n"
         f"OB: {fmt_price(ob['low'])} – {fmt_price(ob['high'])}\n"
-        f"Hacim: {ob['volume_ratio']}x\n"
         f"Trend: {trend_type}\n"
         f"Güç: %{strength}"
     )
 
-    return (f"OB-{symbol}", msg, {"type": "order_block", "strength": strength})
+    return (f"OBR-{symbol}", msg, {"type": "ob_reaction", "strength": strength})
 
 # ==================================================
 # PROCESS SIGNALS (MEVCUTLAR + OB)
@@ -170,19 +201,27 @@ def order_block_signal(item):
 def process_signals(item, market_open=True):
     out = []
 
-    # ⛔ BURADA MEVCUT TÜM SİNYALLERİN ÇAĞRILDIĞINI VARSAYIYORUZ
-    # (pullback, güçlü dönüş, kombine, süper kombine vs.)
+    # ⚠️ MEVCUT TÜM ALGORİTMALAR BURADA ÇALIŞMAYA DEVAM EDER
+    # pullback_signal(item)
+    # strong_reversal_signal(item)
+    # combined_signal(item)
+    # super_combined_signal(item)
+    # vb...
 
-    ob_sig = order_block_signal(item)
-    if ob_sig:
-        out.append(ob_sig)
+    ob_reaction = order_block_reaction_signal(item)
+    if ob_reaction:
+        out.append(ob_reaction)
 
     return out
 
+# ==================================================
+# SAFE PROCESS
+# ==================================================
 def safe_process_bist_data(data_list, market_open=True):
     res = []
     if not data_list:
         return res
+
     for item in data_list:
         try:
             res.extend(process_signals(item, market_open))
