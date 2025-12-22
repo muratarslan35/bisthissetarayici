@@ -65,7 +65,7 @@ def telegram_send(msg):
             pass
 
 # ==================================================
-# MARKET HOURS (GERÇEK HALİNE DÖNDÜ)
+# MARKET HOURS
 # ==================================================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
@@ -103,17 +103,21 @@ def background_loop():
                 for sid, msg, meta in signals:
                     telegram_send(msg)
 
+                    # ---- META FALLBACK (UYUM FIX) ----
+                    symbol = meta.get("symbol") or sid.split("-")[-1]
+                    price = meta.get("price") or meta.get("current_price")
+
                     dashboard_signals.append({
-                        "symbol": meta.get("symbol"),
-                        "price": meta.get("price"),
+                        "symbol": symbol,
+                        "price": price,
                         "type": meta.get("type"),
                         "title": meta.get("title", meta.get("type")),
                         "direction": meta.get("direction", "up"),
-                        "trend_strength": meta.get("trend_strength", 50),
+                        "trend_strength": meta.get("trend_strength", meta.get("strength", 50)),
                         "support": meta.get("support"),
                         "resistance": meta.get("resistance"),
                         "signal_type": meta.get("type"),
-                        "current_price": meta.get("price"),
+                        "current_price": price,
                         "rsi": meta.get("rsi"),
                         "time": to_tr_timezone(
                             datetime.now(timezone.utc)
@@ -122,8 +126,8 @@ def background_loop():
                     })
 
                 with data_lock:
-                    if not TEST_MODE:
-                        LATEST_SIGNALS = dashboard_signals
+                    # TEST MODE canlı sinyali EZMEZ
+                    LATEST_SIGNALS = dashboard_signals
 
             # ================= MARKET KAPALI =================
             else:
