@@ -47,7 +47,7 @@ def calculate_ema(series, period):
 
 
 # ==================================================
-# SAFE YFINANCE
+# SAFE YFINANCE (SESSİZ)
 # ==================================================
 def yf_download_safe(ticker, period, interval):
     try:
@@ -68,27 +68,15 @@ def yf_download_safe(ticker, period, interval):
 
 
 # ==================================================
-# BIST SYMBOLS (FALLBACK GARANTİLİ)
+# SYMBOL LIST — SADECE FALLBACK
 # ==================================================
 def get_bist_symbols():
-    try:
-        url = "https://api.isyatirim.com.tr/index/indexsectorperformance"
-        r = requests.get(url, timeout=6)
-        js = r.json()
-        out = []
-        for item in js:
-            if item.get("indexCode") in ("XU030", "XU100"):
-                for c in item.get("components", []):
-                    s = c.get("symbol")
-                    if s:
-                        out.append(s if s.endswith(".IS") else s + ".IS")
-        return list(dict.fromkeys(out))
-    except Exception:
-        return FALLBACK_SYMBOLS.copy()
+    # 🔥 YF uyumlu, stabil, kontrollü liste
+    return FALLBACK_SYMBOLS.copy()
 
 
 # ==================================================
-# TF INDICATORS (PSEUDO LIVE SADECE 15M)
+# TF INDICATORS (15M PSEUDO LIVE)
 # ==================================================
 def fetch_timeframe_indicators(df, symbol=None):
     if df is None or df.empty:
@@ -96,7 +84,7 @@ def fetch_timeframe_indicators(df, symbol=None):
 
     close = df["Close"].copy()
 
-    # pseudo-live override (sadece son mum)
+    # pseudo-live sadece son mum
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
         if live:
@@ -146,7 +134,7 @@ def fetch_one_symbol(sym):
 
     tf15 = fetch_timeframe_indicators(df_15, sym)
     if tf15 is None:
-        return None  # 🔥 KRİTİK: sinyal motoruna çöp veri gitmez
+        return None
 
     df_1h = yf_download_safe(sym, "14d", "60m")
     df_4h = yf_download_safe(sym, "60d", "4h")
@@ -179,7 +167,7 @@ def fetch_one_symbol(sym):
 
 
 # ==================================================
-# FETCH ALL (GERÇEK VERİ AKIŞI)
+# FETCH ALL (HIZLI + STABİL)
 # ==================================================
 def fetch_bist_data():
     out = []
