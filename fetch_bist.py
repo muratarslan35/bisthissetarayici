@@ -15,7 +15,7 @@ from utils import (
 )
 
 # ==================================================
-# TRADINGVIEW PSEUDO LIVE PRICE (CACHE)
+# TRADINGVIEW PSEUDO LIVE PRICE (CACHE'Lİ)
 # ==================================================
 _TV_CACHE = {}
 _TV_CACHE_TTL = 60  # saniye
@@ -50,7 +50,7 @@ def calculate_ema(series, period):
 
 
 # ==================================================
-# SAFE YFINANCE
+# SAFE YFINANCE (GÜÇLENDİRİLDİ)
 # ==================================================
 def yf_download_safe(ticker, period, interval):
     try:
@@ -59,7 +59,8 @@ def yf_download_safe(ticker, period, interval):
             period=period,
             interval=interval,
             auto_adjust=True,
-            progress=False
+            progress=False,
+            threads=False
         )
         if df is None or df.empty:
             return None
@@ -91,7 +92,7 @@ def get_bist_symbols():
 
 
 # ==================================================
-# TF INDICATORS (PSEUDO LIVE)
+# TF INDICATORS (PSEUDO LIVE PATCH)
 # ==================================================
 def fetch_timeframe_indicators(df, symbol=None):
     out = {}
@@ -100,7 +101,7 @@ def fetch_timeframe_indicators(df, symbol=None):
 
     close = df["Close"].copy()
 
-    # 🔥 pseudo-live fiyat
+    # 🔥 pseudo-live close override
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
         if live:
@@ -135,7 +136,7 @@ def fetch_timeframe_indicators(df, symbol=None):
 
 
 # ==================================================
-# FETCH ONE SYMBOL (FIXED)
+# FETCH ONE SYMBOL (HATA TOLERANSLI)
 # ==================================================
 def fetch_one_symbol(sym):
     df_15 = yf_download_safe(sym, "7d", "15m")
@@ -143,10 +144,13 @@ def fetch_one_symbol(sym):
         raise ValueError("no 15m")
 
     df_1h = yf_download_safe(sym, "14d", "60m")
-    df_1d = yf_download_safe(sym, "120d", "1d")
 
-    # ❗ 4H FIX: Yahoo desteklemiyor → 1H kullanıyoruz
-    df_4h = df_1h
+    # ⚠️ 4H YOKSA 1H FALLBACK (ANA FIX)
+    df_4h = yf_download_safe(sym, "60d", "240m")
+    if df_4h is None:
+        df_4h = df_1h
+
+    df_1d = yf_download_safe(sym, "120d", "1d")
 
     tf15 = fetch_timeframe_indicators(df_15, sym)
     tf1h = fetch_timeframe_indicators(df_1h)
@@ -177,7 +181,7 @@ def fetch_one_symbol(sym):
 
 
 # ==================================================
-# FETCH ALL
+# FETCH ALL (DELİSTED SAFE)
 # ==================================================
 def fetch_bist_data():
     out = []
@@ -186,5 +190,5 @@ def fetch_bist_data():
             out.append(fetch_one_symbol(s))
         except Exception:
             continue
-        time.sleep(0.15)
+        time.sleep(0.12)
     return out
