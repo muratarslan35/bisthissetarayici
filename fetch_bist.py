@@ -50,7 +50,7 @@ def calculate_ema(series, period):
 
 
 # ==================================================
-# SAFE YFINANCE (GÜÇLENDİRİLDİ)
+# SAFE YFINANCE
 # ==================================================
 def yf_download_safe(ticker, period, interval):
     try:
@@ -136,7 +136,7 @@ def fetch_timeframe_indicators(df, symbol=None):
 
 
 # ==================================================
-# FETCH ONE SYMBOL (HATA TOLERANSLI)
+# FETCH ONE SYMBOL
 # ==================================================
 def fetch_one_symbol(sym):
     df_15 = yf_download_safe(sym, "7d", "15m")
@@ -144,12 +144,7 @@ def fetch_one_symbol(sym):
         raise ValueError("no 15m")
 
     df_1h = yf_download_safe(sym, "14d", "60m")
-
-    # ⚠️ 4H YOKSA 1H FALLBACK (ANA FIX)
-    df_4h = yf_download_safe(sym, "60d", "240m")
-    if df_4h is None:
-        df_4h = df_1h
-
+    df_4h = yf_download_safe(sym, "60d", "4h")   # 🔴 FIX BURADA
     df_1d = yf_download_safe(sym, "120d", "1d")
 
     tf15 = fetch_timeframe_indicators(df_15, sym)
@@ -181,7 +176,7 @@ def fetch_one_symbol(sym):
 
 
 # ==================================================
-# FETCH ALL (DELİSTED SAFE)
+# FETCH ALL
 # ==================================================
 def fetch_bist_data():
     out = []
@@ -190,5 +185,5 @@ def fetch_bist_data():
             out.append(fetch_one_symbol(s))
         except Exception:
             continue
-        time.sleep(0.12)
+        time.sleep(0.15)
     return out
