@@ -262,3 +262,37 @@ def daily_success_summary():
         "fail": fail,
         "success_rate": round((hit / total) * 100, 2) if total else 0
     }
+
+# ==================================================
+# TELEGRAM FORMAT (APP.PY UYUMLU – GERİ EKLENDİ)
+# ==================================================
+def format_signal_message(symbol, signals):
+    """
+    Telegram için okunabilir mesaj üretir
+    """
+    if not signals:
+        return None
+
+    s0 = signals[0]
+
+    lines = [
+        f"📈 {symbol}",
+        f"💰 Fiyat: {s0.get('current_price', '-')}",
+        f"📊 RSI: {s0.get('rsi', '-')}",
+        f"📐 EMA20 / EMA50 / EMA200: "
+        f"{s0.get('ema20','-')} / {s0.get('ema50','-')} / {s0.get('ema200','-')}",
+        f"📉 EMA Trend: {s0.get('ema_trend','-')}",
+        f"⏱ Saat: {s0.get('signal_time','-')}",
+        "",
+    ]
+
+    for s in signals:
+        lines.append(
+            f"{s.get('emoji','⚡')} {s['type']} | Güç: %{s['strength']} | {s.get('action','')}"
+        )
+        if s.get("support"):
+            lines.append(f"🟢 Destek: {s['support']}")
+        if s.get("resistance"):
+            lines.append(f"🔴 Direnç: {s['resistance']}")
+
+    return "\n".join(lines)
