@@ -5,12 +5,14 @@ import requests
 from datetime import datetime, timezone
 from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
+from collections import defaultdict
 
 from fetch_bist import fetch_bist_data
 from signal_engine import (
     safe_process_bist_data,
     scan_strong_stocks,
-    daily_success_summary
+    daily_success_summary,
+    format_signal_message
 )
 from utils import to_tr_timezone
 
@@ -19,12 +21,18 @@ from fallback_manager import (
     fallback_daily_report_message
 )
 
+# ==================================================
+# ENV
+# ==================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
+# ==================================================
+# FLASK
+# ==================================================
 app = Flask(__name__)
 
 LATEST_DATA = []
@@ -34,6 +42,9 @@ SYSTEM_STARTED = False
 
 data_lock = threading.Lock()
 
+# ==================================================
+# JSON SAFE
+# ==================================================
 def make_json_safe(obj):
     if isinstance(obj, dict):
         return {k: make_json_safe(v) for k, v in obj.items()}
@@ -43,8 +54,11 @@ def make_json_safe(obj):
         return obj.item()
     return obj
 
+# ==================================================
+# TELEGRAM
+# ==================================================
 def telegram_send(msg):
-    if not TELEGRAM_TOKEN or not CHAT_IDS:
+    if not TELEGRAM_TOKEN or not CHAT_IDS or not msg:
         return
     for cid in CHAT_IDS:
         try:
@@ -56,6 +70,9 @@ def telegram_send(msg):
         except Exception:
             pass
 
+# ==================================================
+# MARKET HOURS
+# ==================================================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
     return (
@@ -64,6 +81,9 @@ def market_open():
         now.hour < 18
     )
 
+# ==================================================
+# BACKGROUND LOOP
+# ==================================================
 def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS
 
@@ -73,18 +93,39 @@ def background_loop():
     while True:
         try:
             raw_data = fetch_bist_data()
+
             with data_lock:
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
+            # ================= MARKET AÇIK =================
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
-                dashboard_signals = []
-                for sid, msg, meta in signals:
+
+                # --------- SİNYALLERİ SEMBOL BAZLI TOPLA ---------
+                grouped = defaultdict(list)
+                tf_cache = {}
+
+                for _, _, meta in signals:
+                    sym = meta.get("symbol")
+                    if not sym:
+                        continue
+                    grouped[sym].append(meta)
+                    if sym not in tf_cache:
+                        tf_cache[sym] = meta.get("tf", {})
+
+                # --------- GELİŞMİŞ TELEGRAM MESAJI ---------
+                for symbol, alg_list in grouped.items():
+                    tf15 = tf_cache.get(symbol, {}).get("15m", {})
+                    msg = format_signal_message(symbol, alg_list, tf15)
                     telegram_send(msg)
+
+                # --------- DASHBOARD ---------
+                dashboard_signals = []
+                for _, _, meta in signals:
                     dashboard_signals.append({
                         "symbol": meta.get("symbol"),
-                        "price": meta.get("price"),
+                        "price": meta.get("price") or meta.get("current_price"),
                         "type": meta.get("type"),
                         "title": meta.get("title", meta.get("type")),
                         "direction": meta.get("direction", "up"),
@@ -92,32 +133,49 @@ def background_loop():
                         "support": meta.get("support"),
                         "resistance": meta.get("resistance"),
                         "signal_type": meta.get("type"),
-                        "current_price": meta.get("price"),
+                        "current_price": meta.get("price") or meta.get("current_price"),
                         "rsi": meta.get("rsi"),
-                        "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
+                        "time": to_tr_timezone(
+                            datetime.now(timezone.utc)
+                        ).strftime("%H:%M:%S"),
                         "details": meta
                     })
+
                 with data_lock:
                     LATEST_SIGNALS = dashboard_signals
+
+            # ================= MARKET KAPALI =================
             else:
                 strong = scan_strong_stocks(raw_data)
                 if strong:
-                    telegram_send("📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" + "\n".join(strong))
+                    telegram_send(
+                        "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
+                        "\n".join(strong)
+                    )
+
                 summary = daily_success_summary()
                 if summary:
                     telegram_send(summary)
+
                 updated = fallback_daily_update_if_needed(raw_data)
                 if updated:
                     msg = fallback_daily_report_message()
                     if msg:
                         telegram_send(msg)
+
         except Exception as e:
             print("SCAN ERROR:", e)
 
         time.sleep(60)
 
+# ==================================================
+# THREAD
+# ==================================================
 threading.Thread(target=background_loop, daemon=True).start()
 
+# ==================================================
+# API
+# ==================================================
 @app.route("/api")
 def api():
     with data_lock:
@@ -132,5 +190,8 @@ def api():
 def dashboard():
     return send_from_directory("static", "dashboard.html")
 
+# ==================================================
+# RUN
+# ==================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
