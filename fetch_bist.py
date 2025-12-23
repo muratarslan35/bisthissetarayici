@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 import yfinance as yf
-from utils import FALLBACK_SYMBOLS
+from utils import FALLBACK_SYMBOLS, to_tr_timezone
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "fallback_state.json")
@@ -34,19 +34,32 @@ def has_daily_movement(symbol):
     except:
         return False
 
-def fallback_daily_update_if_needed(symbols_list):
+def fallback_daily_update_if_needed(raw_data=None, candidate_symbols=None):
+    """
+    Günlük fallback update.
+    - raw_data: app.py'den gelen veri listesi (opsiyonel)
+    - candidate_symbols: yeni eklenebilecek semboller (opsiyonel)
+    """
     state = load_state()
     updated = False
-    for sym in FALLBACK_SYMBOLS:
+    today = to_tr_timezone(datetime.now(timezone.utc)).date().isoformat()
+
+    symbols_to_check = FALLBACK_SYMBOLS.copy()
+    if candidate_symbols:
+        symbols_to_check += candidate_symbols
+
+    for sym in symbols_to_check:
         moved = has_daily_movement(sym)
-        st = state.get(sym, {"no_move_days":0,"last_check":datetime.now(timezone.utc).date().isoformat()})
+        st = state.get(sym, {"no_move_days":0,"last_check":today})
         if moved:
             st["no_move_days"]=0
         else:
             st["no_move_days"]+=1
+        st["last_check"]=today
         state[sym]=st
         if st["no_move_days"]>=NO_MOVE_DAYS_LIMIT:
             updated=True
+
     save_state(state)
     return updated
 
