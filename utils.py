@@ -1,3 +1,5 @@
+# utils.py
+
 import math
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -37,12 +39,9 @@ FALLBACK_SYMBOLS = [
 ]
 
 # ==================================================
-# EMA HESAPLAMA (YENİ EKLENDİ)
+# EMA
 # ==================================================
 def calculate_ema(series, period=20):
-    """
-    Exponential Moving Average
-    """
     return series.ewm(span=period, adjust=False).mean()
 
 # ==================================================
@@ -61,6 +60,8 @@ def calculate_rsi(series, period=14):
 # SUPPORT / RESISTANCE BREAK
 # ==================================================
 def detect_support_resistance_break(df, lookback=20):
+    if df is None or df.empty or len(df) < lookback + 2:
+        return False, False
     prev_low = df["Low"].iloc[:-1].rolling(lookback, min_periods=1).min().iloc[-1]
     prev_high = df["High"].iloc[:-1].rolling(lookback, min_periods=1).max().iloc[-1]
     close = df["Close"].iloc[-1]
@@ -70,6 +71,9 @@ def detect_support_resistance_break(df, lookback=20):
 # NEAREST SUPPORT / RESISTANCE
 # ==================================================
 def nearest_support_resistance_from_history(df, lookback=100):
+    if df is None or df.empty or len(df) < 5:
+        return None, None
+
     highs = df["High"].rolling(3, center=True).max()
     lows = df["Low"].rolling(3, center=True).min()
     ph = df["High"][df["High"] == highs]
@@ -77,8 +81,8 @@ def nearest_support_resistance_from_history(df, lookback=100):
 
     price = df["Close"].iloc[-1]
 
-    resistances = [v for v in ph if v > price]
-    supports = [v for v in pl if v < price]
+    resistances = [float(v) for v in ph if v > price]
+    supports = [float(v) for v in pl if v < price]
 
     nearest_support = max(supports) if supports else None
     nearest_resistance = min(resistances) if resistances else None
@@ -86,26 +90,8 @@ def nearest_support_resistance_from_history(df, lookback=100):
     return nearest_support, nearest_resistance
 
 # ==================================================
-# RESISTANCE BREAK + DEVAM MESAJI
+# THREE PEAKS (ÜÇLÜ TEPE KIRILIMI)
 # ==================================================
-def resistance_continuation(current_price, nearest_resistance, tolerance_pct=0.3):
-    if not nearest_resistance:
-        return False, False
-
-    broken = current_price > nearest_resistance
-    diff_pct = ((current_price - nearest_resistance) / nearest_resistance) * 100
-    continuation = broken and diff_pct >= tolerance_pct
-
-    return broken, continuation
-
-# ==================================================
-# TIMEZONE
-# ==================================================
-def to_tr_timezone(dt):
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(ZoneInfo("Europe/Istanbul"))
-
 def detect_three_peaks(close_series):
     if close_series is None or close_series.empty or len(close_series) < 5:
         return False
@@ -124,3 +110,11 @@ def detect_three_peaks(close_series):
     current_price = close_series.iloc[-1]
 
     return current_price > max_peak
+
+# ==================================================
+# TIMEZONE
+# ==================================================
+def to_tr_timezone(dt):
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo("Europe/Istanbul"))
