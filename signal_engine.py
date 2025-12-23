@@ -270,10 +270,10 @@ def format_signal_message(symbol, signals, tf_data):
         "resistance_break": "🧱",
         "pullback": "⚡️",
         "strong_pullback": "⚡️⚡️⚡️",
-        "l2": "🟡",
-        "l3": "🟢",
-        "l4": "🔵",
-        "ob_reaction": "🔵"
+        "l2": "💰",
+        "l3": "💸💸",
+        "l4": "🪙🪙🪙",
+        "ob_reaction": "🏦"
     }
 
     MA_DIRECTIONS = []
