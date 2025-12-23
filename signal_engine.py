@@ -48,88 +48,96 @@ def update_success(symbol, price):
     if d and not d["hit"] and price >= d["target"]:
         d["hit"] = True
 
-def daily_success_summary():
-    today = now_tr().date()
-    d = success_tracker.get(today)
-    if not d:
-        return None
-    total = len(d)
-    hit = sum(1 for x in d.values() if x["hit"])
-    return (
-        "📊 GÜN SONU ÖZET\n\n"
-        f"Toplam AL: {total}\n"
-        f"%2 Hedefe Ulaşan: {hit}\n"
-        f"Başarısız: {total-hit}"
-    )
+# ==================================================
+# HELPERS
+# ==================================================
+def fmt(v):
+    return round(v, 2) if isinstance(v, (int, float)) else None
+
+def trend_direction(ema20, ema50, ema200):
+    if ema20 and ema50 and ema200:
+        if ema20 > ema50 > ema200:
+            return "📈 YUKARI"
+        if ema20 < ema50 < ema200:
+            return "📉 AŞAĞI"
+    return "➖ YATAY"
+
+def decide_action(strength, rsi, ema_trend):
+    if strength >= 80 and rsi is not None and rsi < 35 and ema_trend == "📈 YUKARI":
+        return "GÜÇLÜ AL"
+    return "TAKİP ET"
 
 # ==================================================
-# META ENRICH
+# META ENRICH (JSON SAFE)
 # ==================================================
 def enrich_meta(item, tf, base):
+    ema20 = tf.get("ema20")
+    ema50 = tf.get("ema50")
+    ema200 = tf.get("ema200")
+
+    ema_trend = trend_direction(ema20, ema50, ema200)
+    rsi = tf.get("rsi")
+
     base.update({
-        "current_price": item.get("current_price"),
-        "price": item.get("current_price"),
-        "rsi": tf.get("rsi"),
-        "ema20": tf.get("ema20"),
-        "ema50": tf.get("ema50"),
-        "ema200": tf.get("ema200"),
-        "volume": tf.get("volume"),
-        "volume_avg": tf.get("volume_avg"),
-        "trend_up": tf.get("trend_up", 0),
-        "trend_down": tf.get("trend_down", 0),
-        "tf": tf
+        "symbol": item["symbol"],
+        "current_price": fmt(item.get("current_price")),
+        "rsi": fmt(rsi),
+        "ema20": fmt(ema20),
+        "ema50": fmt(ema50),
+        "ema200": fmt(ema200),
+        "ema_trend": ema_trend,
+        "volume": fmt(tf.get("volume")),
+        "volume_avg": fmt(tf.get("volume_avg")),
+        "signal_time": now_tr().strftime("%H:%M:%S"),
+        "action": decide_action(base["strength"], rsi, ema_trend)
     })
     return base
 
 # ==================================================
-# SİNYALLER
+# SIGNALS (TAMAMI KORUNDU)
 # ==================================================
 def combined_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     if tf.get("rsi") and tf["rsi"] < 30 and not in_repeat_block(item["symbol"], "kombine"):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "kombine")
-        return ("kombine", "", enrich_meta(item, tf, {
+        return enrich_meta(item, tf, {
             "type": "KOMBİNE",
             "emoji": "🧠",
-            "strength": 70,
-            "symbol": item["symbol"]
-        }))
+            "strength": 70
+        })
 
 def super_combined_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     if tf.get("rsi") and tf["rsi"] < 25 and not in_repeat_block(item["symbol"], "super_kombine"):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "super_kombine")
-        return ("super_kombine", "", enrich_meta(item, tf, {
+        return enrich_meta(item, tf, {
             "type": "SÜPER KOMBİNE",
             "emoji": "🚀",
-            "strength": 90,
-            "symbol": item["symbol"]
-        }))
+            "strength": 90
+        })
 
 def pullback_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     if tf.get("rsi") and tf.get("ema20") and tf.get("ema50"):
         if tf["rsi"] < 40 and tf["ema20"] > tf["ema50"] and not in_repeat_block(item["symbol"], "pullback"):
             mark_sent(item["symbol"], "pullback")
-            return ("pullback", "", enrich_meta(item, tf, {
+            return enrich_meta(item, tf, {
                 "type": "PULLBACK",
                 "emoji": "🔄",
-                "strength": 60,
-                "symbol": item["symbol"]
-            }))
+                "strength": 60
+            })
 
 def strong_pullback_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     if tf.get("rsi") and tf["rsi"] < 25 and not in_repeat_block(item["symbol"], "strong_pullback"):
         mark_sent(item["symbol"], "strong_pullback")
-        return ("strong_pullback", "", enrich_meta(item, tf, {
+        return enrich_meta(item, tf, {
             "type": "GÜÇLÜ PULLBACK",
             "emoji": "💪",
-            "strength": 85,
-            "symbol": item["symbol"]
-        }))
+            "strength": 85
+        })
 
 def three_peak_signal(item):
     tf = item.get("tf", {}).get("15m", {})
@@ -137,12 +145,11 @@ def three_peak_signal(item):
     if df is not None and detect_three_peaks(df["Close"]):
         if not in_repeat_block(item["symbol"], "three_peak"):
             mark_sent(item["symbol"], "three_peak")
-            return ("three_peak", "", enrich_meta(item, tf, {
+            return enrich_meta(item, tf, {
                 "type": "3’LÜ TEPE KIRILIMI",
                 "emoji": "📉➡️📈",
-                "strength": 80,
-                "symbol": item["symbol"]
-            }))
+                "strength": 80
+            })
 
 def support_resistance_break_signal(item):
     tf = item.get("tf", {}).get("15m", {})
@@ -155,47 +162,43 @@ def support_resistance_break_signal(item):
 
     if r_break and not in_repeat_block(item["symbol"], "resistance_break"):
         mark_sent(item["symbol"], "resistance_break")
-        return ("resistance_break", "", enrich_meta(item, tf, {
+        return enrich_meta(item, tf, {
             "type": "DİRENÇ KIRILIMI",
             "emoji": "🚧",
             "strength": 75,
-            "support": sup,
-            "resistance": res,
-            "symbol": item["symbol"]
-        }))
+            "support": fmt(sup),
+            "resistance": fmt(res)
+        })
 
 def l2_signal(item):
     tf = item.get("tf", {}).get("5m", {})
     if tf.get("rsi", 50) > 55 and not in_repeat_block(item["symbol"], "l2"):
         mark_sent(item["symbol"], "l2")
-        return ("l2", "", enrich_meta(item, tf, {
+        return enrich_meta(item, tf, {
             "type": "L2 TREND",
             "emoji": "📈",
-            "strength": 55,
-            "symbol": item["symbol"]
-        }))
+            "strength": 55
+        })
 
 def l3_signal(item):
     tf = item.get("tf", {}).get("5m", {})
     if tf.get("rsi", 50) > 60 and not in_repeat_block(item["symbol"], "l3"):
         mark_sent(item["symbol"], "l3")
-        return ("l3", "", enrich_meta(item, tf, {
+        return enrich_meta(item, tf, {
             "type": "L3 GÜÇLÜ TREND",
             "emoji": "🔥",
-            "strength": 65,
-            "symbol": item["symbol"]
-        }))
+            "strength": 65
+        })
 
 def l4_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     if tf.get("rsi", 50) > 65 and not in_repeat_block(item["symbol"], "l4"):
         mark_sent(item["symbol"], "l4")
-        return ("l4", "", enrich_meta(item, tf, {
+        return enrich_meta(item, tf, {
             "type": "L4 SMART MONEY",
             "emoji": "💎",
-            "strength": 75,
-            "symbol": item["symbol"]
-        }))
+            "strength": 75
+        })
 
 # ==================================================
 # PROCESS
@@ -229,35 +232,7 @@ def safe_process_bist_data(data_list, market_open=True):
     return res
 
 # ==================================================
-# TELEGRAM FORMAT (TÜRKÇE + EMOJİ)
-# ==================================================
-def format_signal_message(symbol, signals, tf_data=None):
-    lines = [f"📈 {symbol}"]
-
-    s0 = signals[0]
-    if s0.get("current_price"):
-        lines.append(f"💰 Fiyat: {s0['current_price']}")
-    if s0.get("rsi") is not None:
-        lines.append(f"📊 RSI: {round(s0['rsi'],1)}")
-    if s0.get("ema20") and s0.get("ema50"):
-        lines.append(f"📐 EMA20 / EMA50: {s0['ema20']} / {s0['ema50']}")
-    if s0.get("volume"):
-        lines.append(f"📦 Hacim: {s0['volume']}")
-
-    for s in signals:
-        lines.append(
-            f"{s.get('emoji','⚡')} {s['type']} | Güç: %{s['strength']}"
-        )
-        if s.get("support"):
-            lines.append(f"🟢 Destek: {s['support']}")
-        if s.get("resistance"):
-            lines.append(f"🔴 Direnç: {s['resistance']}")
-
-    return "\n".join(lines)
-
-
-# ==================================================
-# MARKET KAPALI – GÜÇLÜ HİSSELER (APP.PY UYUMLULUK)
+# MARKET KAPALI – GÜÇLÜ HİSSELER
 # ==================================================
 def scan_strong_stocks(data):
     out = []
