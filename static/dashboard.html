@@ -2,125 +2,141 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Profesyonel BIST Sinyal Dashboard</title>
+<title>BIST Sinyal Paneli</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
 <style>
 :root{
-  --bg:#0d1117;
-  --card:#161b22;
-  --text:#e6edf3;
-  --muted:#8b949e;
-  --green:#2ea043;
-  --red:#f85149;
-  --gold:#d29922;
-  --border:#21262d;
+  --bg:#0f1220;
+  --card:#1b1f38;
+  --text:#e6e8ff;
+  --muted:#9aa0ff;
+  --green:#2ecc71;
+  --red:#e74c3c;
+  --yellow:#f1c40f;
+  --blue:#3498db;
+}
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:var(--bg);
+  color:var(--text);
 }
 body.light{
-  --bg:#f6f8fa;
+  --bg:#f4f6ff;
   --card:#ffffff;
-  --text:#24292f;
-  --muted:#57606a;
-  --border:#d0d7de;
+  --text:#222;
+  --muted:#666;
 }
-*{box-sizing:border-box;font-family:'Inter',sans-serif}
-body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
-
-/* NAVBAR */
-.navbar{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:12px 16px;background:var(--card);border-bottom:1px solid var(--border);
+header{
+  padding:12px 16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:#11142a;
 }
-.status{display:flex;gap:14px;font-size:13px}
-.badge{padding:4px 8px;border-radius:6px;font-weight:600}
-.green{background:var(--green);color:#fff}
-.red{background:var(--red);color:#fff}
-.yellow{background:var(--gold);color:#000}
-
-/* FILTERS */
+body.light header{background:#e9ecff}
+.badge{
+  padding:4px 10px;
+  border-radius:20px;
+  font-size:12px;
+}
+.green{background:var(--green);color:#000}
+.red{background:var(--red)}
+.container{padding:16px}
 .filters{
-  display:flex;flex-wrap:wrap;gap:8px;
-  padding:12px 16px;background:var(--card);border-bottom:1px solid var(--border);
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-bottom:12px;
 }
 .filters label{
-  font-size:12px;cursor:pointer;color:var(--muted);
-  background:var(--bg);padding:6px 10px;border-radius:8px;border:1px solid var(--border);
+  background:var(--card);
+  padding:6px 10px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:13px;
 }
-
-/* INFO */
-.info-bar{padding:10px 16px;font-size:13px;color:var(--muted)}
-
-/* CARDS */
-#cards{
+.cards{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
-  gap:16px;padding:16px;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:12px;
 }
 .card{
-  background:linear-gradient(180deg,var(--card),var(--bg));
-  border:1px solid var(--border);
-  border-radius:16px;
-  padding:14px;
-  transition:.25s;
+  background:var(--card);
+  border-radius:12px;
+  padding:12px;
   position:relative;
 }
-.card:hover{transform:translateY(-4px)}
+.card b{font-size:18px}
 .fav{
-  position:absolute;top:10px;right:12px;
-  cursor:pointer;font-size:18px;color:var(--muted);
+  position:absolute;
+  top:8px;right:10px;
+  cursor:pointer;
+  font-size:18px;
+  opacity:.4;
 }
-.fav.active{color:gold}
-
-/* TAGS */
+.fav.active{opacity:1;color:gold}
 .tag{
-  font-size:11px;padding:3px 6px;border-radius:6px;
-  background:var(--border);display:inline-block;margin-right:4px;margin-top:4px;
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:11px;
+  margin-right:4px;
 }
-.tag.l2{background:#6c5dd3;color:#fff}
-.tag.l3{background:#7dd3fc;color:#000}
-.tag.l4{background:#f9a8d4;color:#000}
-.tag.kombine{background:#facc15;color:#000}
-.tag.super_kombine{background:#34d399;color:#000}
-
-/* TREND BAR */
+.l2{background:#2980b9}
+.l3{background:#8e44ad}
+.l4{background:#f39c12;color:#000}
+.kombine{background:#27ae60}
+.super_kombine{background:#e74c3c}
+.meta{
+  font-size:13px;
+  margin-top:6px;
+  line-height:1.5;
+}
+.meta span{display:block;color:var(--muted)}
 .trend-bar{
-  display:flex;height:6px;margin-top:6px;
-  border-radius:3px;overflow:hidden;background:var(--border);
+  height:6px;
+  border-radius:6px;
+  overflow:hidden;
+  background:#333;
+  margin-top:8px;
+  display:flex;
 }
 .trend-up{background:var(--green)}
+.trend-neutral{background:#777}
 .trend-down{background:var(--red)}
-.trend-neutral{background:var(--gold)}
 </style>
 </head>
 
 <body>
 
-<div class="navbar">
-  <div class="status">
-    <div>Sistem: <span id="sys" class="badge yellow">--</span></div>
-    <div>Piyasa: <span id="market" class="badge yellow">--</span></div>
-    <div>Son Tarama: <b id="scan">--:--:--</b></div>
+<header>
+  <div>
+    Sistem: <span id="sys" class="badge">?</span>
+    Piyasa: <span id="market" class="badge">?</span>
   </div>
-  <button onclick="toggleTheme()">🌙 / ☀️</button>
-</div>
+  <button onclick="toggleTheme()">🌓</button>
+</header>
+
+<div class="container">
 
 <div class="filters" id="filters">
   <label><input type="checkbox" value="favorites"> ⭐ Favoriler</label>
-  <label><input type="checkbox" value="pullback"> Pullback</label>
-  <label><input type="checkbox" value="trend_break"> Trend Kırılımı</label>
-  <label><input type="checkbox" value="breakout"> Direnç Kırılımı</label>
-  <label><input type="checkbox" value="rsi"> RSI</label>
   <label><input type="checkbox" value="kombine"> Kombine</label>
   <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
+  <label><input type="checkbox" value="pullback"> Pullback</label>
+  <label><input type="checkbox" value="trend_break"> 3’lü Tepe</label>
+  <label><input type="checkbox" value="breakout"> Direnç Kırılımı</label>
   <label><input type="checkbox" value="l2"> L2</label>
   <label><input type="checkbox" value="l3"> L3</label>
   <label><input type="checkbox" value="l4"> L4</label>
 </div>
 
-<div class="info-bar" id="info">Veri bekleniyor...</div>
-<div id="cards"></div>
+<div id="info"></div>
+<div class="cards" id="cards"></div>
+
+</div>
 
 <script>
 let ALL_SIGNALS=[]
@@ -147,43 +163,24 @@ function activeFilters(){
   return [...document.querySelectorAll(".filters input:checked")].map(i=>i.value)
 }
 
-/* TYPE → LEVEL */
 function inferLevel(type){
   if(["l2","l3","l4"].includes(type)) return type.toUpperCase()
-  if(type==="pullback") return "L2"
-  if(type==="strong_pullback") return "L3"
-  if(type==="kombine") return "L3"
   if(type==="super_kombine") return "L4"
+  if(type==="kombine") return "L3"
   return ""
 }
 
-/* TYPE → TITLE */
-function inferTitle(type){
-  const map={
-    kombine:"Kombine Sinyal",
-    super_kombine:"Süper Kombine",
-    pullback:"Pullback",
-    strong_pullback:"Güçlü Pullback",
-    three_peak:"3’lü Tepe Kırılımı",
-    resistance_break:"Direnç Kırılımı",
-    l2:"L2 Trend",
-    l3:"L3 Güçlü Trend",
-    l4:"L4 Smart Money"
-  }
-  return map[type]||type
-}
-
-function trendBarHTML(signal){
-  const up = signal.details?.trend_up || 0
-  const down = signal.details?.trend_down || 0
-  const neutral = Math.max(0,100-up-down)
+function trendBarHTML(d){
+  if(!d) return ""
+  const up=d.trend_up||0
+  const down=d.trend_down||0
+  const neutral=Math.max(0,100-up-down)
   return `
     <div class="trend-bar">
       <div class="trend-up" style="width:${up}%"></div>
       <div class="trend-neutral" style="width:${neutral}%"></div>
       <div class="trend-down" style="width:${down}%"></div>
-    </div>
-  `
+    </div>`
 }
 
 function render(){
@@ -196,7 +193,6 @@ function render(){
     if(f.includes("pullback") && !["pullback","strong_pullback"].includes(s.type)) return false
     if(f.includes("trend_break") && s.type!=="three_peak") return false
     if(f.includes("breakout") && s.type!=="resistance_break") return false
-    if(f.includes("rsi") && !["kombine","super_kombine"].includes(s.type)) return false
     if(f.includes("kombine") && s.type!=="kombine") return false
     if(f.includes("super_kombine") && s.type!=="super_kombine") return false
     if(f.includes("l2") && s.type!=="l2") return false
@@ -206,19 +202,18 @@ function render(){
   })
 
   if(!data.length){
-    info.textContent="Şu an filtrelere uygun sinyal yok."
+    info.textContent="Filtrelere uygun sinyal yok."
     return
   }
 
   info.textContent=data.length+" adet sinyal"
 
   data.forEach(s=>{
+    const d=s.details||{}
     const c=document.createElement("div")
     c.className="card"
 
     const level=inferLevel(s.type)
-    const title=s.title||inferTitle(s.type)
-
     let tags=[]
     if(level) tags.push(`<span class="tag ${level.toLowerCase()}">${level}</span>`)
     if(s.type==="kombine") tags.push(`<span class="tag kombine">Kombine</span>`)
@@ -227,10 +222,20 @@ function render(){
     c.innerHTML=`
       <div class="fav ${favs.includes(s.symbol)?"active":""}"
            onclick="toggleFav('${s.symbol}')">★</div>
+
       <b>${s.symbol}</b><br>
-      ${title}<br>
       ${tags.join(" ")}
-      ${trendBarHTML(s)}
+
+      <div class="meta">
+        <span>💰 Fiyat: ${s.price ?? "-"}</span>
+        ${d.rsi!==undefined?`<span>📉 RSI: ${d.rsi.toFixed(1)}</span>`:""}
+        ${d.volume?`<span>📊 Hacim: ${d.volume}</span>`:""}
+        ${(d.ema20&&d.ema50)?`<span>📈 EMA20 / EMA50: ${d.ema20} / ${d.ema50}</span>`:""}
+        ${d.support?`<span>🟢 Destek: ${d.support}</span>`:""}
+        ${d.resistance?`<span>🔴 Direnç: ${d.resistance}</span>`:""}
+      </div>
+
+      ${trendBarHTML(d)}
     `
     wrap.appendChild(c)
   })
@@ -245,10 +250,6 @@ async function load(){
 
   market.textContent=j.market_open?"AÇIK":"KAPALI"
   market.className="badge "+(j.market_open?"green":"red")
-
-  if(j.last_scan){
-    scan.textContent=new Date(j.last_scan*1000).toLocaleTimeString()
-  }
 
   ALL_SIGNALS=j.signals||[]
   render()
