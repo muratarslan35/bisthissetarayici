@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Profesyonel BIST Sinyal Dashboard</title>
+<title>BIST Profesyonel Sinyal Paneli</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -29,7 +29,6 @@ body.light{
 *{box-sizing:border-box;font-family:'Inter',sans-serif}
 body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
 
-/* NAVBAR */
 .navbar{
   display:flex;justify-content:space-between;align-items:center;
   padding:12px 16px;background:var(--card);border-bottom:1px solid var(--border);
@@ -40,7 +39,6 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
 .red{background:var(--red);color:#fff}
 .yellow{background:var(--gold);color:#000}
 
-/* FILTERS */
 .filters{
   display:flex;flex-wrap:wrap;gap:8px;
   padding:12px 16px;background:var(--card);border-bottom:1px solid var(--border);
@@ -50,33 +48,29 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   background:var(--bg);padding:6px 10px;border-radius:8px;border:1px solid var(--border);
 }
 
-/* INFO */
-.info-bar{padding:10px 16px;font-size:13px;color:var(--muted)}
-
-/* CARDS */
 #cards{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
   gap:16px;padding:16px;
 }
+
 .card{
   background:linear-gradient(180deg,var(--card),var(--bg));
   border:1px solid var(--border);
   border-radius:16px;
   padding:14px;
-  transition:.25s;
-  position:relative;
 }
-.card:hover{transform:translateY(-4px)}
-.fav{
-  position:absolute;top:10px;right:12px;
-  cursor:pointer;font-size:18px;color:var(--muted);
+.tag{
+  display:inline-block;
+  margin-top:6px;
+  font-size:11px;
+  padding:4px 8px;
+  border-radius:6px;
+  background:var(--border)
 }
-.fav.active{color:gold}
-
-.tag{font-size:11px;padding:3px 6px;border-radius:6px;background:var(--border)}
-.tag.l3,.tag.l4,.tag.ob{background:var(--purple);color:#fff}
-.tag.target{background:var(--green);color:#000}
+.tag.L2{background:#0969da;color:#fff}
+.tag.L3{background:#8250df;color:#fff}
+.tag.L4,.tag.OB{background:#d29922;color:#000}
 </style>
 </head>
 
@@ -86,100 +80,70 @@ body{margin:0;background:var(--bg);color:var(--text);transition:.3s}
   <div class="status">
     <div>Sistem: <span id="sys" class="badge yellow">--</span></div>
     <div>Piyasa: <span id="market" class="badge yellow">--</span></div>
-    <div>Son Tarama: <b id="scan">--:--:--</b></div>
+    <div>Son Tarama: <b id="scan">--</b></div>
   </div>
   <button onclick="toggleTheme()">🌙 / ☀️</button>
 </div>
 
 <div class="filters" id="filters">
-  <label><input type="checkbox" value="favorites"> ⭐ Favoriler</label>
-
-  <label><input type="checkbox" value="buy" checked> AL</label>
-  <label><input type="checkbox" value="sell" checked> SAT</label>
-  <label><input type="checkbox" value="pullback"> Pullback</label>
-  <label><input type="checkbox" value="strong_reversal"> Güçlü Dönüş</label>
-  <label><input type="checkbox" value="trend_break"> Trend Kırılımı</label>
-  <label><input type="checkbox" value="breakout"> Direnç Kırılımı</label>
-  <label><input type="checkbox" value="rsi"> RSI</label>
-  <label><input type="checkbox" value="kombine"> Kombine</label>
-  <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
-
-  <label><input type="checkbox" value="l2"> L2 (Orta Trend)</label>
-  <label><input type="checkbox" value="l3"> L3 (Güçlü Trend)</label>
-  <label><input type="checkbox" value="l4"> L4 (Smart Money)</label>
-  <label><input type="checkbox" value="ob"> OB (Kurumsal Alım)</label>
+  <label><input type="checkbox" value="combined" checked> Kombine</label>
+  <label><input type="checkbox" value="super_combined" checked> Süper Kombine</label>
+  <label><input type="checkbox" value="ob_reaction" checked> OB</label>
+  <label><input type="checkbox" value="L2"> L2</label>
+  <label><input type="checkbox" value="L3"> L3</label>
+  <label><input type="checkbox" value="L4"> L4</label>
 </div>
 
-<div class="info-bar" id="info">Veri bekleniyor...</div>
 <div id="cards"></div>
 
 <script>
-let ALL_SIGNALS=[]
-let favs=JSON.parse(localStorage.getItem("favs")||"[]")
+let ALL=[]
 
-/* THEME */
 function toggleTheme(){
   document.body.classList.toggle("light")
-  localStorage.setItem("theme",
-    document.body.classList.contains("light")?"light":"dark")
-}
-if(localStorage.getItem("theme")==="light"){
-  document.body.classList.add("light")
-}
-
-/* FAVORI */
-function toggleFav(sym){
-  favs = favs.includes(sym)
-    ? favs.filter(x=>x!==sym)
-    : [...favs,sym]
-  localStorage.setItem("favs",JSON.stringify(favs))
-  render()
 }
 
 function activeFilters(){
-  return [...document.querySelectorAll(".filters input:checked")].map(i=>i.value)
+  return [...document.querySelectorAll(".filters input:checked")].map(x=>x.value)
 }
 
-/* RENDER */
 function render(){
   const wrap=document.getElementById("cards")
   wrap.innerHTML=""
   const f=activeFilters()
 
-  let data=ALL_SIGNALS.filter(s=>{
-    if(f.includes("favorites") && !favs.includes(s.symbol)) return false
-
-    if(f.some(x=>["l2","l3","l4","ob"].includes(x))){
-      const lvl=(s.details?.level||"").toLowerCase()
-      if(lvl && !f.includes(lvl)) return false
-      if(s.type==="order_block" && !f.includes("ob")) return false
-    }
+  const data=ALL.filter(s=>{
+    if(f.length && !f.includes(s.type) && !f.includes(s.details?.level)) return false
     return true
   })
 
   if(!data.length){
-    info.textContent="Şu an filtrelere uygun sinyal yok."
+    wrap.innerHTML="<div style='opacity:.6'>Filtrelere uygun sinyal yok</div>"
     return
   }
-  info.textContent=data.length+" adet sinyal"
 
   data.forEach(s=>{
+    const d=s.details||{}
     const c=document.createElement("div")
     c.className="card"
     c.innerHTML=`
-      <div class="fav ${favs.includes(s.symbol)?"active":""}"
-           onclick="toggleFav('${s.symbol}')">★</div>
       <b>${s.symbol}</b><br>
-      ${s.title || s.type}<br>
-      <div class="tag ${(s.details?.level||"").toLowerCase()}">
-        ${s.details?.level || ""}
+      <small>${s.title||s.type}</small><br>
+
+      <div class="tag ${d.level||""}">${d.level||""}</div>
+
+      <div style="margin-top:8px;font-size:13px">
+        RSI: ${d.rsi ?? "-"}<br>
+        Hacim: ${d.volume ? "✔" : "✖"}<br>
+        Trend: ${d.trend || "-"}<br>
+        EMA20/50/100/200:
+        ${d.ema ? Object.values(d.ema).map(x=>x?.toFixed(2)).join(" / ") : "-"}
       </div>
     `
     wrap.appendChild(c)
   })
 }
 
-/* LOAD */
 async function load(){
   const r=await fetch("/api")
   const j=await r.json()
@@ -194,7 +158,7 @@ async function load(){
     scan.textContent=new Date(j.last_scan*1000).toLocaleTimeString()
   }
 
-  ALL_SIGNALS=j.signals||[]
+  ALL=j.signals||[]
   render()
 }
 
