@@ -31,7 +31,7 @@ CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 # ==================================================
 # FLASK
 # ==================================================
-app = Flask(__name__, static_folder="static")
+app = Flask(__name__)
 
 LATEST_DATA = []
 LATEST_SIGNALS = []
@@ -56,17 +56,13 @@ def make_json_safe(obj):
 # TELEGRAM
 # ==================================================
 def telegram_send(msg):
-    if not TELEGRAM_TOKEN or not CHAT_IDS or not msg:
+    if not TELEGRAM_TOKEN or not CHAT_IDS:
         return
     for cid in CHAT_IDS:
         try:
             requests.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={
-                    "chat_id": cid,
-                    "text": msg,
-                    "disable_web_page_preview": True
-                },
+                json={"chat_id": cid, "text": msg},
                 timeout=5
             )
         except Exception:
@@ -112,35 +108,24 @@ def background_loop():
                     telegram_send(msg)
 
                     symbol = meta.get("symbol") or sid.split("-")[-1]
-                    price = (
-                        meta.get("price")
-                        or meta.get("current_price")
-                    )
+                    price = meta.get("price") or meta.get("current_price")
 
                     dashboard_signals.append({
                         "symbol": symbol,
                         "price": price,
-                        "current_price": price,
                         "type": meta.get("type"),
                         "title": meta.get("title", meta.get("type")),
                         "direction": meta.get("direction", "up"),
-                        "trend_strength": meta.get(
-                            "trend_strength",
-                            meta.get("strength", 50)
-                        ),
+                        "trend_strength": meta.get("trend_strength", meta.get("strength", 50)),
                         "support": meta.get("support"),
                         "resistance": meta.get("resistance"),
+                        "signal_type": meta.get("type"),
+                        "current_price": price,
                         "rsi": meta.get("rsi"),
                         "time": to_tr_timezone(
                             datetime.now(timezone.utc)
                         ).strftime("%H:%M:%S"),
-                        "details": {
-                            **meta,
-                            # dashboard için garanti alanlar
-                            "level": meta.get("level"),
-                            "type": meta.get("type"),
-                            "symbol": symbol
-                        }
+                        "details": meta
                     })
 
                 with data_lock:
@@ -159,7 +144,6 @@ def background_loop():
                 if summary:
                     telegram_send(summary)
 
-                # ---- FALLBACK GÜN SONU YÖNETİMİ ----
                 updated = fallback_daily_update_if_needed(raw_data)
                 if updated:
                     msg = fallback_daily_report_message()
