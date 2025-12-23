@@ -1,5 +1,3 @@
-# fetch_bist.py  (FINAL – UYUMLU, SADELEŞTİRİLMEDEN)
-
 import time
 import os
 import json
@@ -18,9 +16,6 @@ from utils import (
     to_tr_timezone
 )
 
-# ==================================================
-# STATE FILE
-# ==================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "fallback_state.json")
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -40,9 +35,6 @@ def save_state(state):
 
 STATE = load_state()
 
-# ==================================================
-# TRADINGVIEW CACHE
-# ==================================================
 _TV_CACHE = {}
 _TV_CACHE_TTL = 60
 
@@ -66,9 +58,6 @@ def tv_live_price(symbol):
         pass
     return None
 
-# ==================================================
-# SAFE YFINANCE
-# ==================================================
 def yf_download_safe(ticker, period, interval):
     try:
         df = yf.download(
@@ -86,9 +75,6 @@ def yf_download_safe(ticker, period, interval):
     except Exception:
         return None
 
-# ==================================================
-# TIMEFRAME INDICATORS (ENGINE UYUMLU)
-# ==================================================
 def fetch_timeframe_indicators(df, symbol=None):
     if df is None or df.empty or len(df) < 20:
         return None
@@ -126,9 +112,6 @@ def fetch_timeframe_indicators(df, symbol=None):
 
     return out
 
-# ==================================================
-# FETCH ONE SYMBOL
-# ==================================================
 def fetch_one_symbol(sym):
     df_15m = yf_download_safe(sym, "7d", "15m")
     used_tf = "15m"
@@ -196,9 +179,6 @@ def fetch_one_symbol(sym):
         }
     }
 
-# ==================================================
-# FETCH ALL
-# ==================================================
 def fetch_bist_data():
     out = []
     for s in FALLBACK_SYMBOLS:
@@ -207,6 +187,6 @@ def fetch_bist_data():
             if r:
                 out.append(r)
         except Exception:
-            pass
+            continue
         time.sleep(0.15)
     return out
