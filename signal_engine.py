@@ -11,7 +11,7 @@ from utils import (
 success_tracker = {}
 sent_signals = {}
 
-TARGET_PCT = 0.02
+TARGET_PCT = 0.015
 REPEAT_BLOCK_MINUTES = 45
 
 def now_tr():
