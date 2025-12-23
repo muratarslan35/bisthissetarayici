@@ -3,7 +3,12 @@ import pandas as pd
 from datetime import datetime, timezone, timedelta
 from utils import (
     nearest_support_resistance_from_history,
-    to_tr_timezone
+    to_tr_timezone,
+    FALLBACK_SYMBOLS,
+    calculate_rsi,
+    calculate_ema,
+    detect_three_peaks,
+    detect_support_resistance_break
 )
 
 # ==================================================
@@ -73,7 +78,7 @@ def daily_success_summary():
 # ==================================================
 # TREND CHECK (MA BAZLI)
 # ==================================================
-def long_term_trend_ok(item, price):
+def long_term_trend_ok(item):
     tf_list = ["1h", "4h", "1d"]
     for tf in tf_list:
         d = item.get("tf", {}).get(tf, {})
@@ -81,31 +86,38 @@ def long_term_trend_ok(item, price):
             d.get("ema20"), d.get("ema50"), d.get("ema100"), d.get("ema200")
         )
         if ma50 and ma200 and ma50 > ma200:
-            return True, "⚔️ Golden Cross", {}
+            return True, "Golden Cross", d
         if all([ma20, ma50, ma100, ma200]) and ma20 > ma50 > ma100 > ma200:
-            return True, "Uptrend", {}
+            return True, "Uptrend", d
     return False, "", {}
 
 # ==================================================
-# ORDER BLOCK (L4)
+# ORDER BLOCK (L4 – SMART MONEY)
 # ==================================================
 def detect_order_block(df):
     if df is None or len(df) < 30:
         return None
+
     vol_avg = df["volume"].rolling(20).mean()
+
     for i in range(len(df) - 5, 10, -1):
         c = df.iloc[i]
+
         if c["close"] >= c["open"]:
             continue
+
         if c["volume"] < vol_avg.iloc[i] * 1.8:
             continue
+
         base = c["close"]
-        impulse = any(
-            (df.iloc[j]["close"] - base) / base >= 0.015
-            for j in range(i + 1, min(i + 5, len(df)))
-        )
+        impulse = False
+        for j in range(i + 1, min(i + 5, len(df))):
+            if (df.iloc[j]["close"] - base) / base >= 0.015:
+                impulse = True
+                break
         if not impulse:
             continue
+
         return {
             "low": min(c["open"], c["close"]),
             "high": max(c["open"], c["close"]),
@@ -116,78 +128,112 @@ def detect_order_block(df):
 def detect_ob_reaction(df, ob):
     if df is None or ob is None or len(df) < 5:
         return False
+
     last = df.iloc[-1]
     prev = df.iloc[-2]
-    return prev["low"] <= ob["high"]*1.01 and last["close"] > prev["high"] and last["close"] > last["open"]
 
+    if (
+        prev["low"] <= ob["high"] * 1.01 and
+        last["close"] > prev["high"] and
+        last["close"] > last["open"]
+    ):
+        return True
+
+    return False
+
+# ==================================================
+# L3 – KISA VADELİ MOMENTUM
+# ==================================================
 def l3_reaction_ok(item):
     tf5 = item.get("tf", {}).get("5m", {})
     rsi = tf5.get("rsi")
     ema20 = tf5.get("ema20")
     ema50 = tf5.get("ema50")
-    return rsi and ema20 and ema50 and rsi > 50 and ema20 > ema50
 
+    if rsi and ema20 and ema50:
+        return rsi > 50 and ema20 > ema50
+    return False
+
+# ==================================================
+# KOMBİNE & SUPER KOMBİNE (ÖRNEK)
+# ==================================================
+def combined_signal(item):
+    # placeholder: kombine sinyal algoritması
+    tf15 = item.get("tf", {}).get("15m", {})
+    if not tf15:
+        return None
+    rsi = tf15.get("rsi")
+    ema20 = tf15.get("ema20")
+    ema50 = tf15.get("ema50")
+    if rsi and ema20 and ema50 and rsi < 30:
+        register_signal(item["symbol"], item["current_price"])
+        return ("kombine", f"KOMBİNE SİNYAL: {item['symbol']}", {"type": "kombine", "strength": 70, "symbol": item["symbol"]})
+    return None
+
+def super_combined_signal(item):
+    # placeholder: süper kombine algoritması
+    tf15 = item.get("tf", {}).get("15m", {})
+    if not tf15:
+        return None
+    rsi = tf15.get("rsi")
+    ema20 = tf15.get("ema20")
+    ema50 = tf15.get("ema50")
+    if rsi and ema20 and ema50 and rsi < 25:
+        register_signal(item["symbol"], item["current_price"])
+        return ("super_kombine", f"SÜPER KOMBİNE SİNYAL: {item['symbol']}", {"type": "super_kombine", "strength": 90, "symbol": item["symbol"]})
+    return None
+
+# ==================================================
+# OB + REACTION + L3 SİNYALİ
+# ==================================================
 def order_block_reaction_signal(item):
     symbol = item["symbol"]
     price = item["current_price"]
     tf15 = item.get("tf", {}).get("15m", {})
     df = tf15.get("df")
+
     if df is None or in_cooldown(symbol):
         return None
-    trend_ok, trend_type, _ = long_term_trend_ok(item, price)
+
+    trend_ok, trend_type, _ = long_term_trend_ok(item)
     if not trend_ok:
         return None
+
     ob = detect_order_block(df)
-    if not ob or not detect_ob_reaction(df, ob) or not l3_reaction_ok(item):
+    if not ob:
         return None
+
+    if not detect_ob_reaction(df, ob):
+        return None
+
+    if not l3_reaction_ok(item):
+        return None
+
     strength = min(100, int(60 + ob["volume_ratio"] * 15))
+
     register_signal(symbol, price)
     set_cooldown(symbol, 45)
-    msg = (
-        f"⚡ OB REACTION + L3 (L4)\n\n"
-        f"Hisse: {symbol}\n"
-        f"Fiyat: {fmt_price(price)}\n"
-        f"OB: {fmt_price(ob['low'])} – {fmt_price(ob['high'])}\n"
-        f"Trend: {trend_type}\n"
-        f"Güç: %{strength}"
-    )
-    return (f"OBR-{symbol}", msg, {"type":"ob_reaction","strength":strength,"title":"OB REACTION + L3","symbol":symbol,"current_price":price})
 
-# ==================================================
-# KOMBINE / SUPER KOMBINE SİNYALLER
-# ==================================================
-def combined_signal(item):
-    # örnek kombine kontrol
-    if item.get("RSI") and item["RSI"] < 35 and item.get("support_break"):
-        symbol = item["symbol"]
-        price = item["current_price"]
-        register_signal(symbol, price)
-        set_cooldown(symbol, 30)
-        msg = f"⚡ Kombine Sinyal\nHisse: {symbol}\nFiyat: {fmt_price(price)}"
-        return (f"COMB-{symbol}", msg, {"type":"combined","symbol":symbol,"current_price":price,"title":"Kombine Sinyal"})
-    return None
-
-def super_combined_signal(item):
-    # örnek süper kombine kontrol
-    if item.get("RSI") and item["RSI"] < 30 and item.get("resistance_break"):
-        symbol = item["symbol"]
-        price = item["current_price"]
-        register_signal(symbol, price)
-        set_cooldown(symbol, 30)
-        msg = f"⚡ Süper Kombine Sinyal\nHisse: {symbol}\nFiyat: {fmt_price(price)}"
-        return (f"SUPC-{symbol}", msg, {"type":"super_combined","symbol":symbol,"current_price":price,"title":"Süper Kombine Sinyal"})
+    return ("ob_reaction", f"OB REACTION + L3: {symbol}", {"type": "ob_reaction", "strength": strength, "symbol": symbol, "support": ob["low"], "resistance": ob["high"]})
 
 # ==================================================
 # PROCESS SIGNALS
 # ==================================================
 def process_signals(item, market_open=True):
     out = []
+
     for fn in [combined_signal, super_combined_signal, order_block_reaction_signal]:
-        sig = fn(item)
-        if sig:
-            out.append(sig)
+        res = fn(item)
+        if res:
+            out.append(res)
+
+    # Diğer algoritmalar: pullback, üçlü tepe, direnc kırılımı vs. burada eklenecek
+    # L2, L3, L4 sinyalleri eklenebilir
     return out
 
+# ==================================================
+# SAFE PROCESS
+# ==================================================
 def safe_process_bist_data(data_list, market_open=True):
     res = []
     if not data_list:
@@ -200,10 +246,69 @@ def safe_process_bist_data(data_list, market_open=True):
             continue
     return res
 
+# ==================================================
+# STRONG STOCKS PİYASA KAPALI
+# ==================================================
 def scan_strong_stocks(data):
     strong = []
     for i in data:
-        ok, _, _ = long_term_trend_ok(i, i.get("current_price"))
+        ok, _, _ = long_term_trend_ok(i)
         if ok:
             strong.append(f"• {i['symbol']}")
     return strong[:10]
+
+# ==================================================
+# TELEGRAM MESAJ FORMAT
+# ==================================================
+def format_signal_message(symbol, signals, tf_data):
+    msg_lines = []
+    EMOJI_MAP = {
+        "kombine": "🚀",
+        "super_kombine": "🚀🚀🚀",
+        "golden_cross": "⚔️",
+        "three_peak": "🔥🔥",
+        "resistance_break": "🧱",
+        "pullback": "⚡️",
+        "strong_pullback": "⚡️⚡️⚡️",
+        "l2": "🟡",
+        "l3": "🟢",
+        "l4": "🔵",
+        "ob_reaction": "🔵"
+    }
+
+    MA_DIRECTIONS = []
+    for ma_name in ["ema20", "ema50", "ema100", "ema200"]:
+        val = tf_data.get(ma_name)
+        if val is None:
+            continue
+        MA_DIRECTIONS.append(f"{ma_name.upper()} ⬆️" if val >= tf_data["last_close"] else f"{ma_name.upper()} ⬇️")
+
+    for alg in signals:
+        emoji = EMOJI_MAP.get(alg["type"], "")
+        title = alg.get("title", alg["type"]).upper()
+        msg_lines.append(f"{emoji} {title}: {symbol}")
+
+        rsi = tf_data.get("rsi")
+        last_close = tf_data.get("last_close")
+        volume = tf_data.get("volume")
+        volume_ok = tf_data.get("volume_ok")
+        support = alg.get("support")
+        resistance = alg.get("resistance")
+        strength = alg.get("strength", alg.get("trend_strength", 50))
+
+        if MA_DIRECTIONS:
+            msg_lines.append(f"MA Yönleri: {' '.join(MA_DIRECTIONS)}")
+        if rsi:
+            msg_lines.append(f"RSI: {rsi:.0f}")
+        if volume:
+            msg_lines.append(f"Hacim: {'Ortalama üzeri' if volume_ok else 'Ortalama altı'}")
+        if support or resistance:
+            msg_lines.append("Destek/Direnç:")
+            if support:
+                msg_lines.append(f"  Destek: {support}")
+            if resistance:
+                msg_lines.append(f"  Direnç: {resistance}")
+        msg_lines.append(f"Güç: %{strength}")
+        msg_lines.append("")  # alt satır boşluk
+
+    return "\n".join(msg_lines)
