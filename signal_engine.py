@@ -63,13 +63,9 @@ def daily_success_summary():
     )
 
 # ==================================================
-# HELPERS
+# META ENRICH
 # ==================================================
 def enrich_meta(item, tf, base):
-    """
-    Dashboard + Telegram için tüm verileri
-    ÜST SEVİYEYE çıkarır
-    """
     base.update({
         "current_price": item.get("current_price"),
         "price": item.get("current_price"),
@@ -86,7 +82,7 @@ def enrich_meta(item, tf, base):
     return base
 
 # ==================================================
-# SIGNALS
+# SİNYALLER
 # ==================================================
 def combined_signal(item):
     tf = item.get("tf", {}).get("15m", {})
@@ -94,9 +90,10 @@ def combined_signal(item):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "kombine")
         return ("kombine", "", enrich_meta(item, tf, {
-            "type": "kombine",
-            "symbol": item["symbol"],
-            "strength": 70
+            "type": "KOMBİNE",
+            "emoji": "🧠",
+            "strength": 70,
+            "symbol": item["symbol"]
         }))
 
 def super_combined_signal(item):
@@ -105,9 +102,10 @@ def super_combined_signal(item):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "super_kombine")
         return ("super_kombine", "", enrich_meta(item, tf, {
-            "type": "super_kombine",
-            "symbol": item["symbol"],
-            "strength": 90
+            "type": "SÜPER KOMBİNE",
+            "emoji": "🚀",
+            "strength": 90,
+            "symbol": item["symbol"]
         }))
 
 def pullback_signal(item):
@@ -116,9 +114,10 @@ def pullback_signal(item):
         if tf["rsi"] < 40 and tf["ema20"] > tf["ema50"] and not in_repeat_block(item["symbol"], "pullback"):
             mark_sent(item["symbol"], "pullback")
             return ("pullback", "", enrich_meta(item, tf, {
-                "type": "pullback",
-                "symbol": item["symbol"],
-                "strength": 60
+                "type": "PULLBACK",
+                "emoji": "🔄",
+                "strength": 60,
+                "symbol": item["symbol"]
             }))
 
 def strong_pullback_signal(item):
@@ -126,9 +125,10 @@ def strong_pullback_signal(item):
     if tf.get("rsi") and tf["rsi"] < 25 and not in_repeat_block(item["symbol"], "strong_pullback"):
         mark_sent(item["symbol"], "strong_pullback")
         return ("strong_pullback", "", enrich_meta(item, tf, {
-            "type": "strong_pullback",
-            "symbol": item["symbol"],
-            "strength": 85
+            "type": "GÜÇLÜ PULLBACK",
+            "emoji": "💪",
+            "strength": 85,
+            "symbol": item["symbol"]
         }))
 
 def three_peak_signal(item):
@@ -138,9 +138,10 @@ def three_peak_signal(item):
         if not in_repeat_block(item["symbol"], "three_peak"):
             mark_sent(item["symbol"], "three_peak")
             return ("three_peak", "", enrich_meta(item, tf, {
-                "type": "three_peak",
-                "symbol": item["symbol"],
-                "strength": 80
+                "type": "3’LÜ TEPE KIRILIMI",
+                "emoji": "📉➡️📈",
+                "strength": 80,
+                "symbol": item["symbol"]
             }))
 
 def support_resistance_break_signal(item):
@@ -149,17 +150,18 @@ def support_resistance_break_signal(item):
     if df is None:
         return None
 
-    s_break, r_break = detect_support_resistance_break(df)
+    _, r_break = detect_support_resistance_break(df)
     sup, res = nearest_support_resistance_from_history(df)
 
     if r_break and not in_repeat_block(item["symbol"], "resistance_break"):
         mark_sent(item["symbol"], "resistance_break")
         return ("resistance_break", "", enrich_meta(item, tf, {
-            "type": "resistance_break",
-            "symbol": item["symbol"],
+            "type": "DİRENÇ KIRILIMI",
+            "emoji": "🚧",
             "strength": 75,
             "support": sup,
-            "resistance": res
+            "resistance": res,
+            "symbol": item["symbol"]
         }))
 
 def l2_signal(item):
@@ -167,9 +169,10 @@ def l2_signal(item):
     if tf.get("rsi", 50) > 55 and not in_repeat_block(item["symbol"], "l2"):
         mark_sent(item["symbol"], "l2")
         return ("l2", "", enrich_meta(item, tf, {
-            "type": "l2",
-            "symbol": item["symbol"],
-            "strength": 55
+            "type": "L2 TREND",
+            "emoji": "📈",
+            "strength": 55,
+            "symbol": item["symbol"]
         }))
 
 def l3_signal(item):
@@ -177,9 +180,10 @@ def l3_signal(item):
     if tf.get("rsi", 50) > 60 and not in_repeat_block(item["symbol"], "l3"):
         mark_sent(item["symbol"], "l3")
         return ("l3", "", enrich_meta(item, tf, {
-            "type": "l3",
-            "symbol": item["symbol"],
-            "strength": 65
+            "type": "L3 GÜÇLÜ TREND",
+            "emoji": "🔥",
+            "strength": 65,
+            "symbol": item["symbol"]
         }))
 
 def l4_signal(item):
@@ -187,9 +191,10 @@ def l4_signal(item):
     if tf.get("rsi", 50) > 65 and not in_repeat_block(item["symbol"], "l4"):
         mark_sent(item["symbol"], "l4")
         return ("l4", "", enrich_meta(item, tf, {
-            "type": "l4",
-            "symbol": item["symbol"],
-            "strength": 75
+            "type": "L4 SMART MONEY",
+            "emoji": "💎",
+            "strength": 75,
+            "symbol": item["symbol"]
         }))
 
 # ==================================================
@@ -224,39 +229,25 @@ def safe_process_bist_data(data_list, market_open=True):
     return res
 
 # ==================================================
-# MARKET CLOSED
-# ==================================================
-def scan_strong_stocks(data):
-    out = []
-    for i in data:
-        tf = i.get("tf", {}).get("1d", {})
-        if tf.get("ema50") and tf.get("ema200") and tf["ema50"] > tf["ema200"]:
-            out.append(f"• {i['symbol']}")
-    return out[:10]
-
-# ==================================================
-# TELEGRAM FORMAT (DETAYLI)
+# TELEGRAM FORMAT (TÜRKÇE + EMOJİ)
 # ==================================================
 def format_signal_message(symbol, signals, tf_data=None):
     lines = [f"📈 {symbol}"]
 
-    price = signals[0].get("current_price")
-    if price:
-        lines.append(f"💰 Fiyat: {price}")
-
-    rsi = signals[0].get("rsi")
-    if rsi is not None:
-        lines.append(f"📊 RSI: {round(rsi,1)}")
-
-    if signals[0].get("ema20") and signals[0].get("ema50"):
-        lines.append(f"📐 EMA20 / EMA50: {signals[0]['ema20']} / {signals[0]['ema50']}")
-
-    if signals[0].get("volume"):
-        lines.append(f"📦 Hacim: {signals[0]['volume']}")
+    s0 = signals[0]
+    if s0.get("current_price"):
+        lines.append(f"💰 Fiyat: {s0['current_price']}")
+    if s0.get("rsi") is not None:
+        lines.append(f"📊 RSI: {round(s0['rsi'],1)}")
+    if s0.get("ema20") and s0.get("ema50"):
+        lines.append(f"📐 EMA20 / EMA50: {s0['ema20']} / {s0['ema50']}")
+    if s0.get("volume"):
+        lines.append(f"📦 Hacim: {s0['volume']}")
 
     for s in signals:
-        icon = "🔥" if s["strength"] >= 80 else "⚡"
-        lines.append(f"{icon} {s['type'].upper()} | Güç: %{s['strength']}")
+        lines.append(
+            f"{s.get('emoji','⚡')} {s['type']} | Güç: %{s['strength']}"
+        )
         if s.get("support"):
             lines.append(f"🟢 Destek: {s['support']}")
         if s.get("resistance"):
