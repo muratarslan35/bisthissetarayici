@@ -106,7 +106,7 @@ def background_loop():
                 grouped = defaultdict(list)
                 tf_cache = {}
 
-                for _, _, meta in signals:
+                for meta in signals:
                     sym = meta.get("symbol")
                     if not sym:
                         continue
@@ -122,7 +122,7 @@ def background_loop():
 
                 # --------- DASHBOARD ---------
                 dashboard_signals = []
-                for _, _, meta in signals:
+                for meta in signals:
                     dashboard_signals.append({
                         "symbol": meta.get("symbol"),
                         "price": meta.get("price") or meta.get("current_price"),
