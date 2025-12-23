@@ -87,36 +87,7 @@ def long_term_trend_ok(item, price):
     return False, "", {}
 
 # ==================================================
-# L2 / L3 / L4 SİNYALLER
-# ==================================================
-def l2_signal(item):
-    # Basit orta trend kontrolü
-    tf15 = item.get("tf", {}).get("15m", {})
-    if not tf15:
-        return None
-    if tf15.get("rsi") > 55 and tf15.get("ema20") > tf15.get("ema50"):
-        return ("L2-"+item["symbol"], f"L2 Sinyali: {item['symbol']}", {"type":"l2","level":"L2"})
-    return None
-
-def l3_signal(item):
-    tf5 = item.get("tf", {}).get("5m", {})
-    if not tf5:
-        return None
-    if tf5.get("rsi") > 50 and tf5.get("ema20") > tf5.get("ema50"):
-        return ("L3-"+item["symbol"], f"L3 Sinyali: {item['symbol']}", {"type":"l3","level":"L3"})
-    return None
-
-def l4_signal(item):
-    # OB reaction ile L4 mantığı
-    tf15 = item.get("tf", {}).get("15m", {})
-    df = tf15.get("df")
-    if df is None:
-        return None
-    # OB mantığı basitleştirilmiş, detaylar aşağıda
-    return order_block_reaction_signal(item)
-
-# ==================================================
-# ORDER BLOCK (L4 – SMART MONEY)
+# ORDER BLOCK (L4)
 # ==================================================
 def detect_order_block(df):
     if df is None or len(df) < 30:
@@ -129,11 +100,10 @@ def detect_order_block(df):
         if c["volume"] < vol_avg.iloc[i] * 1.8:
             continue
         base = c["close"]
-        impulse = False
-        for j in range(i + 1, min(i + 5, len(df))):
-            if (df.iloc[j]["close"] - base) / base >= 0.015:
-                impulse = True
-                break
+        impulse = any(
+            (df.iloc[j]["close"] - base) / base >= 0.015
+            for j in range(i + 1, min(i + 5, len(df)))
+        )
         if not impulse:
             continue
         return {
@@ -148,9 +118,14 @@ def detect_ob_reaction(df, ob):
         return False
     last = df.iloc[-1]
     prev = df.iloc[-2]
-    if prev["low"] <= ob["high"] * 1.01 and last["close"] > prev["high"] and last["close"] > last["open"]:
-        return True
-    return False
+    return prev["low"] <= ob["high"]*1.01 and last["close"] > prev["high"] and last["close"] > last["open"]
+
+def l3_reaction_ok(item):
+    tf5 = item.get("tf", {}).get("5m", {})
+    rsi = tf5.get("rsi")
+    ema20 = tf5.get("ema20")
+    ema50 = tf5.get("ema50")
+    return rsi and ema20 and ema50 and rsi > 50 and ema20 > ema50
 
 def order_block_reaction_signal(item):
     symbol = item["symbol"]
@@ -163,58 +138,56 @@ def order_block_reaction_signal(item):
     if not trend_ok:
         return None
     ob = detect_order_block(df)
-    if not ob:
-        return None
-    if not detect_ob_reaction(df, ob):
+    if not ob or not detect_ob_reaction(df, ob) or not l3_reaction_ok(item):
         return None
     strength = min(100, int(60 + ob["volume_ratio"] * 15))
     register_signal(symbol, price)
     set_cooldown(symbol, 45)
     msg = (
-        f"⚡ OB REACTION + L4\n\n"
+        f"⚡ OB REACTION + L3 (L4)\n\n"
         f"Hisse: {symbol}\n"
         f"Fiyat: {fmt_price(price)}\n"
         f"OB: {fmt_price(ob['low'])} – {fmt_price(ob['high'])}\n"
         f"Trend: {trend_type}\n"
         f"Güç: %{strength}"
     )
-    return (f"OBR-{symbol}", msg, {"type": "order_block", "strength": strength, "level":"L4"})
+    return (f"OBR-{symbol}", msg, {"type":"ob_reaction","strength":strength,"title":"OB REACTION + L3","symbol":symbol,"current_price":price})
 
 # ==================================================
-# KOMBİNE VE SÜPER KOMBİNE (ÖRNEK)
+# KOMBINE / SUPER KOMBINE SİNYALLER
 # ==================================================
 def combined_signal(item):
-    # Basit örnek: RSI ve EMA50 kesişimi
-    tf15 = item.get("tf", {}).get("15m", {})
-    if not tf15:
-        return None
-    if tf15.get("rsi") < 30 and tf15.get("ema20") > tf15.get("ema50"):
-        return ("COMB-"+item["symbol"], f"Kombine Sinyal: {item['symbol']}", {"type":"kombine","level":"Kombine"})
+    # örnek kombine kontrol
+    if item.get("RSI") and item["RSI"] < 35 and item.get("support_break"):
+        symbol = item["symbol"]
+        price = item["current_price"]
+        register_signal(symbol, price)
+        set_cooldown(symbol, 30)
+        msg = f"⚡ Kombine Sinyal\nHisse: {symbol}\nFiyat: {fmt_price(price)}"
+        return (f"COMB-{symbol}", msg, {"type":"combined","symbol":symbol,"current_price":price,"title":"Kombine Sinyal"})
     return None
 
 def super_combined_signal(item):
-    tf15 = item.get("tf", {}).get("15m", {})
-    if not tf15:
-        return None
-    if tf15.get("rsi") < 25 and tf15.get("ema20") > tf15.get("ema50") > tf15.get("ema100"):
-        return ("SUPER-"+item["symbol"], f"Süper Kombine Sinyal: {item['symbol']}", {"type":"super_kombine","level":"Süper Kombine"})
-    return None
+    # örnek süper kombine kontrol
+    if item.get("RSI") and item["RSI"] < 30 and item.get("resistance_break"):
+        symbol = item["symbol"]
+        price = item["current_price"]
+        register_signal(symbol, price)
+        set_cooldown(symbol, 30)
+        msg = f"⚡ Süper Kombine Sinyal\nHisse: {symbol}\nFiyat: {fmt_price(price)}"
+        return (f"SUPC-{symbol}", msg, {"type":"super_combined","symbol":symbol,"current_price":price,"title":"Süper Kombine Sinyal"})
 
 # ==================================================
 # PROCESS SIGNALS
 # ==================================================
 def process_signals(item, market_open=True):
     out = []
-    # Tüm algoritmalar burada çalışır
-    for fn in [combined_signal, super_combined_signal, l2_signal, l3_signal, l4_signal]:
+    for fn in [combined_signal, super_combined_signal, order_block_reaction_signal]:
         sig = fn(item)
         if sig:
             out.append(sig)
     return out
 
-# ==================================================
-# SAFE PROCESS
-# ==================================================
 def safe_process_bist_data(data_list, market_open=True):
     res = []
     if not data_list:
@@ -227,9 +200,6 @@ def safe_process_bist_data(data_list, market_open=True):
             continue
     return res
 
-# ==================================================
-# PİYASA KAPALI – GÜÇLÜ HİSSELER
-# ==================================================
 def scan_strong_stocks(data):
     strong = []
     for i in data:
