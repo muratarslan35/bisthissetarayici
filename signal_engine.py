@@ -1,5 +1,7 @@
 import time
 from datetime import datetime, timezone, timedelta
+from collections import defaultdict
+
 from utils import (
     nearest_support_resistance_from_history,
     detect_support_resistance_break,
@@ -87,14 +89,14 @@ def enrich_meta(item, tf, base):
         "ema200": fmt(ema200),
         "ema_trend": ema_trend,
         "volume": fmt(tf.get("volume")),
-        "volume_avg": fmt(tf.get("volume_avg")),
+        "volume_avg": fmt(tf.get("volume_avg_20")),
         "signal_time": now_tr().strftime("%H:%M:%S"),
         "action": decide_action(base["strength"], rsi, ema_trend)
     })
     return base
 
 # ==================================================
-# SIGNALS (TAMAMI KORUNDU)
+# SIGNALS
 # ==================================================
 def combined_signal(item):
     tf = item.get("tf", {}).get("15m", {})
@@ -243,7 +245,7 @@ def scan_strong_stocks(data):
     return out[:10]
 
 # ==================================================
-# GÜN SONU BAŞARI ÖZETİ (APP.PY UYUMLU)
+# GÜN SONU BAŞARI ÖZETİ
 # ==================================================
 def daily_success_summary():
     today = now_tr().date()
@@ -264,17 +266,13 @@ def daily_success_summary():
     }
 
 # ==================================================
-# TELEGRAM FORMAT (APP.PY UYUMLU – GERİ EKLENDİ)
+# TELEGRAM FORMAT
 # ==================================================
 def format_signal_message(symbol, signals):
-    """
-    Telegram için okunabilir mesaj üretir
-    """
     if not signals:
         return None
 
     s0 = signals[0]
-
     lines = [
         f"📈 {symbol}",
         f"💰 Fiyat: {s0.get('current_price', '-')}",
