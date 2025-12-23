@@ -43,6 +43,8 @@ body.light header{background:#e9ecff}
 }
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
+.yellow{background:var(--yellow);color:#000}
+
 .container{padding:16px}
 .filters{
   display:flex;
@@ -57,6 +59,7 @@ body.light header{background:#e9ecff}
   cursor:pointer;
   font-size:13px;
 }
+
 .cards{
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
@@ -69,6 +72,7 @@ body.light header{background:#e9ecff}
   position:relative;
 }
 .card b{font-size:18px}
+
 .fav{
   position:absolute;
   top:8px;right:10px;
@@ -77,6 +81,7 @@ body.light header{background:#e9ecff}
   opacity:.4;
 }
 .fav.active{opacity:1;color:gold}
+
 .tag{
   display:inline-block;
   padding:2px 8px;
@@ -84,17 +89,22 @@ body.light header{background:#e9ecff}
   font-size:11px;
   margin-right:4px;
 }
+
 .l2{background:#2980b9}
 .l3{background:#8e44ad}
 .l4{background:#f39c12;color:#000}
 .kombine{background:#27ae60}
 .super_kombine{background:#e74c3c}
+.strong-buy{background:#2ecc71;color:#000}
+.watch{background:#f1c40f;color:#000}
+
 .meta{
   font-size:13px;
   margin-top:6px;
   line-height:1.5;
 }
 .meta span{display:block;color:var(--muted)}
+
 .trend-bar{
   height:6px;
   border-radius:6px;
@@ -123,6 +133,9 @@ body.light header{background:#e9ecff}
 
 <div class="filters" id="filters">
   <label><input type="checkbox" value="favorites"> ⭐ Favoriler</label>
+  <label><input type="checkbox" value="strong_buy"> 💚 Güçlü AL</label>
+  <label><input type="checkbox" value="watch"> 👀 Takip Et</label>
+
   <label><input type="checkbox" value="kombine"> Kombine</label>
   <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
   <label><input type="checkbox" value="pullback"> Pullback</label>
@@ -163,13 +176,6 @@ function activeFilters(){
   return [...document.querySelectorAll(".filters input:checked")].map(i=>i.value)
 }
 
-function inferLevel(type){
-  if(["l2","l3","l4"].includes(type)) return type.toUpperCase()
-  if(type==="super_kombine") return "L4"
-  if(type==="kombine") return "L3"
-  return ""
-}
-
 function trendBarHTML(d){
   if(!d) return ""
   const up=d.trend_up||0
@@ -190,6 +196,9 @@ function render(){
 
   let data=ALL_SIGNALS.filter(s=>{
     if(f.includes("favorites") && !favs.includes(s.symbol)) return false
+    if(f.includes("strong_buy") && s.action!=="STRONG_BUY") return false
+    if(f.includes("watch") && s.action!=="WATCH") return false
+
     if(f.includes("pullback") && !["pullback","strong_pullback"].includes(s.type)) return false
     if(f.includes("trend_break") && s.type!=="three_peak") return false
     if(f.includes("breakout") && s.type!=="resistance_break") return false
@@ -213,24 +222,27 @@ function render(){
     const c=document.createElement("div")
     c.className="card"
 
-    const level=inferLevel(s.type)
-    let tags=[]
-    if(level) tags.push(`<span class="tag ${level.toLowerCase()}">${level}</span>`)
-    if(s.type==="kombine") tags.push(`<span class="tag kombine">Kombine</span>`)
-    if(s.type==="super_kombine") tags.push(`<span class="tag super_kombine">Süper</span>`)
+    let actionTag = s.action==="STRONG_BUY"
+      ? `<span class="tag strong-buy">GÜÇLÜ AL</span>`
+      : `<span class="tag watch">TAKİP ET</span>`
 
     c.innerHTML=`
       <div class="fav ${favs.includes(s.symbol)?"active":""}"
            onclick="toggleFav('${s.symbol}')">★</div>
 
       <b>${s.symbol}</b><br>
-      ${tags.join(" ")}
+      ${actionTag}
 
       <div class="meta">
+        <span>⏱️ Sinyal: ${s.time || "-"}</span>
         <span>💰 Fiyat: ${s.price ?? "-"}</span>
-        ${d.rsi!==undefined?`<span>📉 RSI: ${d.rsi.toFixed(1)}</span>`:""}
-        ${d.volume?`<span>📊 Hacim: ${d.volume}</span>`:""}
-        ${(d.ema20&&d.ema50)?`<span>📈 EMA20 / EMA50: ${d.ema20} / ${d.ema50}</span>`:""}
+        ${d.rsi!==undefined?`<span>📉 RSI: ${d.rsi}</span>`:""}
+        ${(d.ema20&&d.ema50&&d.ema200)?`
+          <span>📐 EMA20: ${d.ema20}</span>
+          <span>📐 EMA50: ${d.ema50}</span>
+          <span>📐 EMA200: ${d.ema200}</span>
+          <span>${d.ema_trend}</span>
+        `:""}
         ${d.support?`<span>🟢 Destek: ${d.support}</span>`:""}
         ${d.resistance?`<span>🔴 Direnç: ${d.resistance}</span>`:""}
       </div>
