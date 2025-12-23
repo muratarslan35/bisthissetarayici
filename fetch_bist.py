@@ -15,7 +15,7 @@ from utils import (
 )
 
 # ==================================================
-# STATE
+# STATE FILE
 # ==================================================
 STATE_DIR = "data"
 STATE_FILE = os.path.join(STATE_DIR, "fallback_state.json")
@@ -34,17 +34,16 @@ def save_state(state):
 STATE = load_state()
 
 # ==================================================
-# TRADINGVIEW LIVE PRICE
+# TRADINGVIEW PSEUDO LIVE PRICE (CACHE)
 # ==================================================
 _TV_CACHE = {}
-_TV_TTL = 60
+_TV_CACHE_TTL = 60
 
 def tv_live_price(symbol):
     now = time.time()
     c = _TV_CACHE.get(symbol)
-    if c and now - c["ts"] < _TV_TTL:
+    if c and now - c["ts"] < _TV_CACHE_TTL:
         return c["price"]
-
     try:
         r = requests.get(
             "https://scanner.tradingview.com/symbol",
@@ -63,13 +62,13 @@ def tv_live_price(symbol):
 # ==================================================
 # EMA
 # ==================================================
-def ema(series, p):
-    return series.ewm(span=p, adjust=False).mean()
+def calculate_ema(series, period):
+    return series.ewm(span=period, adjust=False).mean()
 
 # ==================================================
-# SAFE YF
+# SAFE YFINANCE
 # ==================================================
-def yf_safe(ticker, period, interval):
+def yf_download_safe(ticker, period, interval):
     try:
         df = yf.download(
             ticker,
@@ -87,15 +86,15 @@ def yf_safe(ticker, period, interval):
         return None
 
 # ==================================================
-# FALLBACK SYMBOLS
+# SYMBOL LIST (FALLBACK)
 # ==================================================
 def get_bist_symbols():
     return FALLBACK_SYMBOLS.copy()
 
 # ==================================================
-# INDICATORS
+# TF INDICATORS
 # ==================================================
-def tf_indicators(df, symbol=None):
+def fetch_timeframe_indicators(df, symbol=None):
     if df is None or df.empty:
         return None
 
@@ -111,20 +110,18 @@ def tf_indicators(df, symbol=None):
         return None
 
     out = {
-        "close": float(close.iloc[-1]),
-        "open": float(df["Open"].iloc[-1]),
-        "green": close.iloc[-1] > df["Open"].iloc[-1],
-        "ema20": float(ema(close, 20).iloc[-1]),
-        "ema50": float(ema(close, 50).iloc[-1]),
-        "ema100": float(ema(close, 100).iloc[-1]),
-        "ema200": float(ema(close, 200).iloc[-1]),
+        "last_close": float(close.iloc[-1]),
+        "last_open": float(df["Open"].iloc[-1]),
+        "last_green": close.iloc[-1] > df["Open"].iloc[-1],
+        "ema20": float(calculate_ema(close, 20).iloc[-1]),
+        "ema50": float(calculate_ema(close, 50).iloc[-1]),
         "rsi": float(rsi.iloc[-1]),
     }
 
     try:
         out["volume"] = int(df["Volume"].iloc[-1])
-        out["volume_avg"] = int(df["Volume"].iloc[-6:-1].mean())
-        out["volume_ok"] = out["volume"] > out["volume_avg"]
+        out["volume_avg_5"] = int(df["Volume"].iloc[-6:-1].mean())
+        out["volume_ok"] = out["volume"] > out["volume_avg_5"]
     except Exception:
         pass
 
@@ -135,20 +132,22 @@ def tf_indicators(df, symbol=None):
     return out
 
 # ==================================================
-# FETCH ONE SYMBOL (15m → 30m)
+# FETCH ONE SYMBOL (15m/30m + HIGHER TF)
 # ==================================================
 def fetch_one_symbol(sym):
-    df = yf_safe(sym, "7d", "15m")
+    # ---- PRIMARY: 15m ----
+    df_main = yf_download_safe(sym, "7d", "15m")
     used_tf = "15m"
 
-    if df is None:
-        df = yf_safe(sym, "14d", "30m")
+    # ---- FALLBACK: 30m ----
+    if df_main is None:
+        df_main = yf_download_safe(sym, "14d", "30m")
         used_tf = "30m"
 
-    if df is None:
+    if df_main is None:
         return None
 
-    tf_main = tf_indicators(df, sym)
+    tf_main = fetch_timeframe_indicators(df_main, sym)
     if tf_main is None:
         return None
 
@@ -162,8 +161,8 @@ def fetch_one_symbol(sym):
     })
 
     active = (
-        tf_main["support_break"]
-        or tf_main["resistance_break"]
+        tf_main["resistance_break"]
+        or tf_main["support_break"]
         or tf_main["rsi"] < 30
         or tf_main["rsi"] > 70
     )
@@ -179,24 +178,29 @@ def fetch_one_symbol(sym):
     STATE[symbol] = s
     save_state(STATE)
 
-    df_1h = yf_safe(sym, "14d", "60m")
-    df_4h = yf_safe(sym, "60d", "4h")
-    df_1d = yf_safe(sym, "120d", "1d")
+    # ---- HIGHER TF ----
+    df_1h = yf_download_safe(sym, "14d", "60m")
+    df_4h = yf_download_safe(sym, "60d", "4h")
+    df_1d = yf_download_safe(sym, "120d", "1d")
 
-    ns, nr = nearest_support_resistance_from_history(df)
+    ns, nr = nearest_support_resistance_from_history(df_main)
 
     return {
         "symbol": symbol,
-        "price": tf_main["close"],
-        "used_tf": used_tf,
-        "three_peak_break": detect_three_peaks(df["Close"]),
+        "current_price": tf_main["last_close"],
+        "RSI": tf_main["rsi"],
+        "volume": tf_main.get("volume"),
+        "three_peak_break": detect_three_peaks(df_main["Close"]),
+        "support_break": tf_main["support_break"],
+        "resistance_break": tf_main["resistance_break"],
         "nearest_support": ns,
         "nearest_resistance": nr,
+        "used_timeframe": used_tf,
         "tf": {
             used_tf: tf_main,
-            "1h": tf_indicators(df_1h),
-            "4h": tf_indicators(df_4h),
-            "1d": tf_indicators(df_1d)
+            "1h": fetch_timeframe_indicators(df_1h),
+            "4h": fetch_timeframe_indicators(df_4h),
+            "1d": fetch_timeframe_indicators(df_1d)
         }
     }
 
