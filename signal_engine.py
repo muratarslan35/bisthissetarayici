@@ -254,3 +254,15 @@ def format_signal_message(symbol, signals, tf_data=None):
             lines.append(f"🔴 Direnç: {s['resistance']}")
 
     return "\n".join(lines)
+
+
+# ==================================================
+# MARKET KAPALI – GÜÇLÜ HİSSELER (APP.PY UYUMLULUK)
+# ==================================================
+def scan_strong_stocks(data):
+    out = []
+    for i in data:
+        tf = i.get("tf", {}).get("1d", {})
+        if tf.get("ema50") and tf.get("ema200") and tf["ema50"] > tf["ema200"]:
+            out.append(f"• {i['symbol']}")
+    return out[:10]
