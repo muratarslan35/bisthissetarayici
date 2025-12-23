@@ -226,3 +226,32 @@ def scan_strong_stocks(data):
         if tf.get("ema50") and tf.get("ema200") and tf["ema50"] > tf["ema200"]:
             out.append(f"• {i['symbol']}")
     return out[:10]
+
+# ==================================================
+# TELEGRAM MESAJ FORMAT
+# ==================================================
+def format_signal_message(symbol, signals, tf_data):
+    lines = []
+    lines.append(f"📈 {symbol}")
+
+    if tf_data:
+        rsi = tf_data.get("rsi")
+        if rsi is not None:
+            lines.append(f"RSI: {rsi:.1f}")
+
+    for s in signals:
+        stype = s.get("type", "")
+        strength = s.get("strength", s.get("trend_strength", 50))
+        support = s.get("support")
+        resistance = s.get("resistance")
+
+        line = f"• {stype.upper()} | Güç: %{strength}"
+        lines.append(line)
+
+        if support or resistance:
+            if support:
+                lines.append(f"  Destek: {support}")
+            if resistance:
+                lines.append(f"  Direnç: {resistance}")
+
+    return "\n".join(lines)
