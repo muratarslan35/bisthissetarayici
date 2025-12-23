@@ -116,8 +116,7 @@ def background_loop():
 
                 # --------- GELİŞMİŞ TELEGRAM MESAJI ---------
                 for symbol, alg_list in grouped.items():
-                    tf15 = tf_cache.get(symbol, {}).get("15m", {})
-                    msg = format_signal_message(symbol, alg_list, tf15)
+                    msg = format_signal_message(symbol, alg_list)
                     telegram_send(msg)
 
                 # --------- DASHBOARD ---------
@@ -155,7 +154,12 @@ def background_loop():
 
                 summary = daily_success_summary()
                 if summary:
-                    telegram_send(summary)
+                    telegram_send(
+                        f"📊 GÜN SONU BAŞARI ÖZETİ\n"
+                        f"Tarih: {summary['date']}\n"
+                        f"Toplam: {summary['total']} | Başarılı: {summary['hit']} | Başarısız: {summary['fail']}\n"
+                        f"Başarı Oranı: %{summary['success_rate']}"
+                    )
 
                 updated = fallback_daily_update_if_needed(raw_data)
                 if updated:
