@@ -13,7 +13,7 @@ from utils import (
 # ==================================================
 success_tracker = {}
 cooldowns = {}
-sent_signals = {}   # (symbol, algo) -> last_ts
+sent_signals = {}
 
 TARGET_PCT = 0.02
 COOLDOWN_MINUTES = 30
@@ -32,13 +32,6 @@ def in_repeat_block(symbol, algo):
 
 def mark_sent(symbol, algo):
     sent_signals[(symbol, algo)] = now_tr() + timedelta(minutes=REPEAT_BLOCK_MINUTES)
-
-def set_cooldown(symbol, minutes=COOLDOWN_MINUTES):
-    cooldowns[symbol] = now_tr() + timedelta(minutes=minutes)
-
-def in_cooldown(symbol):
-    t = cooldowns.get(symbol)
-    return t and now_tr() < t
 
 # ==================================================
 # SUCCESS TRACK
@@ -59,19 +52,21 @@ def update_success(symbol, price):
     if d and not d["hit"] and price >= d["target"]:
         d["hit"] = True
 
-def daily_success_summary():
-    today = now_tr().date()
-    d = success_tracker.get(today)
-    if not d:
-        return None
-    total = len(d)
-    hit = sum(1 for x in d.values() if x["hit"])
-    return (
-        "📊 GÜN SONU ÖZET\n\n"
-        f"Toplam AL: {total}\n"
-        f"%2 Başarılı: {hit}\n"
-        f"Başarısız: {total-hit}"
-    )
+# ==================================================
+# HELPERS
+# ==================================================
+def base_details(item, tf):
+    return {
+        "price": item.get("current_price"),
+        "rsi": tf.get("rsi"),
+        "ema20": tf.get("ema20"),
+        "ema50": tf.get("ema50"),
+        "ema200": tf.get("ema200"),
+        "volume": tf.get("volume"),
+        "volume_avg": tf.get("volume_avg"),
+        "trend_up": tf.get("trend_up", 0),
+        "trend_down": tf.get("trend_down", 0),
+    }
 
 # ==================================================
 # KOMBİNE
@@ -79,25 +74,29 @@ def daily_success_summary():
 def combined_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     rsi = tf.get("rsi")
+
     if rsi and rsi < 30 and not in_repeat_block(item["symbol"], "kombine"):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "kombine")
         return ("kombine", "", {
             "type": "kombine",
             "symbol": item["symbol"],
-            "strength": 70
+            "strength": 70,
+            "details": base_details(item, tf)
         })
 
 def super_combined_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     rsi = tf.get("rsi")
+
     if rsi and rsi < 25 and not in_repeat_block(item["symbol"], "super_kombine"):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "super_kombine")
         return ("super_kombine", "", {
             "type": "super_kombine",
             "symbol": item["symbol"],
-            "strength": 90
+            "strength": 90,
+            "details": base_details(item, tf)
         })
 
 # ==================================================
@@ -105,49 +104,49 @@ def super_combined_signal(item):
 # ==================================================
 def pullback_signal(item):
     tf = item.get("tf", {}).get("15m", {})
-    rsi = tf.get("rsi")
-    ema20 = tf.get("ema20")
-    ema50 = tf.get("ema50")
-
-    if rsi and ema20 and ema50:
-        if rsi < 40 and ema20 > ema50 and not in_repeat_block(item["symbol"], "pullback"):
+    if tf.get("rsi") and tf.get("ema20") and tf.get("ema50"):
+        if tf["rsi"] < 40 and tf["ema20"] > tf["ema50"] and not in_repeat_block(item["symbol"], "pullback"):
             mark_sent(item["symbol"], "pullback")
             return ("pullback", "", {
                 "type": "pullback",
                 "symbol": item["symbol"],
-                "strength": 60
+                "strength": 60,
+                "details": base_details(item, tf)
             })
 
 def strong_pullback_signal(item):
     tf = item.get("tf", {}).get("15m", {})
-    rsi = tf.get("rsi")
-    if rsi and rsi < 25 and not in_repeat_block(item["symbol"], "strong_pullback"):
+    if tf.get("rsi") and tf["rsi"] < 25 and not in_repeat_block(item["symbol"], "strong_pullback"):
         mark_sent(item["symbol"], "strong_pullback")
         return ("strong_pullback", "", {
             "type": "strong_pullback",
             "symbol": item["symbol"],
-            "strength": 85
+            "strength": 85,
+            "details": base_details(item, tf)
         })
 
 # ==================================================
-# 3’LÜ TEPE KIRILIMI
+# 3’LÜ TEPE
 # ==================================================
 def three_peak_signal(item):
-    df = item.get("tf", {}).get("15m", {}).get("df")
+    tf = item.get("tf", {}).get("15m", {})
+    df = tf.get("df")
     if df is not None and detect_three_peaks(df["Close"]):
         if not in_repeat_block(item["symbol"], "three_peak"):
             mark_sent(item["symbol"], "three_peak")
             return ("three_peak", "", {
                 "type": "three_peak",
                 "symbol": item["symbol"],
-                "strength": 80
+                "strength": 80,
+                "details": base_details(item, tf)
             })
 
 # ==================================================
-# DESTEK / DİRENÇ KIRILIMI
+# DESTEK / DİRENÇ
 # ==================================================
 def support_resistance_break_signal(item):
-    df = item.get("tf", {}).get("15m", {}).get("df")
+    tf = item.get("tf", {}).get("15m", {})
+    df = tf.get("df")
     if df is None:
         return None
 
@@ -156,12 +155,16 @@ def support_resistance_break_signal(item):
 
     if r_break and not in_repeat_block(item["symbol"], "resistance_break"):
         mark_sent(item["symbol"], "resistance_break")
+        d = base_details(item, tf)
+        d["support"] = sup
+        d["resistance"] = res
         return ("resistance_break", "", {
             "type": "resistance_break",
             "symbol": item["symbol"],
             "strength": 75,
             "support": sup,
-            "resistance": res
+            "resistance": res,
+            "details": d
         })
 
 # ==================================================
@@ -171,19 +174,34 @@ def l2_signal(item):
     tf = item.get("tf", {}).get("5m", {})
     if tf.get("rsi", 50) > 55 and not in_repeat_block(item["symbol"], "l2"):
         mark_sent(item["symbol"], "l2")
-        return ("l2", "", {"type": "l2", "symbol": item["symbol"], "strength": 55})
+        return ("l2", "", {
+            "type": "l2",
+            "symbol": item["symbol"],
+            "strength": 55,
+            "details": base_details(item, tf)
+        })
 
 def l3_signal(item):
     tf = item.get("tf", {}).get("5m", {})
     if tf.get("rsi", 50) > 60 and not in_repeat_block(item["symbol"], "l3"):
         mark_sent(item["symbol"], "l3")
-        return ("l3", "", {"type": "l3", "symbol": item["symbol"], "strength": 65})
+        return ("l3", "", {
+            "type": "l3",
+            "symbol": item["symbol"],
+            "strength": 65,
+            "details": base_details(item, tf)
+        })
 
 def l4_signal(item):
     tf = item.get("tf", {}).get("15m", {})
     if tf.get("rsi", 50) > 65 and not in_repeat_block(item["symbol"], "l4"):
         mark_sent(item["symbol"], "l4")
-        return ("l4", "", {"type": "l4", "symbol": item["symbol"], "strength": 75})
+        return ("l4", "", {
+            "type": "l4",
+            "symbol": item["symbol"],
+            "strength": 75,
+            "details": base_details(item, tf)
+        })
 
 # ==================================================
 # PROCESS
@@ -217,41 +235,29 @@ def safe_process_bist_data(data_list, market_open=True):
     return res
 
 # ==================================================
-# MARKET CLOSED
-# ==================================================
-def scan_strong_stocks(data):
-    out = []
-    for i in data:
-        tf = i.get("tf", {}).get("1d", {})
-        if tf.get("ema50") and tf.get("ema200") and tf["ema50"] > tf["ema200"]:
-            out.append(f"• {i['symbol']}")
-    return out[:10]
-
-# ==================================================
-# TELEGRAM MESAJ FORMAT
+# TELEGRAM FORMAT (İKONLU – DETAYLI)
 # ==================================================
 def format_signal_message(symbol, signals, tf_data):
-    lines = []
-    lines.append(f"📈 {symbol}")
+    lines = [f"📈 *{symbol}*"]
 
     if tf_data:
-        rsi = tf_data.get("rsi")
-        if rsi is not None:
-            lines.append(f"RSI: {rsi:.1f}")
+        lines.append(f"💰 Fiyat: `{tf_data.get('price')}`")
+        if tf_data.get("rsi") is not None:
+            lines.append(f"📊 RSI: `{tf_data['rsi']:.1f}`")
+
+        if tf_data.get("ema20") and tf_data.get("ema50"):
+            lines.append(f"📐 EMA20 / EMA50: `{tf_data['ema20']:.2f}` / `{tf_data['ema50']:.2f}`")
+
+        if tf_data.get("volume"):
+            lines.append(f"📦 Hacim: `{tf_data['volume']}`")
 
     for s in signals:
-        stype = s.get("type", "")
-        strength = s.get("strength", s.get("trend_strength", 50))
-        support = s.get("support")
-        resistance = s.get("resistance")
+        icon = "🔥" if s["strength"] >= 80 else "⚡"
+        lines.append(f"{icon} *{s['type'].upper()}* | Güç: %{s['strength']}")
 
-        line = f"• {stype.upper()} | Güç: %{strength}"
-        lines.append(line)
-
-        if support or resistance:
-            if support:
-                lines.append(f"  Destek: {support}")
-            if resistance:
-                lines.append(f"  Direnç: {resistance}")
+        if s.get("support"):
+            lines.append(f"🟢 Destek: `{s['support']}`")
+        if s.get("resistance"):
+            lines.append(f"🔴 Direnç: `{s['resistance']}`")
 
     return "\n".join(lines)
