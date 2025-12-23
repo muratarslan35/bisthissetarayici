@@ -144,6 +144,7 @@ def background_loop():
                 if summary:
                     telegram_send(summary)
 
+                # ---- FALLBACK GÜN SONU YÖNETİMİ ----
                 updated = fallback_daily_update_if_needed(raw_data)
                 if updated:
                     msg = fallback_daily_report_message()
