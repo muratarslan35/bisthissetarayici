@@ -1,44 +1,268 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
 <title>BIST Sinyal Paneli</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
-:root{--bg:#0f1220;--card:#1b1f38;--text:#e6e8ff;--muted:#9aa0ff;--green:#2ecc71;--red:#e74c3c;--yellow:#f1c40f;--blue:#3498db}
-body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-body.light{--bg:#f4f6ff;--card:#ffffff;--text:#222;--muted:#666}
-header{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#11142a}
+:root{
+  --bg:#0f1220;
+  --card:#1b1f38;
+  --text:#e6e8ff;
+  --muted:#9aa0ff;
+  --green:#2ecc71;
+  --red:#e74c3c;
+  --yellow:#f1c40f;
+  --blue:#3498db;
+}
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+body.light{
+  --bg:#f4f6ff;
+  --card:#ffffff;
+  --text:#222;
+  --muted:#666;
+}
+header{
+  padding:12px 16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:#11142a;
+}
 body.light header{background:#e9ecff}
-.badge{padding:4px 10px;border-radius:20px;font-size:12px}
+.badge{
+  padding:4px 10px;
+  border-radius:20px;
+  font-size:12px;
+}
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
 .yellow{background:var(--yellow);color:#000}
+
 .container{padding:16px}
-.filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
-.filters label{background:var(--card);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:13px}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.card{background:var(--card);border-radius:12px;padding:12px;position:relative}
+.filters{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-bottom:12px;
+}
+.filters label{
+  background:var(--card);
+  padding:6px 10px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:13px;
+}
+
+.cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:12px;
+}
+.card{
+  background:var(--card);
+  border-radius:12px;
+  padding:12px;
+  position:relative;
+}
 .card b{font-size:18px}
-.fav{position:absolute;top:8px;right:10px;cursor:pointer;font-size:18px;opacity:.4}
+
+.fav{
+  position:absolute;
+  top:8px;right:10px;
+  cursor:pointer;
+  font-size:18px;
+  opacity:.4;
+}
 .fav.active{opacity:1;color:gold}
-.tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px}
-.l2{background:#2980b9}.l3{background:#8e44ad}.l4{background:#f39c12;color:#000}.kombine{background:#27ae60}.super_kombine{background:#e74c3c}.strong-buy{background:#2ecc71;color:#000}.watch{background:#f1c40f;color:#000}
-.meta{font-size:13px;margin-top:6px;line-height:1.5}
+
+.tag{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:11px;
+  margin-right:4px;
+}
+
+.l2{background:#2980b9}
+.l3{background:#8e44ad}
+.l4{background:#f39c12;color:#000}
+.kombine{background:#27ae60}
+.super_kombine{background:#e74c3c}
+.strong-buy{background:#2ecc71;color:#000}
+.watch{background:#f1c40f;color:#000}
+
+.meta{
+  font-size:13px;
+  margin-top:6px;
+  line-height:1.5;
+}
 .meta span{display:block;color:var(--muted)}
-.trend-bar{height:6px;border-radius:6px;overflow:hidden;background:#333;margin-top:8px;display:flex}
-.trend-up{background:var(--green)}.trend-neutral{background:#777}.trend-down{background:var(--red)}
+
+.trend-bar{
+  height:6px;
+  border-radius:6px;
+  overflow:hidden;
+  background:#333;
+  margin-top:8px;
+  display:flex;
+}
+.trend-up{background:var(--green)}
+.trend-neutral{background:#777}
+.trend-down{background:var(--red)}
 </style>
 </head>
+
 <body>
+
 <header>
-  <div>Sistem: <span id="sys" class="badge">?</span> Piyasa: <span id="market" class="badge">?</span></div>
+  <div>
+    Sistem: <span id="sys" class="badge">?</span>
+    Piyasa: <span id="market" class="badge">?</span>
+  </div>
   <button onclick="toggleTheme()">🌓</button>
 </header>
+
 <div class="container">
+
 <div class="filters" id="filters">
   <label><input type="checkbox" value="favorites"> ⭐ Favoriler</label>
   <label><input type="checkbox" value="strong_buy"> 💚 Güçlü AL</label>
   <label><input type="checkbox" value="watch"> 👀 Takip Et</label>
   <label><input type="checkbox" value="kombine"> Kombine</label>
-  <label><input type="checkbox
+  <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
+  <label><input type="checkbox" value="pullback"> Pullback</label>
+  <label><input type="checkbox" value="trend_break"> 3’lü Tepe</label>
+  <label><input type="checkbox" value="breakout"> Direnç Kırılımı</label>
+  <label><input type="checkbox" value="l2"> L2</label>
+  <label><input type="checkbox" value="l3"> L3</label>
+  <label><input type="checkbox" value="l4"> L4</label>
+</div>
+
+<div id="info"></div>
+<div class="cards" id="cards"></div>
+
+</div>
+
+<script>
+let ALL_SIGNALS=[]
+let favs=JSON.parse(localStorage.getItem("favs")||"[]")
+
+function toggleTheme(){
+  document.body.classList.toggle("light")
+  localStorage.setItem("theme",document.body.classList.contains("light")?"light":"dark")
+}
+if(localStorage.getItem("theme")==="light"){
+  document.body.classList.add("light")
+}
+
+function toggleFav(sym){
+  favs = favs.includes(sym) ? favs.filter(x=>x!==sym) : [...favs,sym]
+  localStorage.setItem("favs",JSON.stringify(favs))
+  render()
+}
+
+function activeFilters(){
+  return [...document.querySelectorAll(".filters input:checked")].map(i=>i.value)
+}
+
+function trendBarHTML(d){
+  if(!d) return ""
+  const up=d.trend_up||0
+  const down=d.trend_down||0
+  const neutral=Math.max(0,100-up-down)
+  return `<div class="trend-bar">
+    <div class="trend-up" style="width:${up}%"></div>
+    <div class="trend-neutral" style="width:${neutral}%"></div>
+    <div class="trend-down" style="width:${down}%"></div>
+  </div>`
+}
+
+function render(){
+  const wrap=document.getElementById("cards")
+  const info=document.getElementById("info")
+  wrap.innerHTML=""
+  const f=activeFilters()
+  const seen=new Set()
+
+  let data=ALL_SIGNALS.filter(s=>{
+    if(seen.has(s.symbol)) return false
+    seen.add(s.symbol)
+    if(f.includes("favorites") && !favs.includes(s.symbol)) return false
+    if(f.includes("strong_buy") && s.action!=="GÜÇLÜ AL") return false
+    if(f.includes("watch") && s.action!=="TAKİP ET") return false
+    if(f.includes("pullback") && !["pullback","GÜÇLÜ PULLBACK"].includes(s.type)) return false
+    if(f.includes("trend_break") && s.type!=="three_peak") return false
+    if(f.includes("breakout") && s.type!=="resistance_break") return false
+    if(f.includes("kombine") && s.type!=="kombine") return false
+    if(f.includes("super_kombine") && s.type!=="super_kombine") return false
+    if(f.includes("l2") && s.type!=="l2") return false
+    if(f.includes("l3") && s.type!=="l3") return false
+    if(f.includes("l4") && s.type!=="l4") return false
+    return true
+  })
+
+  info.textContent = data.length ? data.length+" adet sinyal" : "Filtrelere uygun sinyal yok."
+
+  data.forEach(s=>{
+    const d=s.details||{}
+    const c=document.createElement("div")
+    c.className="card"
+    let actionTag = s.action==="GÜÇLÜ AL"
+      ? `<span class="tag strong-buy">GÜÇLÜ AL</span>`
+      : `<span class="tag watch">TAKİP ET</span>`
+
+    let algTags = []
+    if(d.type) algTags.push(`<span class="tag ${d.type}">${d.type.toUpperCase()}</span>`)
+
+    c.innerHTML=`
+      <div class="fav ${favs.includes(s.symbol)?"active":""}" onclick="toggleFav('${s.symbol}')">★</div>
+      <b>${s.symbol}</b><br>
+      ${actionTag} ${algTags.join(" ")}
+      <div class="meta">
+        <span>⏱️ Sinyal: ${s.time || "-"}</span>
+        <span>💰 Fiyat: ${s.price ?? "-"}</span>
+        ${d.rsi!==undefined?`<span>📉 RSI: ${d.rsi}</span>`:""}
+        ${(d.ema20&&d.ema50&&d.ema200)?`
+          <span>📐 EMA20: ${d.ema20}</span>
+          <span>📐 EMA50: ${d.ema50}</span>
+          <span>📐 EMA200: ${d.ema200}</span>
+          <span>${d.ema_trend}</span>
+        `:""}
+        ${d.support?`<span>🟢 Destek: ${d.support}</span>`:""}
+        ${d.resistance?`<span>🔴 Direnç: ${d.resistance}</span>`:""}
+      </div>
+      ${trendBarHTML(d)}
+    `
+    wrap.appendChild(c)
+  })
+}
+
+async function load(){
+  const r=await fetch("/api")
+  const j=await r.json()
+
+  document.getElementById("sys").textContent=j.system_active?"AKTİF":"PASİF"
+  document.getElementById("sys").className="badge "+(j.system_active?"green":"red")
+
+  document.getElementById("market").textContent=j.market_open?"AÇIK":"KAPALI"
+  document.getElementById("market").className="badge "+(j.market_open?"green":"red")
+
+  ALL_SIGNALS=j.signals||[]
+  render()
+}
+
+document.getElementById("filters").addEventListener("change",render)
+setInterval(load,5000)
+load()
+</script>
+
+</body>
+</html>
