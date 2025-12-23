@@ -14,6 +14,11 @@ from signal_engine import (
 )
 from utils import to_tr_timezone
 
+from fallback_manager import (
+    fallback_daily_update_if_needed,
+    fallback_daily_report_message
+)
+
 # ==================================================
 # ENV
 # ==================================================
@@ -32,7 +37,6 @@ LATEST_DATA = []
 LATEST_SIGNALS = []
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
-TEST_MODE = False
 
 data_lock = threading.Lock()
 
@@ -65,7 +69,7 @@ def telegram_send(msg):
             pass
 
 # ==================================================
-# MARKET HOURS
+# MARKET HOURS (TR)
 # ==================================================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
@@ -103,7 +107,6 @@ def background_loop():
                 for sid, msg, meta in signals:
                     telegram_send(msg)
 
-                    # ---- META FALLBACK (UYUM FIX) ----
                     symbol = meta.get("symbol") or sid.split("-")[-1]
                     price = meta.get("price") or meta.get("current_price")
 
@@ -126,7 +129,6 @@ def background_loop():
                     })
 
                 with data_lock:
-                    # TEST MODE canlı sinyali EZMEZ
                     LATEST_SIGNALS = dashboard_signals
 
             # ================= MARKET KAPALI =================
@@ -142,6 +144,13 @@ def background_loop():
                 if summary:
                     telegram_send(summary)
 
+                # ---- FALLBACK GÜN SONU YÖNETİMİ ----
+                updated = fallback_daily_update_if_needed(raw_data)
+                if updated:
+                    msg = fallback_daily_report_message()
+                    if msg:
+                        telegram_send(msg)
+
         except Exception as e:
             print("SCAN ERROR:", e)
 
@@ -151,48 +160,6 @@ def background_loop():
 # THREAD
 # ==================================================
 threading.Thread(target=background_loop, daemon=True).start()
-
-# ==================================================
-# TEST SIGNAL (MANUEL)
-# ==================================================
-@app.route("/api/test_signal")
-def test_signal():
-    global TEST_MODE
-    TEST_MODE = True
-
-    now_str = to_tr_timezone(
-        datetime.now(timezone.utc)
-    ).strftime("%H:%M:%S")
-
-    test_signal_obj = {
-        "symbol": "TESTHISSE",
-        "price": 123.45,
-        "type": "strong_reversal",
-        "title": "🧪 TEST – Güçlü Dönüş (L2)",
-        "direction": "up",
-        "trend_strength": 82,
-        "support": 120.0,
-        "resistance": 135.0,
-        "signal_type": "strong_reversal",
-        "current_price": 123.45,
-        "rsi": 49.8,
-        "time": now_str,
-        "test": True
-    }
-
-    with data_lock:
-        LATEST_SIGNALS.insert(0, test_signal_obj)
-
-    telegram_send(
-        "🧪 TEST SİNYALİ\n\n"
-        "Hisse: TESTHISSE\n"
-        "📈 Güçlü Dönüş (L2)\n"
-        "Fiyat: 123.45\n"
-        "Trend Gücü: %82\n"
-        "RSI: 49.8"
-    )
-
-    return jsonify({"ok": 1, "msg": "Test sinyali üretildi"})
 
 # ==================================================
 # API
