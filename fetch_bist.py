@@ -1,14 +1,17 @@
+# fetch_bist.py  (FINAL – UYUMLU, SADELEŞTİRİLMEDEN)
+
 import time
 import os
 import json
 import requests
 import pandas as pd
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utils import (
     FALLBACK_SYMBOLS,
     calculate_rsi,
+    calculate_ema,
     detect_three_peaks,
     detect_support_resistance_break,
     nearest_support_resistance_from_history,
@@ -38,7 +41,7 @@ def save_state(state):
 STATE = load_state()
 
 # ==================================================
-# TRADINGVIEW PSEUDO LIVE PRICE (CACHE)
+# TRADINGVIEW CACHE
 # ==================================================
 _TV_CACHE = {}
 _TV_CACHE_TTL = 60
@@ -64,12 +67,6 @@ def tv_live_price(symbol):
     return None
 
 # ==================================================
-# EMA
-# ==================================================
-def calculate_ema(series, period):
-    return series.ewm(span=period, adjust=False).mean()
-
-# ==================================================
 # SAFE YFINANCE
 # ==================================================
 def yf_download_safe(ticker, period, interval):
@@ -90,16 +87,10 @@ def yf_download_safe(ticker, period, interval):
         return None
 
 # ==================================================
-# SYMBOL LIST (FALLBACK)
-# ==================================================
-def get_bist_symbols():
-    return FALLBACK_SYMBOLS.copy()
-
-# ==================================================
-# TF INDICATORS
+# TIMEFRAME INDICATORS (ENGINE UYUMLU)
 # ==================================================
 def fetch_timeframe_indicators(df, symbol=None):
-    if df is None or df.empty:
+    if df is None or df.empty or len(df) < 20:
         return None
 
     close = df["Close"].copy()
@@ -110,22 +101,22 @@ def fetch_timeframe_indicators(df, symbol=None):
             close.iloc[-1] = live
 
     rsi = calculate_rsi(close)
-    if rsi.isna().all():
-        return None
 
     out = {
+        "df": df,
         "last_close": float(close.iloc[-1]),
         "last_open": float(df["Open"].iloc[-1]),
-        "last_green": close.iloc[-1] > df["Open"].iloc[-1],
         "ema20": float(calculate_ema(close, 20).iloc[-1]),
         "ema50": float(calculate_ema(close, 50).iloc[-1]),
-        "rsi": float(rsi.iloc[-1]),
+        "ema100": float(calculate_ema(close, 100).iloc[-1]),
+        "ema200": float(calculate_ema(close, 200).iloc[-1]),
+        "rsi": float(rsi.iloc[-1])
     }
 
     try:
         out["volume"] = int(df["Volume"].iloc[-1])
-        out["volume_avg_5"] = int(df["Volume"].iloc[-6:-1].mean())
-        out["volume_ok"] = out["volume"] > out["volume_avg_5"]
+        out["volume_avg_20"] = int(df["Volume"].rolling(20).mean().iloc[-1])
+        out["volume_ok"] = out["volume"] > out["volume_avg_20"]
     except Exception:
         pass
 
@@ -139,17 +130,17 @@ def fetch_timeframe_indicators(df, symbol=None):
 # FETCH ONE SYMBOL
 # ==================================================
 def fetch_one_symbol(sym):
-    df_main = yf_download_safe(sym, "7d", "15m")
+    df_15m = yf_download_safe(sym, "7d", "15m")
     used_tf = "15m"
 
-    if df_main is None:
-        df_main = yf_download_safe(sym, "14d", "30m")
+    if df_15m is None:
+        df_15m = yf_download_safe(sym, "14d", "30m")
         used_tf = "30m"
 
-    if df_main is None:
+    if df_15m is None:
         return None
 
-    tf_main = fetch_timeframe_indicators(df_main, sym)
+    tf_main = fetch_timeframe_indicators(df_15m, sym)
     if tf_main is None:
         return None
 
@@ -180,37 +171,37 @@ def fetch_one_symbol(sym):
     STATE[symbol] = s
     save_state(STATE)
 
+    df_5m = yf_download_safe(sym, "3d", "5m")
     df_1h = yf_download_safe(sym, "14d", "60m")
     df_4h = yf_download_safe(sym, "60d", "4h")
     df_1d = yf_download_safe(sym, "120d", "1d")
 
-    ns, nr = nearest_support_resistance_from_history(df_main)
+    ns, nr = nearest_support_resistance_from_history(df_15m)
 
     return {
         "symbol": symbol,
         "current_price": tf_main["last_close"],
-        "RSI": tf_main["rsi"],
-        "volume": tf_main.get("volume"),
-        "three_peak_break": detect_three_peaks(df_main["Close"]),
+        "three_peak_break": detect_three_peaks(df_15m["Close"]),
         "support_break": tf_main["support_break"],
         "resistance_break": tf_main["resistance_break"],
         "nearest_support": ns,
         "nearest_resistance": nr,
         "used_timeframe": used_tf,
         "tf": {
+            "5m": fetch_timeframe_indicators(df_5m, sym) if df_5m is not None else None,
             used_tf: tf_main,
-            "1h": fetch_timeframe_indicators(df_1h),
-            "4h": fetch_timeframe_indicators(df_4h),
-            "1d": fetch_timeframe_indicators(df_1d)
+            "1h": fetch_timeframe_indicators(df_1h, sym),
+            "4h": fetch_timeframe_indicators(df_4h, sym),
+            "1d": fetch_timeframe_indicators(df_1d, sym)
         }
     }
 
 # ==================================================
-# FETCH ALL (FALLBACK TEMELLİ)
+# FETCH ALL
 # ==================================================
 def fetch_bist_data():
     out = []
-    for s in get_bist_symbols():
+    for s in FALLBACK_SYMBOLS:
         try:
             r = fetch_one_symbol(s)
             if r:
