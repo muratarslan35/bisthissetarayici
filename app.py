@@ -104,15 +104,10 @@ def background_loop():
 
                 # --------- SİNYALLERİ SEMBOL BAZLI TOPLA ---------
                 grouped = defaultdict(list)
-                tf_cache = {}
-
                 for meta in signals:
                     sym = meta.get("symbol")
-                    if not sym:
-                        continue
-                    grouped[sym].append(meta)
-                    if sym not in tf_cache:
-                        tf_cache[sym] = meta.get("tf", {})
+                    if sym:
+                        grouped[sym].append(meta)
 
                 # --------- GELİŞMİŞ TELEGRAM MESAJI ---------
                 for symbol, alg_list in grouped.items():
@@ -127,6 +122,8 @@ def background_loop():
                     if sym in seen_symbols:
                         continue
                     seen_symbols.add(sym)
+                    # Tek hisse için birleştirilmiş algoritmalar
+                    combined_algorithms = meta.get("combined_algorithms", [meta])
                     dashboard_signals.append({
                         "symbol": sym,
                         "price": meta.get("price") or meta.get("current_price"),
@@ -140,7 +137,8 @@ def background_loop():
                         "current_price": meta.get("price") or meta.get("current_price"),
                         "rsi": meta.get("rsi"),
                         "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
-                        "details": meta
+                        "details": meta,
+                        "combined_algorithms": combined_algorithms
                     })
 
                 with data_lock:
