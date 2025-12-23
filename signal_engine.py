@@ -70,11 +70,10 @@ def daily_success_summary():
     )
 
 # ==================================================
-# TREND + GOLDEN CROSS
+# TREND CHECK (EMA / GOLDEN CROSS)
 # ==================================================
 def long_term_trend_ok(item, price):
-    tf_list = ["1h", "4h", "1d"]
-    for tf in tf_list:
+    for tf in ["1h", "4h", "1d"]:
         d = item.get("tf", {}).get(tf, {})
         ma20 = d.get("ema20")
         ma50 = d.get("ema50")
@@ -82,14 +81,10 @@ def long_term_trend_ok(item, price):
         ma200 = d.get("ema200")
 
         if ma50 and ma200 and ma50 > ma200:
-            return True, "Golden Cross", {
-                "ema20": ma20, "ema50": ma50, "ema100": ma100, "ema200": ma200
-            }
+            return True, "Golden Cross", {}
 
         if all([ma20, ma50, ma100, ma200]) and ma20 > ma50 > ma100 > ma200:
-            return True, "Strong Uptrend", {
-                "ema20": ma20, "ema50": ma50, "ema100": ma100, "ema200": ma200
-            }
+            return True, "Strong Uptrend", {}
 
     return False, "", {}
 
@@ -100,51 +95,60 @@ def detect_order_block(df):
     if df is None or len(df) < 30:
         return None
 
-    vol_avg = df["volume"].rolling(20).mean()
+    vol_avg = df["Volume"].rolling(20).mean()
 
     for i in range(len(df) - 5, 10, -1):
         c = df.iloc[i]
-        if c["close"] >= c["open"]:
-            continue
-        if c["volume"] < vol_avg.iloc[i] * 1.8:
+
+        if c["Close"] >= c["Open"]:
             continue
 
-        base = c["close"]
-        for j in range(i + 1, min(i + 5, len(df))):
-            if (df.iloc[j]["close"] - base) / base >= 0.015:
-                return {
-                    "low": min(c["open"], c["close"]),
-                    "high": max(c["open"], c["close"]),
-                    "volume_ratio": round(c["volume"] / vol_avg.iloc[i], 2)
-                }
+        if c["Volume"] < vol_avg.iloc[i] * 1.8:
+            continue
+
+        base = c["Close"]
+        impulse = False
+        for j in range(i + 1, min(i + 6, len(df))):
+            if (df.iloc[j]["Close"] - base) / base >= 0.015:
+                impulse = True
+                break
+
+        if impulse:
+            return {
+                "low": min(c["Open"], c["Close"]),
+                "high": max(c["Open"], c["Close"]),
+                "volume_ratio": round(c["Volume"] / vol_avg.iloc[i], 2)
+            }
+
     return None
 
 def detect_ob_reaction(df, ob):
-    if df is None or ob is None or len(df) < 5:
+    if df is None or ob is None or len(df) < 3:
         return False
 
     last = df.iloc[-1]
     prev = df.iloc[-2]
 
     return (
-        prev["low"] <= ob["high"] * 1.01 and
-        last["close"] > prev["high"] and
-        last["close"] > last["open"]
+        prev["Low"] <= ob["high"] * 1.01 and
+        last["Close"] > prev["High"] and
+        last["Close"] > last["Open"]
     )
 
 # ==================================================
-# OB + KOMBINASYON
+# OB + TREND SİNYALİ
 # ==================================================
 def order_block_reaction_signal(item):
     symbol = item["symbol"]
     price = item["current_price"]
-    tf15 = item.get("tf", {}).get(item.get("used_timeframe", "15m"), {})
+
+    tf15 = item.get("tf", {}).get("15m", {})
     df = tf15.get("df")
 
     if df is None or in_cooldown(symbol):
         return None
 
-    trend_ok, trend_type, emas = long_term_trend_ok(item, price)
+    trend_ok, trend_type, _ = long_term_trend_ok(item, price)
     if not trend_ok:
         return None
 
@@ -155,44 +159,63 @@ def order_block_reaction_signal(item):
     register_signal(symbol, price)
     set_cooldown(symbol, 45)
 
-    ns, nr = nearest_support_resistance_from_history(df)
-
-    meta = {
-        "symbol": symbol,
-        "price": price,
-        "type": "order_block",
-        "title": "OB + Trend + Momentum",
-        "direction": "up",
-        "level": "L4",
-        "strength": min(100, int(60 + ob["volume_ratio"] * 15)),
-        "rsi": tf15.get("rsi"),
-        "ema20": emas.get("ema20"),
-        "ema50": emas.get("ema50"),
-        "ema100": emas.get("ema100"),
-        "ema200": emas.get("ema200"),
-        "trend": trend_type,
-        "support": ns,
-        "resistance": nr
-    }
-
-    msg = (
-        f"⚡ OB + L4 SİNYAL\n\n"
-        f"Hisse: {symbol}\n"
-        f"Fiyat: {fmt_price(price)}\n"
-        f"Trend: {trend_type}\n"
-        f"RSI: {fmt_price(meta['rsi'])}\n"
-        f"EMA20/50/100/200: "
-        f"{fmt_price(meta['ema20'])} / {fmt_price(meta['ema50'])} / "
-        f"{fmt_price(meta['ema100'])} / {fmt_price(meta['ema200'])}\n"
-        f"Destek / Direnç: {fmt_price(ns)} / {fmt_price(nr)}"
+    return (
+        f"OB-{symbol}",
+        (
+            f"⚡ OB + TREND\n\n"
+            f"Hisse: {symbol}\n"
+            f"Fiyat: {fmt_price(price)}\n"
+            f"OB: {fmt_price(ob['low'])} – {fmt_price(ob['high'])}\n"
+            f"Trend: {trend_type}"
+        ),
+        {
+            "symbol": symbol,
+            "price": price,
+            "type": "order_block",
+            "level": "L4",
+            "trend": trend_type,
+            "strength": int(60 + ob["volume_ratio"] * 15)
+        }
     )
 
-    return (f"OB-{symbol}", msg, meta)
-
 # ==================================================
-# PROCESS
+# PROCESS SIGNALS
 # ==================================================
 def process_signals(item, market_open=True):
     out = []
 
-    ob_sig = order_block_re
+    ob_sig = order_block_reaction_signal(item)
+    if ob_sig:
+        out.append(ob_sig)
+
+    return out
+
+# ==================================================
+# ✅ APP.PY'NİN BEKLEDİĞİ FONKSİYON
+# ==================================================
+def safe_process_bist_data(data_list, market_open=True):
+    results = []
+
+    if not data_list:
+        return results
+
+    for item in data_list:
+        try:
+            signals = process_signals(item, market_open)
+            results.extend(signals)
+            update_success(item["symbol"], item["current_price"])
+        except Exception:
+            continue
+
+    return results
+
+# ==================================================
+# PİYASA KAPALI – GÜÇLÜLER
+# ==================================================
+def scan_strong_stocks(data):
+    out = []
+    for item in data:
+        ok, _, _ = long_term_trend_ok(item, item.get("current_price"))
+        if ok:
+            out.append(f"• {item['symbol']}")
+    return out[:10]
