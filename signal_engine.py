@@ -241,3 +241,24 @@ def scan_strong_stocks(data):
         if tf.get("ema50") and tf.get("ema200") and tf["ema50"] > tf["ema200"]:
             out.append(f"• {i['symbol']}")
     return out[:10]
+
+# ==================================================
+# GÜN SONU BAŞARI ÖZETİ (APP.PY UYUMLU)
+# ==================================================
+def daily_success_summary():
+    today = now_tr().date()
+    d = success_tracker.get(today)
+    if not d:
+        return None
+
+    total = len(d)
+    hit = sum(1 for x in d.values() if x.get("hit"))
+    fail = total - hit
+
+    return {
+        "date": str(today),
+        "total": total,
+        "hit": hit,
+        "fail": fail,
+        "success_rate": round((hit / total) * 100, 2) if total else 0
+    }
