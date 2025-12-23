@@ -52,6 +52,21 @@ def update_success(symbol, price):
     if d and not d["hit"] and price >= d["target"]:
         d["hit"] = True
 
+def daily_success_summary():
+    today = now_tr().date()
+    d = success_tracker.get(today)
+    if not d:
+        return None
+
+    total = len(d)
+    hit = sum(1 for x in d.values() if x["hit"])
+    return (
+        "📊 GÜN SONU ÖZET\n\n"
+        f"Toplam AL: {total}\n"
+        f"%2 Hedefe Ulaşan: {hit}\n"
+        f"Başarısız: {total-hit}"
+    )
+
 # ==================================================
 # HELPERS
 # ==================================================
@@ -126,7 +141,7 @@ def strong_pullback_signal(item):
         })
 
 # ==================================================
-# 3’LÜ TEPE
+# 3’LÜ TEPE KIRILIMI (AKTİF)
 # ==================================================
 def three_peak_signal(item):
     tf = item.get("tf", {}).get("15m", {})
@@ -235,29 +250,29 @@ def safe_process_bist_data(data_list, market_open=True):
     return res
 
 # ==================================================
-# TELEGRAM FORMAT (İKONLU – DETAYLI)
+# MARKET KAPALI – GÜÇLÜ HİSSELER
+# ==================================================
+def scan_strong_stocks(data):
+    out = []
+    for i in data:
+        tf = i.get("tf", {}).get("1d", {})
+        if tf.get("ema50") and tf.get("ema200") and tf["ema50"] > tf["ema200"]:
+            out.append(f"• {i['symbol']}")
+    return out[:10]
+
+# ==================================================
+# TELEGRAM FORMAT
 # ==================================================
 def format_signal_message(symbol, signals, tf_data):
-    lines = [f"📈 *{symbol}*"]
-
-    if tf_data:
-        lines.append(f"💰 Fiyat: `{tf_data.get('price')}`")
-        if tf_data.get("rsi") is not None:
-            lines.append(f"📊 RSI: `{tf_data['rsi']:.1f}`")
-
-        if tf_data.get("ema20") and tf_data.get("ema50"):
-            lines.append(f"📐 EMA20 / EMA50: `{tf_data['ema20']:.2f}` / `{tf_data['ema50']:.2f}`")
-
-        if tf_data.get("volume"):
-            lines.append(f"📦 Hacim: `{tf_data['volume']}`")
+    lines = [f"📈 {symbol}"]
 
     for s in signals:
         icon = "🔥" if s["strength"] >= 80 else "⚡"
-        lines.append(f"{icon} *{s['type'].upper()}* | Güç: %{s['strength']}")
+        lines.append(f"{icon} {s['type'].upper()} | Güç: %{s['strength']}")
 
         if s.get("support"):
-            lines.append(f"🟢 Destek: `{s['support']}`")
+            lines.append(f"🟢 Destek: {s['support']}")
         if s.get("resistance"):
-            lines.append(f"🔴 Direnç: `{s['resistance']}`")
+            lines.append(f"🔴 Direnç: {s['resistance']}")
 
     return "\n".join(lines)
