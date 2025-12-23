@@ -31,7 +31,9 @@ def register_signal(symbol, price):
         success_tracker[today][symbol] = {
             "entry": price,
             "target": price * (1 + TARGET_PCT),
-            "hit": False
+            "hit": False,
+            "algorithm": None,
+            "time": now_tr().strftime("%H:%M:%S")
         }
 
 def update_success(symbol, price):
@@ -75,6 +77,16 @@ def enrich_meta(item, tf, base):
         "time": now_tr().strftime("%H:%M:%S"),
         "action": decide_action(base["strength"], rsi, ema_trend)
     })
+    # Kaydı başarı tracker'a ekle
+    today = now_tr().date()
+    success_tracker.setdefault(today, {})
+    success_tracker[today][item["symbol"]] = {
+        **success_tracker[today].get(item["symbol"], {}),
+        "algorithm": base["type"],
+        "entry": fmt(item.get("current_price")),
+        "hit": success_tracker[today].get(item["symbol"], {}).get("hit", False),
+        "time": now_tr().strftime("%H:%M:%S")
+    }
     return base
 
 # ---------------- SIGNAL FUNCTIONS ----------------
@@ -141,22 +153,43 @@ def l4_signal(item):
         mark_sent(item["symbol"], "l4")
         return enrich_meta(item, tf, {"type":"l4","emoji":"💎","strength":75})
 
+# ---------------- PROCESS SIGNALS WITH GROUPING ----------------
 def process_signals(item, market_open=True):
-    out=[]
+    signals = []
     for fn in [
         combined_signal, super_combined_signal, pullback_signal,
         strong_pullback_signal, three_peak_signal,
         support_resistance_break_signal, l2_signal, l3_signal, l4_signal
     ]:
-        r=fn(item)
-        if r: out.append(r)
-    return out
+        r = fn(item)
+        if r:
+            signals.append(r)
+
+    # Aynı hisse için birleştirme: tek bir dict altında tüm algoritmaları topla
+    if signals:
+        combined = signals[0].copy()
+        combined["combined_algorithms"] = [
+            {
+                "type": s["type"],
+                "emoji": s.get("emoji","⚡"),
+                "strength": s.get("strength"),
+                "action": s.get("action"),
+                "support": s.get("support"),
+                "resistance": s.get("resistance"),
+                "time": s.get("time")
+            } for s in signals
+        ]
+        return [combined]
+    return []
 
 def safe_process_bist_data(data_list, market_open=True):
     res=[]
     for item in data_list:
         try:
-            res.extend(process_signals(item, market_open))
+            processed = process_signals(item, market_open)
+            if processed:
+                res.extend(processed)
+            # Her bir hisse için son fiyatı güncelle ve başarı durumunu kontrol et
             update_success(item["symbol"], item["current_price"])
         except Exception:
             continue
@@ -170,18 +203,38 @@ def scan_strong_stocks(data):
             out.append(f"• {i['symbol']}")
     return out[:10]
 
-def daily_success_summary():
+# ---------------- DAILY SUCCESS SUMMARY ----------------
+def daily_success_summary(include_details=False, max_failures=0):
     today=now_tr().date()
     d=success_tracker.get(today)
     if not d: return None
     total=len(d)
     hit=sum(1 for x in d.values() if x.get("hit"))
     fail=total-hit
-    return {"date":str(today),"total":total,"hit":hit,"fail":fail,"success_rate":round((hit/total)*100,2) if total else 0}
+    result = {
+        "date": str(today),
+        "total": total,
+        "hit": hit,
+        "fail": fail,
+        "success_rate": round((hit/total)*100,2) if total else 0
+    }
+
+    if include_details:
+        success_signals = []
+        for sym, meta in d.items():
+            if meta.get("hit"):
+                success_signals.append({
+                    "symbol": sym,
+                    "algorithm": meta.get("algorithm","-"),
+                    "time": meta.get("time","-"),
+                    "price": fmt(meta.get("entry"))
+                })
+        result["success_signals"] = success_signals
+    return result
 
 def format_signal_message(symbol, signals):
     if not signals: return None
-    s0=signals[0]
+    s0 = signals[0]
     lines=[
         f"📈 {symbol}",
         f"💰 Fiyat: {s0.get('current_price','-')}",
@@ -190,7 +243,7 @@ def format_signal_message(symbol, signals):
         f"📉 EMA Trend: {s0.get('ema_trend','-')}",
         f"⏱ Saat: {s0.get('time','-')}", ""
     ]
-    for s in signals:
+    for s in s0.get("combined_algorithms", []):
         lines.append(f"{s.get('emoji','⚡')} {s['type']} | Güç: %{s['strength']} | {s.get('action','')}")
         if s.get("support"): lines.append(f"🟢 Destek: {s['support']}")
         if s.get("resistance"): lines.append(f"🔴 Direnç: {s['resistance']}")
