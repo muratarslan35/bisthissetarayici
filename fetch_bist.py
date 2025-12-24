@@ -75,28 +75,42 @@ def yf_download_safe(ticker, period, interval):
     except Exception:
         return None
 
-def fetch_timeframe_indicators(df, symbol=None):
+def incremental_indicators(prev_close_series, prev_rsi_series, prev_ema_series, new_close):
+    close_series = prev_close_series.append(pd.Series([new_close]), ignore_index=True)
+    rsi_series = calculate_rsi(close_series)
+    ema_series = {k: calculate_ema(close_series, k) for k in [20,50,100,200]}
+    return close_series, rsi_series, ema_series
+
+def fetch_timeframe_indicators(df, symbol=None, prev=None):
     if df is None or df.empty or len(df) < 20:
         return None
 
     close = df["Close"].copy()
 
+    live = None
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
         if live:
             close.iloc[-1] = live
 
-    rsi = calculate_rsi(close)
+    if prev:
+        close, rsi_series, ema_series = incremental_indicators(prev.get("close"), prev.get("rsi_series"), prev.get("ema_series"), close.iloc[-1])
+    else:
+        rsi_series = calculate_rsi(close)
+        ema_series = {k: calculate_ema(close, k) for k in [20,50,100,200]}
 
     out = {
         "df": df,
         "last_close": float(close.iloc[-1]),
         "last_open": float(df["Open"].iloc[-1]),
-        "ema20": float(calculate_ema(close, 20).iloc[-1]),
-        "ema50": float(calculate_ema(close, 50).iloc[-1]),
-        "ema100": float(calculate_ema(close, 100).iloc[-1]),
-        "ema200": float(calculate_ema(close, 200).iloc[-1]),
-        "rsi": float(rsi.iloc[-1])
+        "ema20": float(ema_series[20].iloc[-1]),
+        "ema50": float(ema_series[50].iloc[-1]),
+        "ema100": float(ema_series[100].iloc[-1]),
+        "ema200": float(ema_series[200].iloc[-1]),
+        "rsi": float(rsi_series.iloc[-1]),
+        "close": close,
+        "rsi_series": rsi_series,
+        "ema_series": ema_series
     }
 
     try:
@@ -111,6 +125,9 @@ def fetch_timeframe_indicators(df, symbol=None):
     out["resistance_break"] = r_break
 
     return out
+
+_prev_1h = {}
+_prev_4h = {}
 
 def fetch_one_symbol(sym):
     df_15m = yf_download_safe(sym, "7d", "15m")
@@ -159,6 +176,22 @@ def fetch_one_symbol(sym):
     df_4h = yf_download_safe(sym, "60d", "4h")
     df_1d = yf_download_safe(sym, "120d", "1d")
 
+    global _prev_1h, _prev_4h
+
+    prev_1h = _prev_1h.get(symbol)
+    prev_4h = _prev_4h.get(symbol)
+
+    tf_1h = fetch_timeframe_indicators(df_1h, sym, prev_1h)
+    tf_4h = fetch_timeframe_indicators(df_4h, sym, prev_4h)
+
+    if tf_1h:
+        _prev_1h[symbol] = {"close": tf_1h["close"], "rsi_series": tf_1h["rsi_series"], "ema_series": tf_1h["ema_series"]}
+    if tf_4h:
+        _prev_4h[symbol] = {"close": tf_4h["close"], "rsi_series": tf_4h["rsi_series"], "ema_series": tf_4h["ema_series"]}
+
+    tf_main_1h = tf_1h if tf_1h else {}
+    tf_main_4h = tf_4h if tf_4h else {}
+
     ns, nr = nearest_support_resistance_from_history(df_15m)
 
     return {
@@ -173,9 +206,9 @@ def fetch_one_symbol(sym):
         "tf": {
             "5m": fetch_timeframe_indicators(df_5m, sym) if df_5m is not None else None,
             used_tf: tf_main,
-            "1h": fetch_timeframe_indicators(df_1h, sym),
-            "4h": fetch_timeframe_indicators(df_4h, sym),
-            "1d": fetch_timeframe_indicators(df_1d, sym)
+            "1h": tf_main_1h,
+            "4h": tf_main_4h,
+            "1d": fetch_timeframe_indicators(df_1d, sym) if df_1d is not None else None
         }
     }
 
