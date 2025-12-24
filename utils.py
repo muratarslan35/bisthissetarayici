@@ -112,6 +112,25 @@ def detect_three_peaks(close_series):
     return current_price > max_peak
 
 # ==================================================
+# ORDER BLOCK DETECTION
+# ==================================================
+def detect_order_block(df, lookback=20):
+    if df is None or df.empty or len(df) < lookback:
+        return None
+    df['change'] = df['Close'].diff()
+    bullish_blocks = df[(df['change'] > 0) & (df['Close'] > df['Open'])]
+    bearish_blocks = df[(df['change'] < 0) & (df['Close'] < df['Open'])]
+    if not bullish_blocks.empty:
+        low = bullish_blocks['Low'].min()
+        high = bullish_blocks['High'].max()
+        return {"low": low, "high": high}
+    if not bearish_blocks.empty:
+        low = bearish_blocks['Low'].min()
+        high = bearish_blocks['High'].max()
+        return {"low": low, "high": high}
+    return None
+
+# ==================================================
 # TIMEZONE
 # ==================================================
 def to_tr_timezone(dt):
