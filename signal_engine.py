@@ -299,3 +299,5 @@ def process_signals(item, market_open=True):
         combined["success"] = combined.get("success", False)
         return [combined]
     return []
+
+scan_strong_stocks = process_signals
