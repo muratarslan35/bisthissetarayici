@@ -135,8 +135,8 @@ body.light header{background:#e9ecff}
 
 <div class="filters" id="filters">
   <label><input type="checkbox" value="favorites"> ⭐ Favoriler</label>
-  <label><input type="checkbox" value="strong_buy" checked> 💚 Güçlü AL</label>
-  <label><input type="checkbox" value="watch" checked> 👀 Takip Et</label>
+  <label><input type="checkbox" value="strong_buy"> 💚 Güçlü AL</label>
+  <label><input type="checkbox" value="watch"> 👀 Takip Et</label>
   <label><input type="checkbox" value="success"> ✅ Başarılı Sinyaller</label>
   <label><input type="checkbox" value="kombine"> Kombine</label>
   <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
@@ -248,7 +248,7 @@ function render(){
         `:""}
         ${d.support?`<span>🟢 Destek: ${d.support}</span>`:""}
         ${d.resistance?`<span>🔴 Direnç: ${d.resistance}</span>`:""}
-        ${d.type==="ob"?`<span>🟦 OB</span>`:""}
+        ${d.type==="ob"?`<span>💰 OB</span>`:""}
       </div>
       ${trendBarHTML(d)}
     `
