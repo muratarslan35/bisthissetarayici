@@ -86,7 +86,6 @@ def fetch_timeframe_indicators(df, symbol=None, prev=None):
         return None
 
     close = df["Close"].copy()
-
     live = None
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
@@ -177,7 +176,6 @@ def fetch_one_symbol(sym):
     df_1d = yf_download_safe(sym, "120d", "1d")
 
     global _prev_1h, _prev_4h
-
     prev_1h = _prev_1h.get(symbol)
     prev_4h = _prev_4h.get(symbol)
 
@@ -188,9 +186,6 @@ def fetch_one_symbol(sym):
         _prev_1h[symbol] = {"close": tf_1h["close"], "rsi_series": tf_1h["rsi_series"], "ema_series": tf_1h["ema_series"]}
     if tf_4h:
         _prev_4h[symbol] = {"close": tf_4h["close"], "rsi_series": tf_4h["rsi_series"], "ema_series": tf_4h["ema_series"]}
-
-    tf_main_1h = tf_1h if tf_1h else {}
-    tf_main_4h = tf_4h if tf_4h else {}
 
     ns, nr = nearest_support_resistance_from_history(df_15m)
 
@@ -206,8 +201,8 @@ def fetch_one_symbol(sym):
         "tf": {
             "5m": fetch_timeframe_indicators(df_5m, sym) if df_5m is not None else None,
             used_tf: tf_main,
-            "1h": tf_main_1h,
-            "4h": tf_main_4h,
+            "1h": tf_1h if tf_1h else {},
+            "4h": tf_4h if tf_4h else {},
             "1d": fetch_timeframe_indicators(df_1d, sym) if df_1d is not None else None
         }
     }
