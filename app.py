@@ -3,14 +3,14 @@ import time
 import json
 import threading
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time as dtime
 from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 from collections import defaultdict
 
 from fetch_bist import fetch_bist_data
 from signal_engine import (
-    safe_process_bist_data,
+    process_signals,
     scan_strong_stocks,
     daily_success_summary,
     format_signal_message
@@ -22,9 +22,6 @@ from fallback_manager import (
     fallback_daily_report_message
 )
 
-# ==================================================
-# ENV
-# ==================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
@@ -33,9 +30,6 @@ CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
 SUCCESS_STORE_FILE = os.path.join(BASE_DIR, "successful_signals.json")
 
-# ==================================================
-# FLASK
-# ==================================================
 app = Flask(__name__)
 
 LATEST_DATA = []
@@ -47,15 +41,9 @@ SUCCESS_SIGNALS = []
 
 data_lock = threading.Lock()
 
-# ==================================================
-# GÜN SONU BAYRAKLARI
-# ==================================================
 DAILY_SENT = {"strong_stocks": False, "summary": False}
-LAST_DAY = None
+LAST_RESET_DATE = None
 
-# ==================================================
-# JSON SAFE
-# ==================================================
 def make_json_safe(obj):
     if isinstance(obj, dict):
         return {k: make_json_safe(v) for k, v in obj.items()}
@@ -65,9 +53,6 @@ def make_json_safe(obj):
         return obj.item()
     return obj
 
-# ==================================================
-# SUCCESS STORE
-# ==================================================
 def load_success_store():
     global SUCCESS_SIGNALS
     if os.path.exists(SUCCESS_STORE_FILE):
@@ -91,9 +76,6 @@ def reset_success_store():
     SUCCESS_SIGNALS = []
     save_success_store()
 
-# ==================================================
-# TELEGRAM
-# ==================================================
 def telegram_send(msg):
     if not TELEGRAM_TOKEN or not CHAT_IDS or not msg:
         return
@@ -107,9 +89,6 @@ def telegram_send(msg):
         except Exception:
             pass
 
-# ==================================================
-# MARKET HOURS
-# ==================================================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
     return (
@@ -118,11 +97,17 @@ def market_open():
         now.hour < 18
     )
 
-# ==================================================
-# BACKGROUND LOOP
-# ==================================================
+def should_daily_reset(now):
+    global LAST_RESET_DATE
+    reset_time = dtime(9, 50)
+    if now.time() >= reset_time:
+        if LAST_RESET_DATE != now.date():
+            LAST_RESET_DATE = now.date()
+            return True
+    return False
+
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY, SUCCESS_SIGNALS
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, SUCCESS_SIGNALS
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
@@ -132,22 +117,22 @@ def background_loop():
     while True:
         try:
             raw_data = fetch_bist_data()
-
             now = to_tr_timezone(datetime.now(timezone.utc))
-            today = now.date()
 
-            if LAST_DAY != today:
+            if should_daily_reset(now):
                 DAILY_SENT = {"strong_stocks": False, "summary": False}
-                LAST_DAY = today
                 reset_success_store()
 
             with data_lock:
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
-            # ================= MARKET AÇIK =================
             if market_open():
-                signals = safe_process_bist_data(raw_data, market_open=True)
+                signals = []
+                for item in raw_data:
+                    s = process_signals(item, market_open=True)
+                    if s:
+                        signals.extend(s)
 
                 grouped = defaultdict(list)
                 for meta in signals:
@@ -167,29 +152,19 @@ def background_loop():
                         continue
                     seen_symbols.add(sym)
 
-                    combined_algorithms = meta.get("combined_algorithms", [meta])
-
-                    success_hit = False
-                    for s in SUCCESS_SIGNALS:
-                        if s["symbol"] == sym:
-                            success_hit = True
-                            break
+                    success_hit = any(s["symbol"] == sym for s in SUCCESS_SIGNALS)
 
                     dashboard_signals.append({
                         "symbol": sym,
-                        "price": meta.get("price") or meta.get("current_price"),
+                        "current_price": meta.get("current_price"),
                         "type": meta.get("type"),
-                        "title": meta.get("title", meta.get("type")),
-                        "direction": meta.get("direction", "up"),
-                        "trend_strength": meta.get("trend_strength", meta.get("strength", 50)),
-                        "support": meta.get("support"),
-                        "resistance": meta.get("resistance"),
-                        "signal_type": meta.get("type"),
-                        "current_price": meta.get("price") or meta.get("current_price"),
                         "rsi": meta.get("rsi"),
-                        "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
-                        "details": meta,
-                        "combined_algorithms": combined_algorithms,
+                        "ema_trend": meta.get("ema_trend"),
+                        "volume": meta.get("volume"),
+                        "volume_avg": meta.get("volume_avg"),
+                        "action": meta.get("action"),
+                        "time": meta.get("time"),
+                        "combined_algorithms": meta.get("combined_algorithms", []),
                         "success": success_hit
                     })
 
@@ -203,7 +178,6 @@ def background_loop():
                             SUCCESS_SIGNALS.append(s)
                             save_success_store()
 
-            # ================= MARKET KAPALI =================
             else:
                 if not DAILY_SENT["strong_stocks"]:
                     strong = scan_strong_stocks(raw_data)
@@ -218,7 +192,7 @@ def background_loop():
                     summary = daily_success_summary(include_details=True, max_failures=0)
                     if summary:
                         lines = [
-                            f"📊 GÜN SONU BAŞARI ÖZETİ",
+                            "📊 GÜN SONU BAŞARI ÖZETİ",
                             f"Tarih: {summary['date']}",
                             f"Toplam Başarılı: {summary['hit']} / Toplam Sinyal: {summary['total']}",
                             f"Başarı Oranı: %{summary['success_rate']:.2f}",
@@ -226,7 +200,9 @@ def background_loop():
                             "Başarılı Sinyaller:"
                         ]
                         for s in summary.get("success_signals", []):
-                            lines.append(f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}")
+                            lines.append(
+                                f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}"
+                            )
                         telegram_send("\n".join(lines))
                     DAILY_SENT["summary"] = True
 
@@ -241,14 +217,8 @@ def background_loop():
 
         time.sleep(60)
 
-# ==================================================
-# THREAD
-# ==================================================
 threading.Thread(target=background_loop, daemon=True).start()
 
-# ==================================================
-# API
-# ==================================================
 @app.route("/api")
 def api():
     with data_lock:
@@ -264,8 +234,5 @@ def api():
 def dashboard():
     return send_from_directory("static", "dashboard.html")
 
-# ==================================================
-# RUN
-# ==================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
