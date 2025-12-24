@@ -43,6 +43,12 @@ SYSTEM_STARTED = False
 data_lock = threading.Lock()
 
 # ==================================================
+# GÜN SONU BAYRAKLARI
+# ==================================================
+DAILY_SENT = {"strong_stocks": False, "summary": False}
+LAST_DAY = None
+
+# ==================================================
 # JSON SAFE
 # ==================================================
 def make_json_safe(obj):
@@ -85,7 +91,7 @@ def market_open():
 # BACKGROUND LOOP
 # ==================================================
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
@@ -93,6 +99,14 @@ def background_loop():
     while True:
         try:
             raw_data = fetch_bist_data()
+
+            now = to_tr_timezone(datetime.now(timezone.utc))
+            today = now.date()
+
+            # Gün değiştiyse bayrakları sıfırla
+            if LAST_DAY != today:
+                DAILY_SENT = {"strong_stocks": False, "summary": False}
+                LAST_DAY = today
 
             with data_lock:
                 LATEST_DATA = raw_data
@@ -146,29 +160,34 @@ def background_loop():
 
             # ================= MARKET KAPALI =================
             else:
-                strong = scan_strong_stocks(raw_data)
-                if strong:
-                    telegram_send(
-                        "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
-                        "\n".join(strong)
-                    )
+                # Güçlü hisseler – sadece 1 kez gönder
+                if not DAILY_SENT["strong_stocks"]:
+                    strong = scan_strong_stocks(raw_data)
+                    if strong:
+                        telegram_send(
+                            "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
+                            "\n".join(strong)
+                        )
+                    DAILY_SENT["strong_stocks"] = True
 
-                # ============= GÜN SONU BAŞARI ÖZETİ =============
-                summary = daily_success_summary(include_details=True, max_failures=0)  # Başarısızları dahil etme
-                if summary:
-                    lines = [
-                        f"📊 GÜN SONU BAŞARI ÖZETİ",
-                        f"Tarih: {summary['date']}",
-                        f"Toplam Başarılı: {summary['hit']} / Toplam Sinyal: {summary['total']}",
-                        f"Başarı Oranı: %{summary['success_rate']:.2f}",
-                        "",
-                        "Başarılı Sinyaller:"
-                    ]
-                    for s in summary.get("success_signals", []):
-                        lines.append(f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}")
+                # Gün sonu başarı özeti – sadece 1 kez gönder
+                if not DAILY_SENT["summary"]:
+                    summary = daily_success_summary(include_details=True, max_failures=0)
+                    if summary:
+                        lines = [
+                            f"📊 GÜN SONU BAŞARI ÖZETİ",
+                            f"Tarih: {summary['date']}",
+                            f"Toplam Başarılı: {summary['hit']} / Toplam Sinyal: {summary['total']}",
+                            f"Başarı Oranı: %{summary['success_rate']:.2f}",
+                            "",
+                            "Başarılı Sinyaller:"
+                        ]
+                        for s in summary.get("success_signals", []):
+                            lines.append(f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}")
+                        telegram_send("\n".join(lines))
+                    DAILY_SENT["summary"] = True
 
-                    telegram_send("\n".join(lines))
-
+                # Fallback güncelleme
                 updated = fallback_daily_update_if_needed(raw_data)
                 if updated:
                     msg = fallback_daily_report_message()
