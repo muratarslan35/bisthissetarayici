@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import threading
 import requests
 from datetime import datetime, timezone
@@ -30,6 +31,8 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
+SUCCESS_STORE_FILE = os.path.join(BASE_DIR, "successful_signals.json")
+
 # ==================================================
 # FLASK
 # ==================================================
@@ -39,6 +42,8 @@ LATEST_DATA = []
 LATEST_SIGNALS = []
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
+
+SUCCESS_SIGNALS = []
 
 data_lock = threading.Lock()
 
@@ -59,6 +64,32 @@ def make_json_safe(obj):
     elif hasattr(obj, "item"):
         return obj.item()
     return obj
+
+# ==================================================
+# SUCCESS STORE
+# ==================================================
+def load_success_store():
+    global SUCCESS_SIGNALS
+    if os.path.exists(SUCCESS_STORE_FILE):
+        try:
+            with open(SUCCESS_STORE_FILE, "r") as f:
+                SUCCESS_SIGNALS = json.load(f)
+        except Exception:
+            SUCCESS_SIGNALS = []
+    else:
+        SUCCESS_SIGNALS = []
+
+def save_success_store():
+    try:
+        with open(SUCCESS_STORE_FILE, "w") as f:
+            json.dump(SUCCESS_SIGNALS, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+def reset_success_store():
+    global SUCCESS_SIGNALS
+    SUCCESS_SIGNALS = []
+    save_success_store()
 
 # ==================================================
 # TELEGRAM
@@ -91,10 +122,12 @@ def market_open():
 # BACKGROUND LOOP
 # ==================================================
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY, SUCCESS_SIGNALS
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
+
+    load_success_store()
 
     while True:
         try:
@@ -103,10 +136,10 @@ def background_loop():
             now = to_tr_timezone(datetime.now(timezone.utc))
             today = now.date()
 
-            # Gün değiştiyse bayrakları sıfırla
             if LAST_DAY != today:
                 DAILY_SENT = {"strong_stocks": False, "summary": False}
                 LAST_DAY = today
+                reset_success_store()
 
             with data_lock:
                 LATEST_DATA = raw_data
@@ -116,19 +149,16 @@ def background_loop():
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
 
-                # --------- SİNYALLERİ SEMBOL BAZLI TOPLA ---------
                 grouped = defaultdict(list)
                 for meta in signals:
                     sym = meta.get("symbol")
                     if sym:
                         grouped[sym].append(meta)
 
-                # --------- GELİŞMİŞ TELEGRAM MESAJI ---------
                 for symbol, alg_list in grouped.items():
                     msg = format_signal_message(symbol, alg_list)
                     telegram_send(msg)
 
-                # --------- DASHBOARD ---------
                 dashboard_signals = []
                 seen_symbols = set()
                 for meta in signals:
@@ -136,8 +166,15 @@ def background_loop():
                     if sym in seen_symbols:
                         continue
                     seen_symbols.add(sym)
-                    # Tek hisse için birleştirilmiş algoritmalar
+
                     combined_algorithms = meta.get("combined_algorithms", [meta])
+
+                    success_hit = False
+                    for s in SUCCESS_SIGNALS:
+                        if s["symbol"] == sym:
+                            success_hit = True
+                            break
+
                     dashboard_signals.append({
                         "symbol": sym,
                         "price": meta.get("price") or meta.get("current_price"),
@@ -152,15 +189,22 @@ def background_loop():
                         "rsi": meta.get("rsi"),
                         "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
                         "details": meta,
-                        "combined_algorithms": combined_algorithms
+                        "combined_algorithms": combined_algorithms,
+                        "success": success_hit
                     })
 
                 with data_lock:
                     LATEST_SIGNALS = dashboard_signals
 
+                summary = daily_success_summary(include_details=True, max_failures=0)
+                if summary:
+                    for s in summary.get("success_signals", []):
+                        if not any(x["symbol"] == s["symbol"] for x in SUCCESS_SIGNALS):
+                            SUCCESS_SIGNALS.append(s)
+                            save_success_store()
+
             # ================= MARKET KAPALI =================
             else:
-                # Güçlü hisseler – sadece 1 kez gönder
                 if not DAILY_SENT["strong_stocks"]:
                     strong = scan_strong_stocks(raw_data)
                     if strong:
@@ -170,7 +214,6 @@ def background_loop():
                         )
                     DAILY_SENT["strong_stocks"] = True
 
-                # Gün sonu başarı özeti – sadece 1 kez gönder
                 if not DAILY_SENT["summary"]:
                     summary = daily_success_summary(include_details=True, max_failures=0)
                     if summary:
@@ -187,7 +230,6 @@ def background_loop():
                         telegram_send("\n".join(lines))
                     DAILY_SENT["summary"] = True
 
-                # Fallback güncelleme
                 updated = fallback_daily_update_if_needed(raw_data)
                 if updated:
                     msg = fallback_daily_report_message()
@@ -214,7 +256,8 @@ def api():
             "system_active": int(SYSTEM_STARTED),
             "market_open": int(market_open()),
             "last_scan": LAST_SCAN_TS,
-            "signals": LATEST_SIGNALS
+            "signals": LATEST_SIGNALS,
+            "successful_signals": SUCCESS_SIGNALS
         }))
 
 @app.route("/")
