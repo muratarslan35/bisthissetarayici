@@ -305,3 +305,26 @@ scan_strong_stocks = process_signals
 def daily_success_summary():
     today = now_tr().date()
     return successful_signals_store.get(today, {})
+
+def format_signal_message(signal):
+    lines = []
+    symbol = signal.get("symbol")
+    current_price = signal.get("current_price")
+    action = signal.get("action")
+    ema_trend = signal.get("ema_trend")
+    volume_tag = signal.get("volume_tag")
+    volume_badge = signal.get("volume_badge")
+    success = signal.get("success")
+    combined_algorithms = signal.get("combined_algorithms", [])
+
+    lines.append(f"{symbol} | {action} | Fiyat: {current_price}")
+    lines.append(f"EMA Trend: {ema_trend} | Hacim: {volume_tag or '-'} {volume_badge or ''}")
+    if combined_algorithms:
+        lines.append("Algoritmalar:")
+        for alg in combined_algorithms:
+            lines.append(f"  {alg.get('emoji','')} {alg.get('type')} | Güç: {alg.get('strength')} | Action: {alg.get('action')}")
+
+    if success:
+        lines.append("✅ Hedefe ulaşıldı")
+
+    return "\n".join(lines)
