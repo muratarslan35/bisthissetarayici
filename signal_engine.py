@@ -301,3 +301,7 @@ def process_signals(item, market_open=True):
     return []
 
 scan_strong_stocks = process_signals
+
+def daily_success_summary():
+    today = now_tr().date()
+    return successful_signals_store.get(today, {})
