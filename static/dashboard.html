@@ -98,6 +98,7 @@ body.light header{background:#e9ecff}
 .strong-buy{background:#2ecc71;color:#000}
 .watch{background:#f1c40f;color:#000}
 .order_block{background:#3498db}
+.success{background:#9b59b6} /* Başarılı Sinyaller rengi */
 
 .meta{
   font-size:13px;
@@ -136,6 +137,7 @@ body.light header{background:#e9ecff}
   <label><input type="checkbox" value="favorites"> ⭐ Favoriler</label>
   <label><input type="checkbox" value="strong_buy" checked> 💚 Güçlü AL</label>
   <label><input type="checkbox" value="watch" checked> 👀 Takip Et</label>
+  <label><input type="checkbox" value="success"> ✅ Başarılı Sinyaller</label>
   <label><input type="checkbox" value="kombine"> Kombine</label>
   <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
   <label><input type="checkbox" value="pullback"> Pullback</label>
@@ -154,6 +156,7 @@ body.light header{background:#e9ecff}
 
 <script>
 let ALL_SIGNALS=[]
+let SUCCESS_SIGNALS=[]
 let favs=JSON.parse(localStorage.getItem("favs")||"[]")
 
 function toggleTheme(){
@@ -199,6 +202,7 @@ function render(){
     if(f.includes("favorites") && !favs.includes(s.symbol)) return false
     if(f.includes("strong_buy") && !s.combined_algorithms.some(a=>a.action==="GÜÇLÜ AL")) return false
     if(f.includes("watch") && !s.combined_algorithms.some(a=>a.action==="TAKİP ET")) return false
+    if(f.includes("success") && !SUCCESS_SIGNALS.some(a=>a.symbol===s.symbol)) return false
     if(f.includes("pullback") && !s.combined_algorithms.some(a=>["pullback","GÜÇLÜ PULLBACK"].includes(a.type))) return false
     if(f.includes("trend_break") && !s.combined_algorithms.some(a=>a.type==="three_peak")) return false
     if(f.includes("breakout") && !s.combined_algorithms.some(a=>a.type==="resistance_break")) return false
@@ -225,10 +229,13 @@ function render(){
       `<span class="tag ${a.type}">${a.type.toUpperCase()}</span>`
     )
 
+    let successTag = SUCCESS_SIGNALS.some(a=>a.symbol===s.symbol)
+      ? `<span class="tag success">✅ Başarılı</span>` : ""
+
     c.innerHTML=`
       <div class="fav ${favs.includes(s.symbol)?"active":""}" onclick="toggleFav('${s.symbol}')">★</div>
       <b>${s.symbol}</b><br>
-      ${actionTag} ${algTags.join(" ")}
+      ${actionTag} ${algTags.join(" ")} ${successTag}
       <div class="meta">
         <span>⏱️ Sinyal: ${s.time || "-"}</span>
         <span>💰 Fiyat: ${s.current_price ?? "-"}</span>
@@ -260,6 +267,7 @@ async function load(){
   document.getElementById("market").className="badge "+(j.market_open?"green":"red")
 
   ALL_SIGNALS=j.signals||[]
+  SUCCESS_SIGNALS=j.success_signals||[]
   render()
 }
 
