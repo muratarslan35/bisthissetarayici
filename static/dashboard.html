@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
@@ -202,7 +202,7 @@ function render(){
     if(f.includes("pullback") && !s.combined_algorithms.some(a=>["pullback","GÜÇLÜ PULLBACK"].includes(a.type))) return false
     if(f.includes("trend_break") && !s.combined_algorithms.some(a=>a.type==="three_peak")) return false
     if(f.includes("breakout") && !s.combined_algorithms.some(a=>a.type==="resistance_break")) return false
-    if(f.includes("order_block") && !s.combined_algorithms.some(a=>a.type==="order_block")) return false
+    if(f.includes("order_block") && !s.combined_algorithms.some(a=>a.type==="ob")) return false
     if(f.includes("kombine") && !s.combined_algorithms.some(a=>a.type==="kombine")) return false
     if(f.includes("super_kombine") && !s.combined_algorithms.some(a=>a.type==="super_kombine")) return false
     if(f.includes("l2") && !s.combined_algorithms.some(a=>a.type==="l2")) return false
@@ -214,7 +214,7 @@ function render(){
   info.textContent = data.length ? data.length+" adet sinyal" : "Filtrelere uygun sinyal yok."
 
   data.forEach(s=>{
-    const d=s.details||{}
+    const d=s
     const c=document.createElement("div")
     c.className="card"
     let actionTag = s.combined_algorithms.some(a=>a.action==="GÜÇLÜ AL")
@@ -231,7 +231,7 @@ function render(){
       ${actionTag} ${algTags.join(" ")}
       <div class="meta">
         <span>⏱️ Sinyal: ${s.time || "-"}</span>
-        <span>💰 Fiyat: ${s.price ?? "-"}</span>
+        <span>💰 Fiyat: ${s.current_price ?? "-"}</span>
         ${d.rsi!==undefined?`<span>📉 RSI: ${d.rsi}</span>`:""}
         ${(d.ema20&&d.ema50&&d.ema200)?`
           <span>📐 EMA20: ${d.ema20}</span>
@@ -241,7 +241,7 @@ function render(){
         `:""}
         ${d.support?`<span>🟢 Destek: ${d.support}</span>`:""}
         ${d.resistance?`<span>🔴 Direnç: ${d.resistance}</span>`:""}
-        ${d.order_block?`<span>🟦 OB: ${d.order_block}</span>`:""}
+        ${d.type==="ob"?`<span>🟦 OB</span>`:""}
       </div>
       ${trendBarHTML(d)}
     `
