@@ -106,8 +106,11 @@ def should_daily_reset(now):
             return True
     return False
 
+_prev_1h = {}
+_prev_4h = {}
+
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, SUCCESS_SIGNALS
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, SUCCESS_SIGNALS, _prev_1h, _prev_4h
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
@@ -122,6 +125,8 @@ def background_loop():
             if should_daily_reset(now):
                 DAILY_SENT = {"strong_stocks": False, "summary": False}
                 reset_success_store()
+                _prev_1h = {}
+                _prev_4h = {}
 
             with data_lock:
                 LATEST_DATA = raw_data
@@ -152,6 +157,7 @@ def background_loop():
                         continue
                     seen_symbols.add(sym)
 
+                    # Başarılı sinyal kontrolü
                     success_hit = any(s["symbol"] == sym for s in SUCCESS_SIGNALS)
 
                     dashboard_signals.append({
@@ -227,7 +233,7 @@ def api():
             "market_open": int(market_open()),
             "last_scan": LAST_SCAN_TS,
             "signals": LATEST_SIGNALS,
-            "successful_signals": SUCCESS_SIGNALS
+            "success_signals": SUCCESS_SIGNALS
         }))
 
 @app.route("/")
