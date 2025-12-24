@@ -64,8 +64,24 @@ def trend_direction(ema20, ema50, ema200):
             return "📉 AŞAĞI"
     return "➖ YATAY"
 
-def decide_action(strength, rsi, ema_trend):
-    if strength >= 80 and rsi is not None and rsi < 35 and ema_trend == "📈 YUKARI":
+def volume_strength(vol, vol_avg):
+    if not vol or not vol_avg:
+        return None
+    ratio = vol / vol_avg
+    if ratio >= 1.5:
+        return "GÜÇLÜ"
+    if ratio >= 1.0:
+        return "ORTA"
+    return "ZAYIF"
+
+def decide_action(strength, rsi, ema_trend, vol_tag):
+    if (
+        strength >= 80
+        and rsi is not None
+        and rsi < 35
+        and ema_trend == "📈 YUKARI"
+        and vol_tag in ("ORTA", "GÜÇLÜ")
+    ):
         return "GÜÇLÜ AL"
     return "TAKİP ET"
 
@@ -75,6 +91,9 @@ def enrich_meta(item, tf, base):
     ema200 = tf.get("ema200")
     ema_trend = trend_direction(ema20, ema50, ema200)
     rsi = tf.get("rsi")
+    vol = tf.get("volume")
+    vol_avg = tf.get("volume_avg_20")
+    vol_tag = volume_strength(vol, vol_avg)
     today = now_tr().date()
 
     base.update({
@@ -85,10 +104,12 @@ def enrich_meta(item, tf, base):
         "ema50": fmt(ema50),
         "ema200": fmt(ema200),
         "ema_trend": ema_trend,
-        "volume": fmt(tf.get("volume")),
-        "volume_avg": fmt(tf.get("volume_avg_20")),
+        "volume": fmt(vol),
+        "volume_avg": fmt(vol_avg),
+        "volume_tag": vol_tag,
+        "volume_badge": "✅ HACİM ONAYLI" if vol_tag == "GÜÇLÜ" else None,
         "time": now_tr().strftime("%H:%M:%S"),
-        "action": decide_action(base["strength"], rsi, ema_trend),
+        "action": decide_action(base["strength"], rsi, ema_trend, vol_tag),
         "success": success_tracker.get(today, {}).get(item["symbol"], {}).get("hit", False)
     })
 
@@ -122,10 +143,20 @@ def trend_consistency_15m_1h_4h(tf_15m, tf_1h, tf_4h):
         return t1h == "DOWN" and t4h == "DOWN"
     return False
 
+def rsi_confirm_1h_4h(tf1h, tf4h):
+    return (
+        tf1h.get("rsi") is not None
+        and tf4h.get("rsi") is not None
+        and tf1h["rsi"] < 50
+        and tf4h["rsi"] < 50
+    )
+
 def ob_signal(item):
     tf15 = item.get("tf", {}).get("15m", {})
+    tf1h = item.get("tf", {}).get("1h", {})
+    tf4h = item.get("tf", {}).get("4h", {})
     df = tf15.get("df")
-    if df is None:
+    if df is None or not rsi_confirm_1h_4h(tf1h, tf4h):
         return None
     ob = detect_order_block(df)
     if ob and not in_repeat_block(item["symbol"], "ob"):
@@ -206,7 +237,13 @@ def support_resistance_break_signal(item):
     sup, res = nearest_support_resistance_from_history(df)
     if r_break and not in_repeat_block(item["symbol"], "resistance_break"):
         mark_sent(item["symbol"], "resistance_break")
-        return enrich_meta(item, tf15, {"type": "resistance_break", "emoji": "🚧", "strength": 75, "support": fmt(sup), "resistance": fmt(res)})
+        return enrich_meta(item, tf15, {
+            "type": "resistance_break",
+            "emoji": "🚧",
+            "strength": 75,
+            "support": fmt(sup),
+            "resistance": fmt(res)
+        })
 
 def l2_signal(item):
     tf = item.get("tf", {}).get("5m", {})
@@ -254,7 +291,9 @@ def process_signals(item, market_open=True):
                 "action": s.get("action"),
                 "support": s.get("support"),
                 "resistance": s.get("resistance"),
-                "time": s.get("time")
+                "time": s.get("time"),
+                "volume_tag": s.get("volume_tag"),
+                "volume_badge": s.get("volume_badge")
             } for s in signals
         ]
         combined["success"] = combined.get("success", False)
