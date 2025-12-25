@@ -90,10 +90,17 @@ def enrich_meta(item, tf, base):
     vol_tag = volume_strength(vol, vol_avg)
     today = now_tr().date()
 
+    # Farklı zaman dilimleri
+    tf_1h = (item.get("tf") or {}).get("1h") or {}
+    tf_4h = (item.get("tf") or {}).get("4h") or {}
+    tf_1d = (item.get("tf") or {}).get("1d") or {}
+
     base.update({
         "symbol": item.get("symbol"),
         "current_price": fmt(item.get("current_price")),
         "rsi": fmt(rsi),
+        "rsi_1h": fmt(tf_1h.get("rsi")),
+        "rsi_4h": fmt(tf_4h.get("rsi")),
         "ema20": fmt(ema20),
         "ema50": fmt(ema50),
         "ema200": fmt(ema200),
@@ -103,8 +110,16 @@ def enrich_meta(item, tf, base):
         "volume_tag": vol_tag,
         "volume_badge": "✅ HACİM ONAYLI" if vol_tag == "GÜÇLÜ" else None,
         "time": now_tr().strftime("%H:%M:%S"),
-        "action": decide_action(base["strength"], rsi, ema_trend, vol_tag),
-        "success": success_tracker.get(today, {}).get(item.get("symbol"), {}).get("hit", False)
+        "action": decide_action(base.get("strength",0), rsi, ema_trend, vol_tag),
+        "success": success_tracker.get(today, {}).get(item.get("symbol"), {}).get("hit", False),
+        "support_15m": fmt(tf.get("support")),
+        "support_1h": fmt(tf_1h.get("support")),
+        "support_4h": fmt(tf_4h.get("support")),
+        "support_1d": fmt(tf_1d.get("support")),
+        "resistance_15m": fmt(tf.get("resistance")),
+        "resistance_1h": fmt(tf_1h.get("resistance")),
+        "resistance_4h": fmt(tf_4h.get("resistance")),
+        "resistance_1d": fmt(tf_1d.get("resistance"))
     })
 
     success_tracker.setdefault(today, {})
@@ -270,10 +285,18 @@ def process_signals(item, market_open=True):
                 "strength": s.get("strength"),
                 "action": s.get("action"),
                 "support": s.get("support"),
+                "support_1h": s.get("support_1h"),
+                "support_4h": s.get("support_4h"),
+                "support_1d": s.get("support_1d"),
                 "resistance": s.get("resistance"),
-                "time": s.get("time"),
+                "resistance_1h": s.get("resistance_1h"),
+                "resistance_4h": s.get("resistance_4h"),
+                "resistance_1d": s.get("resistance_1d"),
+                "rsi_1h": s.get("rsi_1h"),
+                "rsi_4h": s.get("rsi_4h"),
                 "volume_tag": s.get("volume_tag"),
-                "volume_badge": s.get("volume_badge")
+                "volume_badge": s.get("volume_badge"),
+                "time": s.get("time")
             } for s in signals
         ]
         combined["success"] = combined.get("success", False)
