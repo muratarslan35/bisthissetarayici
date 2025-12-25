@@ -3,7 +3,7 @@ import time
 import json
 import threading
 import requests
-from datetime import datetime, timezone, time as dtime
+from datetime import datetime, timezone, time as dtime, timedelta
 from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 from collections import defaultdict
@@ -16,7 +16,6 @@ from signal_engine import (
     format_signal_message
 )
 from utils import to_tr_timezone
-
 from fallback_manager import (
     fallback_daily_update_if_needed,
     fallback_daily_report_message
@@ -40,9 +39,10 @@ SYSTEM_STARTED = False
 SUCCESS_SIGNALS = []
 
 data_lock = threading.Lock()
-
 DAILY_SENT = {"strong_stocks": False, "summary": False}
 LAST_RESET_DATE = None
+
+sent_signals = {}  # (symbol, type) -> {"time": ..., "strength": ...}
 
 def make_json_safe(obj):
     if isinstance(obj, dict):
@@ -76,14 +76,15 @@ def reset_success_store():
     SUCCESS_SIGNALS = []
     save_success_store()
 
-def telegram_send(msg):
+def telegram_send(msg, strong_increase=False):
     if not TELEGRAM_TOKEN or not CHAT_IDS or not msg:
         return
+    prefix = "GÜÇ ARTIŞI ⚡️⚡️⚡️\n" if strong_increase else ""
     for cid in CHAT_IDS:
         try:
             requests.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={"chat_id": cid, "text": msg},
+                json={"chat_id": cid, "text": prefix + msg},
                 timeout=5
             )
         except Exception:
@@ -110,7 +111,7 @@ _prev_1h = {}
 _prev_4h = {}
 
 def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, SUCCESS_SIGNALS, _prev_1h, _prev_4h
+    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, SUCCESS_SIGNALS, _prev_1h, _prev_4h, sent_signals
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
@@ -127,6 +128,7 @@ def background_loop():
                 reset_success_store()
                 _prev_1h = {}
                 _prev_4h = {}
+                sent_signals = {}
 
             with data_lock:
                 LATEST_DATA = raw_data
@@ -148,7 +150,19 @@ def background_loop():
                 for symbol, alg_list in grouped.items():
                     for meta in alg_list:
                         msg = format_signal_message(meta)
-                        telegram_send(msg)
+
+                        # Güç artışı kontrolü
+                        prev_strength = sent_signals.get((symbol, meta.get("type")), {}).get("strength", 0)
+                        current_strength = meta.get("strength", 0)
+                        strong_increase = current_strength > prev_strength
+
+                        telegram_send(msg, strong_increase=strong_increase)
+
+                        # Gönderilen sinyali hafızaya kaydet
+                        sent_signals[(symbol, meta.get("type"))] = {
+                            "time": datetime.now(),
+                            "strength": current_strength
+                        }
 
                 dashboard_signals = []
                 seen_symbols = set()
@@ -166,6 +180,8 @@ def background_loop():
                         "ema_trend": meta.get("ema_trend"),
                         "volume": meta.get("volume"),
                         "volume_avg": meta.get("volume_avg"),
+                        "volume_tag": meta.get("volume_tag"),
+                        "volume_badge": meta.get("volume_badge"),
                         "action": meta.get("action"),
                         "time": meta.get("time"),
                         "combined_algorithms": meta.get("combined_algorithms", []),
