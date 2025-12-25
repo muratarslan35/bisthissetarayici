@@ -146,8 +146,9 @@ def background_loop():
                         grouped[sym].append(meta)
 
                 for symbol, alg_list in grouped.items():
-                    msg = format_signal_message(symbol, alg_list)
-                    telegram_send(msg)
+                    for meta in alg_list:
+                        msg = format_signal_message(meta)
+                        telegram_send(msg)
 
                 dashboard_signals = []
                 seen_symbols = set()
@@ -156,9 +157,6 @@ def background_loop():
                     if sym in seen_symbols:
                         continue
                     seen_symbols.add(sym)
-
-                    # Başarılı sinyal kontrolü
-                    success_hit = any(s["symbol"] == sym for s in SUCCESS_SIGNALS)
 
                     dashboard_signals.append({
                         "symbol": sym,
@@ -171,13 +169,13 @@ def background_loop():
                         "action": meta.get("action"),
                         "time": meta.get("time"),
                         "combined_algorithms": meta.get("combined_algorithms", []),
-                        "success": success_hit
+                        "success": meta.get("success", False)
                     })
 
                 with data_lock:
                     LATEST_SIGNALS = dashboard_signals
 
-                summary = daily_success_summary(include_details=True, max_failures=0)
+                summary = daily_success_summary()
                 if summary:
                     for s in summary.get("success_signals", []):
                         if not any(x["symbol"] == s["symbol"] for x in SUCCESS_SIGNALS):
@@ -195,17 +193,22 @@ def background_loop():
                     DAILY_SENT["strong_stocks"] = True
 
                 if not DAILY_SENT["summary"]:
-                    summary = daily_success_summary(include_details=True, max_failures=0)
+                    summary = daily_success_summary()
                     if summary:
+                        success_list = summary.get("success_signals", [])
+                        total_signals = len(LATEST_DATA)
+                        hit_signals = len(success_list)
+                        success_rate = (hit_signals / total_signals * 100) if total_signals else 0
+
                         lines = [
                             "📊 GÜN SONU BAŞARI ÖZETİ",
                             f"Tarih: {summary['date']}",
-                            f"Toplam Başarılı: {summary['hit']} / Toplam Sinyal: {summary['total']}",
-                            f"Başarı Oranı: %{summary['success_rate']:.2f}",
+                            f"Toplam Başarılı: {hit_signals} / Toplam Sinyal: {total_signals}",
+                            f"Başarı Oranı: %{success_rate:.2f}",
                             "",
                             "Başarılı Sinyaller:"
                         ]
-                        for s in summary.get("success_signals", []):
+                        for s in success_list:
                             lines.append(
                                 f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}"
                             )
@@ -220,6 +223,8 @@ def background_loop():
 
         except Exception as e:
             print("SCAN ERROR:", e)
+            import traceback
+            traceback.print_exc()
 
         time.sleep(60)
 
