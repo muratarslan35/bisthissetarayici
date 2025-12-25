@@ -62,7 +62,7 @@ body.light header{background:#e9ecff}
 
 .cards{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
   gap:12px;
 }
 .card{
@@ -71,7 +71,7 @@ body.light header{background:#e9ecff}
   padding:12px;
   position:relative;
 }
-.card b{font-size:18px}
+.card b{font-size:20px}
 
 .fav{
   position:absolute;
@@ -99,6 +99,7 @@ body.light header{background:#e9ecff}
 .watch{background:#f1c40f;color:#000}
 .order_block{background:#3498db}
 .success{background:#9b59b6} /* Başarılı Sinyaller rengi */
+.volume_ok{background:#2ecc71;color:#000}
 
 .meta{
   font-size:13px;
@@ -232,23 +233,31 @@ function render(){
     let successTag = SUCCESS_SIGNALS.some(a=>a.symbol===s.symbol)
       ? `<span class="tag success">✅ Başarılı</span>` : ""
 
+    let volumeTag = d.volume_badge ? `<span class="tag volume_ok">${d.volume_badge}</span>` : ""
+
     c.innerHTML=`
       <div class="fav ${favs.includes(s.symbol)?"active":""}" onclick="toggleFav('${s.symbol}')">★</div>
       <b>${s.symbol}</b><br>
-      ${actionTag} ${algTags.join(" ")} ${successTag}
+      <span style="font-size:18px">💰 Fiyat: ${s.current_price ?? "-"}</span><br>
+      ${actionTag} ${volumeTag} ${algTags.join(" ")} ${successTag}
       <div class="meta">
-        <span>⏱️ Sinyal: ${s.time || "-"}</span>
-        <span>💰 Fiyat: ${s.current_price ?? "-"}</span>
-        ${d.rsi!==undefined?`<span>📉 RSI: ${d.rsi}</span>`:""}
+        ${d.rsi!==undefined?`<span>📉 RSI 15m: ${d.rsi}</span>`:""}
+        ${d.tf_1h?.rsi!==undefined?`<span>📉 RSI 1h: ${d.tf_1h.rsi}</span>`:""}
+        ${d.tf_4h?.rsi!==undefined?`<span>📉 RSI 4h: ${d.tf_4h.rsi}</span>`:""}
         ${(d.ema20&&d.ema50&&d.ema200)?`
           <span>📐 EMA20: ${d.ema20}</span>
           <span>📐 EMA50: ${d.ema50}</span>
           <span>📐 EMA200: ${d.ema200}</span>
-          <span>${d.ema_trend}</span>
+          <span>📊 Trend: ${d.ema_trend}</span>
         `:""}
         ${d.support?`<span>🟢 Destek: ${d.support}</span>`:""}
         ${d.resistance?`<span>🔴 Direnç: ${d.resistance}</span>`:""}
-        ${d.type==="ob"?`<span>💰 OB</span>`:""}
+        ${d.resistance_1h?`<span>🔴 Direnç 1h: ${d.resistance_1h}</span>`:""}
+        ${d.resistance_4h?`<span>🔴 Direnç 4h: ${d.resistance_4h}</span>`:""}
+        ${d.resistance_1d?`<span>🔴 Direnç 1d: ${d.resistance_1d}</span>`:""}
+        ${d.support_1h?`<span>🟢 Destek 1h: ${d.support_1h}</span>`:""}
+        ${d.support_4h?`<span>🟢 Destek 4h: ${d.support_4h}</span>`:""}
+        ${d.support_1d?`<span>🟢 Destek 1d: ${d.support_1d}</span>`:""}
       </div>
       ${trendBarHTML(d)}
     `
