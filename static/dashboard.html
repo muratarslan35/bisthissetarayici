@@ -62,7 +62,7 @@ body.light header{background:#e9ecff}
 
 .cards{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
   gap:12px;
 }
 .card{
@@ -70,6 +70,7 @@ body.light header{background:#e9ecff}
   border-radius:12px;
   padding:12px;
   position:relative;
+  word-break: break-word;
 }
 .card b{font-size:20px}
 
@@ -95,6 +96,7 @@ body.light header{background:#e9ecff}
 .l4{background:#f39c12;color:#000}
 .kombine{background:#27ae60}
 .super_kombine{background:#e74c3c}
+.pullback{background:#16a085}
 .strong-buy{background:#2ecc71;color:#000}
 .watch{background:#f1c40f;color:#000}
 .order_block{background:#3498db}
@@ -218,6 +220,9 @@ function render(){
 
   info.textContent = data.length ? data.length+" adet sinyal" : "Filtrelere uygun sinyal yok."
 
+  // En son gelen sinyaller üste
+  data.sort((a,b)=>new Date(b.time)-new Date(a.time))
+
   data.forEach(s=>{
     const d=s
     const c=document.createElement("div")
@@ -242,8 +247,8 @@ function render(){
       ${actionTag} ${volumeTag} ${algTags.join(" ")} ${successTag}
       <div class="meta">
         ${d.rsi!==undefined?`<span>📉 RSI 15m: ${d.rsi}</span>`:""}
-        ${d.tf_1h?.rsi!==undefined?`<span>📉 RSI 1h: ${d.tf_1h.rsi}</span>`:""}
-        ${d.tf_4h?.rsi!==undefined?`<span>📉 RSI 4h: ${d.tf_4h.rsi}</span>`:""}
+        ${d.rsi_1h!==undefined?`<span>📉 RSI 1h: ${d.rsi_1h}</span>`:""}
+        ${d.rsi_4h!==undefined?`<span>📉 RSI 4h: ${d.rsi_4h}</span>`:""}
         ${(d.ema20&&d.ema50&&d.ema200)?`
           <span>📐 EMA20: ${d.ema20}</span>
           <span>📐 EMA50: ${d.ema50}</span>
@@ -252,14 +257,15 @@ function render(){
         `:""}
         ${d.support?`<span>🟢 Destek: ${d.support}</span>`:""}
         ${d.resistance?`<span>🔴 Direnç: ${d.resistance}</span>`:""}
-        ${d.resistance_1h?`<span>🔴 Direnç 1h: ${d.resistance_1h}</span>`:""}
-        ${d.resistance_4h?`<span>🔴 Direnç 4h: ${d.resistance_4h}</span>`:""}
-        ${d.resistance_1d?`<span>🔴 Direnç 1d: ${d.resistance_1d}</span>`:""}
         ${d.support_1h?`<span>🟢 Destek 1h: ${d.support_1h}</span>`:""}
         ${d.support_4h?`<span>🟢 Destek 4h: ${d.support_4h}</span>`:""}
         ${d.support_1d?`<span>🟢 Destek 1d: ${d.support_1d}</span>`:""}
+        ${d.resistance_1h?`<span>🔴 Direnç 1h: ${d.resistance_1h}</span>`:""}
+        ${d.resistance_4h?`<span>🔴 Direnç 4h: ${d.resistance_4h}</span>`:""}
+        ${d.resistance_1d?`<span>🔴 Direnç 1d: ${d.resistance_1d}</span>`:""}
       </div>
       ${trendBarHTML(d)}
+      <span style="font-size:11px;color:var(--muted)">🕒 ${d.time}</span>
     `
     wrap.appendChild(c)
   })
