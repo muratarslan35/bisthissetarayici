@@ -90,7 +90,6 @@ def enrich_meta(item, tf, base):
     vol_tag = volume_strength(vol, vol_avg)
     today = now_tr().date()
 
-    # Farklı zaman dilimleri
     tf_1h = (item.get("tf") or {}).get("1h") or {}
     tf_4h = (item.get("tf") or {}).get("4h") or {}
     tf_1d = (item.get("tf") or {}).get("1d") or {}
@@ -328,6 +327,9 @@ def daily_success_summary(include_details=True, max_failures=0):
     return store
 
 def format_signal_message(signal):
+    """
+    Telegram mesajı için tüm bilgiler alt alta.
+    """
     lines = []
     symbol = signal.get("symbol")
     current_price = signal.get("current_price")
@@ -338,14 +340,16 @@ def format_signal_message(signal):
     success = signal.get("success")
     combined_algorithms = signal.get("combined_algorithms", [])
 
-    lines.append(f"{symbol} | {action} | Fiyat: {current_price}")
-    lines.append(f"EMA Trend: {ema_trend} | Hacim: {volume_tag or '-'} {volume_badge or ''}")
+    lines.append(f"📌 {symbol}")
+    lines.append(f"Fiyat: {current_price}")
+    lines.append(f"EMA Trend: {ema_trend}")
+    lines.append(f"Hacim: {volume_tag or '-'} {volume_badge or ''}")
+    lines.append(f"Genel Action: {action}")
+    
     if combined_algorithms:
-        lines.append("Algoritmalar:")
+        lines.append("Algoritmalar Detayları:")
         for alg in combined_algorithms:
-            lines.append(f"  {alg.get('emoji','')} {alg.get('type')} | Güç: {alg.get('strength')} | Action: {alg.get('action')}")
-
-    if success:
-        lines.append("✅ Hedefe ulaşıldı")
-
-    return "\n".join(lines)
+            lines.append(f"  {alg.get('emoji','')} {alg.get('type')}")
+            lines.append(f"    Güç: {alg.get('strength')}")
+            lines.append(f"    Action: {alg.get('action')}")
+            lines.append(f"    Support: {alg.get('
