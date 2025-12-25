@@ -352,4 +352,4 @@ def format_signal_message(signal):
             lines.append(f"  {alg.get('emoji','')} {alg.get('type')}")
             lines.append(f"    Güç: {alg.get('strength')}")
             lines.append(f"    Action: {alg.get('action')}")
-            lines.append(f"    Support: {alg.get('
+            lines.append(f"    Support: {alg.get('support')}")
