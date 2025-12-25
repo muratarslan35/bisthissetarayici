@@ -3,7 +3,7 @@ import time
 import json
 import threading
 import requests
-from datetime import datetime, timezone, time as dtime, timedelta
+from datetime import datetime, timezone, time as dtime
 from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 from collections import defaultdict
@@ -35,14 +35,17 @@ LATEST_DATA = []
 LATEST_SIGNALS = []
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
-
 SUCCESS_SIGNALS = []
 
 data_lock = threading.Lock()
 DAILY_SENT = {"strong_stocks": False, "summary": False}
 LAST_RESET_DATE = None
-
 sent_signals = {}  # (symbol, type) -> {"time": ..., "strength": ...}
+
+_prev_1h = {}
+_prev_4h = {}
+
+# ----------------- Fonksiyonlar -----------------
 
 def make_json_safe(obj):
     if isinstance(obj, dict):
@@ -107,15 +110,13 @@ def should_daily_reset(now):
             return True
     return False
 
-_prev_1h = {}
-_prev_4h = {}
+# ----------------- Background Loop -----------------
 
 def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, SUCCESS_SIGNALS, _prev_1h, _prev_4h, sent_signals
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
-
     load_success_store()
 
     while True:
@@ -150,19 +151,11 @@ def background_loop():
                 for symbol, alg_list in grouped.items():
                     for meta in alg_list:
                         msg = format_signal_message(meta)
-
-                        # Güç artışı kontrolü
                         prev_strength = sent_signals.get((symbol, meta.get("type")), {}).get("strength", 0)
                         current_strength = meta.get("strength", 0)
                         strong_increase = current_strength > prev_strength
-
                         telegram_send(msg, strong_increase=strong_increase)
-
-                        # Gönderilen sinyali hafızaya kaydet
-                        sent_signals[(symbol, meta.get("type"))] = {
-                            "time": datetime.now(),
-                            "strength": current_strength
-                        }
+                        sent_signals[(symbol, meta.get("type"))] = {"time": datetime.now(), "strength": current_strength}
 
                 dashboard_signals = []
                 seen_symbols = set()
@@ -171,7 +164,6 @@ def background_loop():
                     if sym in seen_symbols:
                         continue
                     seen_symbols.add(sym)
-
                     dashboard_signals.append({
                         "symbol": sym,
                         "current_price": meta.get("current_price"),
@@ -218,7 +210,6 @@ def background_loop():
                         total_signals = len(LATEST_DATA)
                         hit_signals = len(success_list)
                         success_rate = (hit_signals / total_signals * 100) if total_signals else 0
-
                         lines = [
                             "📊 GÜN SONU BAŞARI ÖZETİ",
                             f"Tarih: {summary['date']}",
@@ -228,9 +219,7 @@ def background_loop():
                             "Başarılı Sinyaller:"
                         ]
                         for s in success_list:
-                            lines.append(
-                                f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}"
-                            )
+                            lines.append(f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}")
                         telegram_send("\n".join(lines))
                     DAILY_SENT["summary"] = True
 
@@ -247,7 +236,11 @@ def background_loop():
 
         time.sleep(60)
 
+# ----------------- Thread Başlat -----------------
+
 threading.Thread(target=background_loop, daemon=True).start()
+
+# ----------------- Flask Routes -----------------
 
 @app.route("/api")
 def api():
@@ -264,5 +257,7 @@ def api():
 def dashboard():
     return send_from_directory("static", "dashboard.html")
 
+# ----------------- Flask Run -----------------
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
