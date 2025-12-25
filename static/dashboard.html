@@ -43,7 +43,7 @@ body.light header{background:#e9ecff}
 }
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
-.yellow{background:var(--yellow);color:#000}
+.yellow{background:#f1c40f;color:#000}
 
 .container{padding:16px}
 .filters{
@@ -124,7 +124,7 @@ body.light header{background:#e9ecff}
 }
 .trend-up{background:var(--green)}
 .trend-neutral{background:#777}
-.trend-down{background:var(--red)}
+.trend-down{background:#red}
 </style>
 </head>
 
@@ -162,7 +162,60 @@ body.light header{background:#e9ecff}
 </div>
 
 <script>
-// JS kısmı aynen kalabilir, sadece render() fonksiyonunda dikey yapıya uygun şekilde bilgiler alt alta gösteriliyor
+let lastScan = 0;
+
+// Bildirim izni iste
+if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+}
+
+// Tarama kontrol ve popup bildirimi
+setInterval(async () => {
+    try {
+        const res = await fetch("/api");
+        const data = await res.json();
+        
+        // last_scan değiştiyse yeni tarama var
+        if (data.last_scan > lastScan) {
+            lastScan = data.last_scan;
+
+            // Bildirim gönder
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("Yeni tarama sonuçları geldi");
+            }
+        }
+
+        // Dashboard güncelleme (isteğe bağlı)
+        document.getElementById("sys").textContent = data.system_active ? "Aktif" : "Pasif";
+        document.getElementById("market").textContent = data.market_open ? "Açık" : "Kapalı";
+
+        // Kartları render et
+        const cardsEl = document.getElementById("cards");
+        cardsEl.innerHTML = "";
+        data.signals.forEach(sig => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.innerHTML = `
+                <b>${sig.symbol}</b>
+                <div class="meta">
+                    <span>Fiyat: ${sig.current_price}</span>
+                    <span>RSI: ${sig.rsi}</span>
+                    <span>EMA Trend: ${sig.ema_trend}</span>
+                    <span>Hacim: ${sig.volume}</span>
+                </div>
+            `;
+            cardsEl.appendChild(card);
+        });
+
+    } catch (e) {
+        console.error("API kontrol hatası:", e);
+    }
+}, 10000);
+
+// Tema geçiş fonksiyonu
+function toggleTheme() {
+    document.body.classList.toggle("light");
+}
 </script>
 
 </body>
