@@ -202,10 +202,13 @@ def background_loop():
                 if not DAILY_SENT["strong_stocks"]:
                     strong = scan_strong_stocks(raw_data)
                     if strong:
-                        telegram_send(
-                            "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
-                            "\n".join(strong)
-                        )
+                        strong_msgs = []
+                        for sig in strong:
+                            if isinstance(sig, dict):
+                                strong_msgs.append(format_signal_message(sig))
+                            else:
+                                strong_msgs.append(str(sig))
+                        telegram_send("📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" + "\n\n".join(strong_msgs))
                     DAILY_SENT["strong_stocks"] = True
 
                 if not DAILY_SENT["summary"]:
