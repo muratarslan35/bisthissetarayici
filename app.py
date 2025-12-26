@@ -38,6 +38,7 @@ sent_signal_cache = {}
 
 data_lock = threading.Lock()
 DAILY_SENT = {"strong_stocks": False, "summary": False}
+REPEAT_DELAY = 15 * 60  # 15 dakika
 
 def log(msg):
     print(f"[APP] {msg}", flush=True)
@@ -96,13 +97,6 @@ def telegram_send(message, strong_increase=False):
         except Exception as e:
             log(f"Telegram hata: {e}")
 
-def should_daily_reset(now):
-    # Günlük sıfırlama saat 09:50
-    reset_time = dtime(9, 50)
-    if now.time() >= reset_time:
-        return True
-    return False
-
 def background_loop():
     global LATEST_DATA, LATEST_SIGNALS, LAST_SCAN_TS, SYSTEM_STARTED, sent_signal_cache
 
@@ -118,7 +112,6 @@ def background_loop():
             now = to_tr_timezone(datetime.now(timezone.utc))
             raw_data = fetch_bist_data()
             LAST_SCAN_TS = int(time.time())
-
             log(f"Taranan hisse: {len(raw_data)}")
 
             all_signals = []
@@ -132,16 +125,16 @@ def background_loop():
 
             log(f"Üretilen sinyal: {len(all_signals)}")
 
-            # Günlük reset kontrolü
-            if last_reset_date != now.date() and should_daily_reset(now):
+            # HAFTA İÇİ SABAH 09:40 SIFIRLAMA
+            if now.weekday() < 5 and (last_reset_date != now.date()) and now.time() >= dtime(9,40):
                 last_reset_date = now.date()
                 reset_success_store()
                 sent_signal_cache = {}
                 DAILY_SENT["strong_stocks"] = False
                 DAILY_SENT["summary"] = False
-                log("Günlük başarı sinyalleri sıfırlandı")
+                log("Hafta içi sabah 09:40 sinyaller sıfırlandı")
 
-            # Dashboard payload: tüm alanlar default ile
+            # Dashboard payload: tüm alanlar default ile, kalıcı
             seen = set()
             dashboard_payload = []
             for meta in all_signals:
@@ -172,11 +165,7 @@ def background_loop():
                     }
                     dashboard_payload.append(safe_meta)
 
-            with data_lock:
-                LATEST_DATA = raw_data
-                LATEST_SIGNALS = dashboard_payload
-
-            # Telegram: sadece market açıkken
+            # Telegram: market açıkken
             if market_open():
                 grouped = defaultdict(list)
                 for meta in all_signals:
@@ -185,15 +174,20 @@ def background_loop():
                 for symbol, metas in grouped.items():
                     for meta in metas:
                         key = (symbol, meta["type"])
-                        prev = sent_signal_cache.get(key, {}).get("strength", 0)
+                        prev = sent_signal_cache.get(key, {"strength":0,"time":0})
                         curr = meta.get("strength", 0)
-                        strong = curr > prev
+                        last_sent = prev.get("time", 0)
+                        now_ts = int(time.time())
+                        strong = False
+                        if curr > prev["strength"] or now_ts - last_sent > REPEAT_DELAY:
+                            strong = curr > prev["strength"]
+                            telegram_send(format_signal_message(meta), strong)
+                            sent_signal_cache[key] = {"strength": curr, "time": now_ts}
 
-                        telegram_send(format_signal_message(meta), strong)
-                        sent_signal_cache[key] = {
-                            "strength": curr,
-                            "time": now.isoformat()
-                        }
+            # Dashboard her zaman güncel
+            with data_lock:
+                LATEST_DATA = raw_data
+                LATEST_SIGNALS = dashboard_payload
 
             # Günlük başarılı sinyallerin kaydı
             summary = daily_success_summary()
@@ -208,6 +202,7 @@ def background_loop():
 
         time.sleep(60)
 
+
 threading.Thread(target=background_loop, daemon=True).start()
 
 
@@ -221,6 +216,7 @@ def api():
             "signals": LATEST_SIGNALS,
             "success_signals": SUCCESS_SIGNALS
         }))
+
 
 @app.route("/")
 def dashboard():
