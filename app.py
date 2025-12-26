@@ -32,6 +32,7 @@ LATEST_DATA = []
 LATEST_SIGNALS = []
 SUCCESS_SIGNALS = []
 
+persistent_signals = []  # Dashboard sinyallerini kalıcı tutacak
 LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
 sent_signal_cache = {}
@@ -71,8 +72,9 @@ def save_success_store():
         log(f"Başarı sinyal kaydetme hatası: {e}")
 
 def reset_success_store():
-    global SUCCESS_SIGNALS
+    global SUCCESS_SIGNALS, persistent_signals
     SUCCESS_SIGNALS = []
+    persistent_signals = []
     save_success_store()
 
 def market_open():
@@ -98,7 +100,7 @@ def telegram_send(message, strong_increase=False):
             log(f"Telegram hata: {e}")
 
 def background_loop():
-    global LATEST_DATA, LATEST_SIGNALS, LAST_SCAN_TS, SYSTEM_STARTED, sent_signal_cache
+    global LATEST_DATA, LATEST_SIGNALS, LAST_SCAN_TS, SYSTEM_STARTED, sent_signal_cache, persistent_signals
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU BAŞLATILDI")
@@ -125,7 +127,7 @@ def background_loop():
 
             log(f"Üretilen sinyal: {len(all_signals)}")
 
-            # HAFTA İÇİ SABAH 09:40 SIFIRLAMA
+            # Hafta içi 09:40 reset
             if now.weekday() < 5 and (last_reset_date != now.date()) and now.time() >= dtime(9,40):
                 last_reset_date = now.date()
                 reset_success_store()
@@ -134,62 +136,40 @@ def background_loop():
                 DAILY_SENT["summary"] = False
                 log("Hafta içi sabah 09:40 sinyaller sıfırlandı")
 
-            # Dashboard payload: tüm alanlar default ile, kalıcı
-            seen = set()
-            dashboard_payload = []
+            # Dashboard hafızasını güncelle
             for meta in all_signals:
-                if meta["symbol"] not in seen:
-                    seen.add(meta["symbol"])
-                    safe_meta = {
-                        "symbol": meta.get("symbol", "-"),
-                        "current_price": meta.get("current_price", 0),
-                        "ema_trend": meta.get("ema_trend", "➖"),
-                        "rsi": meta.get("rsi", 0),
-                        "rsi_1h": meta.get("rsi_1h", 0),
-                        "rsi_4h": meta.get("rsi_4h", 0),
-                        "rsi_1h_synthetic": meta.get("rsi_1h_synthetic", 0),
-                        "rsi_4h_synthetic": meta.get("rsi_4h_synthetic", 0),
-                        "volume_tag": meta.get("volume_tag", "-"),
-                        "support_15m": meta.get("support_15m", "-"),
-                        "support_1h": meta.get("support_1h", "-"),
-                        "support_4h": meta.get("support_4h", "-"),
-                        "support_1d": meta.get("support_1d", "-"),
-                        "resistance_15m": meta.get("resistance_15m", "-"),
-                        "resistance_1h": meta.get("resistance_1h", "-"),
-                        "resistance_4h": meta.get("resistance_4h", "-"),
-                        "resistance_1d": meta.get("resistance_1d", "-"),
-                        "action": meta.get("action", "-"),
-                        "success": meta.get("success", False),
-                        "volume_badge": meta.get("volume_badge", None),
-                        "combined_algorithms": meta.get("combined_algorithms", [])
-                    }
-                    dashboard_payload.append(safe_meta)
+                key = meta["symbol"]
+                existing = next((x for x in persistent_signals if x["symbol"] == key), None)
+                if existing:
+                    # Güçlendiğinde güncelle
+                    if meta.get("strength",0) > existing.get("strength",0):
+                        existing.update(meta)
+                else:
+                    persistent_signals.insert(0, meta)  # yeni sinyaller üstte
 
-            # Telegram: market açıkken
+            # Telegram: market açıkken gönder
             if market_open():
                 grouped = defaultdict(list)
                 for meta in all_signals:
                     grouped[meta["symbol"]].append(meta)
 
+                now_ts = int(time.time())
                 for symbol, metas in grouped.items():
                     for meta in metas:
                         key = (symbol, meta["type"])
                         prev = sent_signal_cache.get(key, {"strength":0,"time":0})
-                        curr = meta.get("strength", 0)
-                        last_sent = prev.get("time", 0)
-                        now_ts = int(time.time())
                         strong = False
-                        if curr > prev["strength"] or now_ts - last_sent > REPEAT_DELAY:
-                            strong = curr > prev["strength"]
+                        if meta.get("strength",0) > prev["strength"] or now_ts - prev["time"] > REPEAT_DELAY:
+                            strong = meta.get("strength",0) > prev["strength"]
                             telegram_send(format_signal_message(meta), strong)
-                            sent_signal_cache[key] = {"strength": curr, "time": now_ts}
+                            sent_signal_cache[key] = {"strength": meta.get("strength",0), "time": now_ts}
 
-            # Dashboard her zaman güncel
+            # Dashboard sinyallerini global olarak set et
             with data_lock:
                 LATEST_DATA = raw_data
-                LATEST_SIGNALS = dashboard_payload
+                LATEST_SIGNALS = persistent_signals.copy()
 
-            # Günlük başarılı sinyallerin kaydı
+            # Günlük başarılı sinyaller
             summary = daily_success_summary()
             if summary and summary.get("success_signals"):
                 for s in summary["success_signals"]:
@@ -202,9 +182,7 @@ def background_loop():
 
         time.sleep(60)
 
-
 threading.Thread(target=background_loop, daemon=True).start()
-
 
 @app.route("/api")
 def api():
@@ -217,11 +195,9 @@ def api():
             "success_signals": SUCCESS_SIGNALS
         }))
 
-
 @app.route("/")
 def dashboard():
     return send_from_directory("static", "dashboard.html")
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
