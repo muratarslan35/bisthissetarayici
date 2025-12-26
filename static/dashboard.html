@@ -36,6 +36,7 @@ header{
   background:#11142a;
 }
 body.light header{background:#e9ecff}
+
 .badge{
   padding:4px 10px;
   border-radius:20px;
@@ -46,85 +47,60 @@ body.light header{background:#e9ecff}
 .yellow{background:#f1c40f;color:#000}
 
 .container{padding:16px}
-.filters{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  margin-bottom:12px;
-}
-.filters label{
-  background:var(--card);
-  padding:6px 10px;
-  border-radius:8px;
-  cursor:pointer;
-  font-size:13px;
-}
-
-/* Dikey kart düzeni */
 .cards{
   display:flex;
   flex-direction:column;
-  gap:12px;
+  gap:14px;
 }
+
 .card{
   background:var(--card);
-  border-radius:12px;
-  padding:12px;
-  position:relative;
-  word-break: break-word;
-  width:100%;
-  box-sizing:border-box;
+  border-radius:14px;
+  padding:14px;
 }
-.card b{font-size:20px}
 
-.fav{
-  position:absolute;
-  top:8px;right:10px;
-  cursor:pointer;
-  font-size:18px;
-  opacity:.4;
+h2{
+  margin:0;
+  font-size:20px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
 }
-.fav.active{opacity:1;color:gold}
 
 .tag{
-  display:inline-block;
   padding:2px 8px;
   border-radius:10px;
   font-size:11px;
-  margin-right:4px;
-  margin-bottom:4px;
 }
-
-.l2{background:#2980b9}
-.l3{background:#8e44ad}
-.l4{background:#f39c12;color:#000}
-.kombine{background:#27ae60}
-.super_kombine{background:#e74c3c}
-.pullback{background:#16a085}
-.strong-buy{background:#2ecc71;color:#000}
-.watch{background:#f1c40f;color:#000}
-.order_block{background:#3498db}
-.success{background:#9b59b6} 
+.success{background:#9b59b6}
 .volume_ok{background:#2ecc71;color:#000}
+.watch{background:#f1c40f;color:#000}
+.strong{background:#2ecc71;color:#000}
 
 .meta{
+  margin-top:10px;
   font-size:13px;
-  margin-top:6px;
-  line-height:1.5;
+  line-height:1.6;
 }
-.meta span{display:block;color:var(--muted)}
+.meta span{
+  display:block;
+  color:var(--muted);
+}
 
-.trend-bar{
-  height:6px;
-  border-radius:6px;
-  overflow:hidden;
-  background:#333;
-  margin-top:8px;
-  display:flex;
+.algos{
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,.15);
 }
-.trend-up{background:var(--green)}
-.trend-neutral{background:#777}
-.trend-down{background:#red}
+.algobox{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(255,255,255,.06);
+  font-size:12px;
+}
+.algobox b{font-size:13px}
 </style>
 </head>
 
@@ -139,82 +115,98 @@ body.light header{background:#e9ecff}
 </header>
 
 <div class="container">
-
-<div class="filters" id="filters">
-  <label><input type="checkbox" value="favorites"> ⭐ Favoriler</label>
-  <label><input type="checkbox" value="strong_buy"> 💚 Güçlü AL</label>
-  <label><input type="checkbox" value="watch"> 👀 Takip Et</label>
-  <label><input type="checkbox" value="success"> ✅ Başarılı Sinyaller</label>
-  <label><input type="checkbox" value="kombine"> Kombine</label>
-  <label><input type="checkbox" value="super_kombine"> Süper Kombine</label>
-  <label><input type="checkbox" value="pullback"> Pullback</label>
-  <label><input type="checkbox" value="trend_break"> 3’lü Tepe</label>
-  <label><input type="checkbox" value="breakout"> Direnç Kırılımı</label>
-  <label><input type="checkbox" value="order_block"> OB</label>
-  <label><input type="checkbox" value="l2"> L2</label>
-  <label><input type="checkbox" value="l3"> L3</label>
-  <label><input type="checkbox" value="l4"> L4</label>
-</div>
-
-<div id="info"></div>
-<div class="cards" id="cards"></div>
-
+  <div class="cards" id="cards"></div>
 </div>
 
 <script>
 let lastScan = 0;
 
-// Bildirim izni iste
 if ("Notification" in window && Notification.permission !== "granted") {
-    Notification.requestPermission();
+  Notification.requestPermission();
 }
 
-// Tarama kontrol ve popup bildirimi
 setInterval(async () => {
-    try {
-        const res = await fetch("/api");
-        const data = await res.json();
-        
-        // last_scan değiştiyse yeni tarama var
-        if (data.last_scan > lastScan) {
-            lastScan = data.last_scan;
+  try {
+    const res = await fetch("/api");
+    const data = await res.json();
 
-            // Bildirim gönder
-            if ("Notification" in window && Notification.permission === "granted") {
-                new Notification("Yeni tarama sonuçları geldi");
-            }
-        }
-
-        // Dashboard güncelleme (isteğe bağlı)
-        document.getElementById("sys").textContent = data.system_active ? "Aktif" : "Pasif";
-        document.getElementById("market").textContent = data.market_open ? "Açık" : "Kapalı";
-
-        // Kartları render et
-        const cardsEl = document.getElementById("cards");
-        cardsEl.innerHTML = "";
-        data.signals.forEach(sig => {
-            const card = document.createElement("div");
-            card.className = "card";
-            card.innerHTML = `
-                <b>${sig.symbol}</b>
-                <div class="meta">
-                    <span>Fiyat: ${sig.current_price}</span>
-                    <span>RSI: ${sig.rsi}</span>
-                    <span>EMA Trend: ${sig.ema_trend}</span>
-                    <span>Hacim: ${sig.volume}</span>
-                </div>
-            `;
-            cardsEl.appendChild(card);
-        });
-
-    } catch (e) {
-        console.error("API kontrol hatası:", e);
+    if (data.last_scan > lastScan) {
+      lastScan = data.last_scan;
+      if (Notification.permission === "granted") {
+        new Notification("📡 Yeni tarama sonuçları geldi");
+      }
     }
+
+    document.getElementById("sys").textContent = data.system_active ? "Aktif" : "Pasif";
+    document.getElementById("sys").className = "badge " + (data.system_active ? "green" : "red");
+
+    document.getElementById("market").textContent = data.market_open ? "Açık" : "Kapalı";
+    document.getElementById("market").className = "badge " + (data.market_open ? "green" : "yellow");
+
+    const cards = document.getElementById("cards");
+    cards.innerHTML = "";
+
+    data.signals.forEach(sig => {
+      const div = document.createElement("div");
+      div.className = "card";
+
+      div.innerHTML = `
+        <h2>
+          ${sig.symbol}
+          ${sig.success ? '<span class="tag success">✅ BAŞARILI</span>' : ''}
+          ${sig.volume_badge ? '<span class="tag volume_ok">HACİM</span>' : ''}
+          <span class="tag ${sig.action === 'GÜÇLÜ AL' ? 'strong' : 'watch'}">${sig.action}</span>
+        </h2>
+
+        <div class="meta">
+          <span>💰 Fiyat: ${sig.current_price}</span>
+          <span>📊 Trend: ${sig.ema_trend}</span>
+
+          <span>RSI 15m: ${sig.rsi ?? '-'}</span>
+          <span>RSI 1h: ${sig.rsi_1h ?? '-'} | Hayali: ${sig.rsi_1h_synthetic ?? '-'}</span>
+          <span>RSI 4h: ${sig.rsi_4h ?? '-'} | Hayali: ${sig.rsi_4h_synthetic ?? '-'}</span>
+
+          <span>📈 Hacim: ${sig.volume_tag ?? '-'}</span>
+
+          <span>Destek 15m / 1h / 4h / 1d:
+            ${sig.support_15m ?? '-'} /
+            ${sig.support_1h ?? '-'} /
+            ${sig.support_4h ?? '-'} /
+            ${sig.support_1d ?? '-'}
+          </span>
+
+          <span>Direnç 15m / 1h / 4h / 1d:
+            ${sig.resistance_15m ?? '-'} /
+            ${sig.resistance_1h ?? '-'} /
+            ${sig.resistance_4h ?? '-'} /
+            ${sig.resistance_1d ?? '-'}
+          </span>
+        </div>
+
+        ${sig.combined_algorithms ? `
+        <div class="algos">
+          ${sig.combined_algorithms.map(a => `
+            <div class="algobox">
+              <b>${a.emoji} ${a.type.toUpperCase()}</b>
+              <div>Güç: ${a.strength}</div>
+              <div>RSI 1h / 4h: ${a.rsi_1h ?? '-'} / ${a.rsi_4h ?? '-'}</div>
+              ${a.support ? `<div>Destek: ${a.support}</div>` : ''}
+              ${a.resistance ? `<div>Direnç: ${a.resistance}</div>` : ''}
+            </div>
+          `).join("")}
+        </div>` : ""}
+      `;
+
+      cards.appendChild(div);
+    });
+
+  } catch (e) {
+    console.error("Dashboard hata:", e);
+  }
 }, 10000);
 
-// Tema geçiş fonksiyonu
-function toggleTheme() {
-    document.body.classList.toggle("light");
+function toggleTheme(){
+  document.body.classList.toggle("light");
 }
 </script>
 
