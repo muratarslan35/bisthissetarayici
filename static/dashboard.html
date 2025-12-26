@@ -14,10 +14,20 @@
   --green:#2ecc71;
   --red:#e74c3c;
   --yellow:#f1c40f;
+  --blue:#3498db;
 }
-body{margin:0;font-family:Arial;background:var(--bg);color:var(--text)}
-body.light{--bg:#f4f6ff;--card:#fff;--text:#222;--muted:#666}
-
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+body.light{
+  --bg:#f4f6ff;
+  --card:#ffffff;
+  --text:#222;
+  --muted:#666;
+}
 header{
   padding:12px 16px;
   display:flex;
@@ -27,10 +37,14 @@ header{
 }
 body.light header{background:#e9ecff}
 
-.badge{padding:4px 10px;border-radius:20px;font-size:12px}
+.badge{
+  padding:4px 10px;
+  border-radius:20px;
+  font-size:12px;
+}
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
-.yellow{background:var(--yellow);color:#000}
+.yellow{background:#f1c40f;color:#000}
 
 .container{padding:16px}
 
@@ -38,37 +52,76 @@ body.light header{background:#e9ecff}
   display:flex;
   flex-wrap:wrap;
   gap:8px;
-  margin-bottom:14px;
+  margin-bottom:16px;
 }
-.filters label{
+.filter{
   background:var(--card);
-  padding:6px 10px;
-  border-radius:10px;
-  font-size:12px;
+  padding:6px 12px;
+  border-radius:14px;
   cursor:pointer;
+  font-size:12px;
+  user-select:none;
+  transition:0.2s;
 }
+.filter.active{box-shadow:0 0 5px var(--blue); border:1px solid var(--blue);}
+.filter:hover{opacity:0.8;}
 
-.cards{display:flex;flex-direction:column;gap:14px}
+.cards{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
 
 .card{
   background:var(--card);
   border-radius:14px;
   padding:14px;
+  transition:0.2s;
+}
+.card:hover{transform:scale(1.01);}
+
+h2{
+  margin:0;
+  font-size:20px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
 }
 
-h2{margin:0;font-size:20px;display:flex;flex-wrap:wrap;gap:8px}
-
-.tag{padding:2px 8px;border-radius:10px;font-size:11px}
+.tag{
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:11px;
+}
 .success{background:#9b59b6}
 .volume_ok{background:#2ecc71;color:#000}
 .watch{background:#f1c40f;color:#000}
 .strong{background:#2ecc71;color:#000}
 
-.meta{margin-top:10px;font-size:13px;line-height:1.6}
-.meta span{display:block;color:var(--muted)}
+.meta{
+  margin-top:10px;
+  font-size:13px;
+  line-height:1.6;
+}
+.meta span{
+  display:block;
+  color:var(--muted);
+}
 
-.algos{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15)}
-.algobox{margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.06);font-size:12px}
+.algos{
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,.15);
+}
+.algobox{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(255,255,255,.06);
+  font-size:12px;
+}
+.algobox b{font-size:13px}
 </style>
 </head>
 
@@ -83,85 +136,126 @@ h2{margin:0;font-size:20px;display:flex;flex-wrap:wrap;gap:8px}
 </header>
 
 <div class="container">
-
-  <!-- FİLTRELER -->
-  <div class="filters">
-    <label><input type="checkbox" data-filter="strong"> Güçlü AL</label>
-    <label><input type="checkbox" data-filter="watch"> Takip</label>
-    <label><input type="checkbox" data-filter="success"> Başarılı</label>
-    <label><input type="checkbox" data-filter="volume"> Hacim</label>
-    <label><input type="checkbox" data-filter="kombine"> Kombine</label>
-    <label><input type="checkbox" data-filter="super"> Süper Kombine</label>
-    <label><input type="checkbox" data-filter="ob"> OB</label>
-    <label><input type="checkbox" data-filter="rsi"> RSI</label>
-    <label><input type="checkbox" data-filter="support"> Destek</label>
-    <label><input type="checkbox" data-filter="resistance"> Direnç</label>
-    <label><input type="checkbox" data-filter="break"> Kırılım</label>
-    <label><input type="checkbox" data-filter="triple"> 3’lü Tepe</label>
-    <label><input type="checkbox" data-filter="l2"> L2</label>
-    <label><input type="checkbox" data-filter="l3"> L3</label>
-    <label><input type="checkbox" data-filter="l4"> L4</label>
+  <div class="filters" id="filters">
+    <div class="filter active" data-type="all">Tümü</div>
+    <div class="filter" data-type="strong">GÜÇLÜ AL</div>
+    <div class="filter" data-type="watch">İZLE</div>
+    <div class="filter" data-type="volume">HACİM</div>
+    <div class="filter" data-type="success">BAŞARILI</div>
   </div>
-
   <div class="cards" id="cards"></div>
 </div>
 
 <script>
-let lastScan=0, allSignals=[];
+let lastScan = 0;
+let currentFilter = "all";
+let allSignals = [];
 
-setInterval(async()=>{
-  const res=await fetch("/api");
-  const data=await res.json();
+if ("Notification" in window && Notification.permission !== "granted") {
+  Notification.requestPermission();
+}
 
-  const sys=document.getElementById("sys");
-  sys.textContent=data.system_active?"Aktif":"Pasif";
-  sys.className="badge "+(data.system_active?"green":"red");
-
-  const m=document.getElementById("market");
-  m.textContent=data.market_open?"Açık":"Kapalı";
-  m.className="badge "+(data.market_open?"green":"yellow");
-
-  allSignals=data.signals;
-  render();
-},10000);
-
-document.querySelectorAll(".filters input").forEach(i=>{
-  i.addEventListener("change",render);
+document.querySelectorAll(".filter").forEach(f=>{
+  f.addEventListener("click",()=>{
+    currentFilter=f.dataset.type;
+    document.querySelectorAll(".filter").forEach(ff=>ff.classList.remove("active"));
+    f.classList.add("active");
+    renderCards();
+  });
 });
 
-function render(){
-  const active=[...document.querySelectorAll(".filters input:checked")].map(i=>i.dataset.filter);
-  const cards=document.getElementById("cards");
-  cards.innerHTML="";
+function renderCards(){
+  const cardsEl=document.getElementById("cards");
+  cardsEl.innerHTML="";
+  let filtered = allSignals;
+  if(currentFilter==="strong"){
+    filtered = allSignals.filter(s=>s.action==="GÜÇLÜ AL");
+  }else if(currentFilter==="watch"){
+    filtered = allSignals.filter(s=>s.action!=="GÜÇLÜ AL");
+  }else if(currentFilter==="volume"){
+    filtered = allSignals.filter(s=>s.volume_badge);
+  }else if(currentFilter==="success"){
+    filtered = allSignals.filter(s=>s.success);
+  }
 
-  allSignals.filter(s=>{
-    return active.every(f=>{
-      if(f==="strong") return s.action==="GÜÇLÜ AL";
-      if(f==="watch") return s.action!=="GÜÇLÜ AL";
-      if(f==="success") return s.success;
-      if(f==="volume") return s.volume_badge;
-      if(f==="kombine") return s.combined_algorithms?.length;
-      if(f==="super") return s.super_combined;
-      if(f==="ob") return s.has_ob;
-      if(f==="rsi") return s.rsi;
-      if(f==="support") return s.support_15m;
-      if(f==="resistance") return s.resistance_15m;
-      if(f==="break") return s.breakout;
-      if(f==="triple") return s.triple_top;
-      if(f==="l2") return s.l2;
-      if(f==="l3") return s.l3;
-      if(f==="l4") return s.l4;
-      return true;
-    });
-  }).forEach(sig=>{
-    const d=document.createElement("div");
-    d.className="card";
-    d.innerHTML=`<h2>${sig.symbol}</h2>`;
-    cards.appendChild(d);
+  filtered.forEach(sig=>{
+    const div=document.createElement("div");
+    div.className="card";
+    div.innerHTML=`
+      <h2>
+        ${sig.symbol}
+        ${sig.success?'<span class="tag success">✅ BAŞARILI</span>':''}
+        ${sig.volume_badge?'<span class="tag volume_ok">HACİM</span>':''}
+        <span class="tag ${sig.action==="GÜÇLÜ AL"?"strong":"watch"}">${sig.action}</span>
+      </h2>
+
+      <div class="meta">
+        <span>💰 Fiyat: ${sig.current_price}</span>
+        <span>📊 Trend: ${sig.ema_trend}</span>
+
+        <span>RSI 15m: ${sig.rsi??'-'}</span>
+        <span>RSI 1h: ${sig.rsi_1h??'-'} | Hayali: ${sig.rsi_1h_synthetic??'-'}</span>
+        <span>RSI 4h: ${sig.rsi_4h??'-'} | Hayali: ${sig.rsi_4h_synthetic??'-'}</span>
+
+        <span>📈 Hacim: ${sig.volume_tag??'-'}</span>
+
+        <span>Destek 15m / 1h / 4h / 1d:
+          ${sig.support_15m??'-'} /
+          ${sig.support_1h??'-'} /
+          ${sig.support_4h??'-'} /
+          ${sig.support_1d??'-'}
+        </span>
+
+        <span>Direnç 15m / 1h / 4h / 1d:
+          ${sig.resistance_15m??'-'} /
+          ${sig.resistance_1h??'-'} /
+          ${sig.resistance_4h??'-'} /
+          ${sig.resistance_1d??'-'}
+        </span>
+      </div>
+
+      ${sig.combined_algorithms?`
+      <div class="algos">
+        ${sig.combined_algorithms.map(a=>`
+          <div class="algobox">
+            <b>${a.emoji} ${a.type.toUpperCase()}</b>
+            <div>Güç: ${a.strength}</div>
+            <div>RSI 1h / 4h: ${a.rsi_1h??'-'} / ${a.rsi_4h??'-'}</div>
+            ${a.support?`<div>Destek: ${a.support}</div>`:''}
+            ${a.resistance?`<div>Direnç: ${a.resistance}</div>`:''}
+          </div>
+        `).join('')}
+      </div>`:''}
+    `;
+    cardsEl.appendChild(div);
   });
 }
 
-function toggleTheme(){document.body.classList.toggle("light")}
+setInterval(async()=>{
+  try{
+    const res=await fetch("/api");
+    const data=await res.json();
+
+    if(data.last_scan>lastScan){
+      lastScan=data.last_scan;
+      allSignals=data.signals;
+      renderCards();
+
+      if(Notification.permission==="granted"){
+        new Notification("📡 Yeni tarama sonuçları geldi");
+      }
+    }
+
+    document.getElementById("sys").textContent=data.system_active?"Aktif":"Pasif";
+    document.getElementById("sys").className="badge "+(data.system_active?"green":"red");
+
+    document.getElementById("market").textContent=data.market_open?"Açık":"Kapalı";
+    document.getElementById("market").className="badge "+(data.market_open?"green":"yellow");
+
+  }catch(e){console.error("Dashboard hata:",e);}
+},10000);
+
+function toggleTheme(){document.body.classList.toggle("light");}
 </script>
 
 </body>
