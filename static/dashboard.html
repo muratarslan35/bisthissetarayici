@@ -45,7 +45,9 @@ body.light header{background:#e9ecff}
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
 .yellow{background:#f1c40f;color:#000}
+
 .container{padding:16px}
+
 .filters{
   display:flex;
   flex-wrap:wrap;
@@ -63,11 +65,13 @@ body.light header{background:#e9ecff}
 }
 .filter.active{box-shadow:0 0 5px var(--blue); border:1px solid var(--blue);}
 .filter:hover{opacity:0.8;}
+
 .cards{
   display:flex;
   flex-direction:column;
   gap:14px;
 }
+
 .card{
   background:var(--card);
   border-radius:14px;
@@ -75,6 +79,7 @@ body.light header{background:#e9ecff}
   transition:0.2s;
 }
 .card:hover{transform:scale(1.01);}
+
 h2{
   margin:0;
   font-size:20px;
@@ -83,6 +88,7 @@ h2{
   align-items:center;
   gap:8px;
 }
+
 .tag{
   padding:2px 8px;
   border-radius:10px;
@@ -92,6 +98,15 @@ h2{
 .volume_ok{background:#2ecc71;color:#000}
 .watch{background:#f1c40f;color:#000}
 .strong{background:#2ecc71;color:#000}
+.favorite{background:#3498db;color:#fff}
+.combined{background:#9b59b6;color:#fff}
+.super_combined{background:#f1c40f;color:#000}
+.l2{background:#1abc9c;color:#000}
+.l3{background:#e67e22;color:#000}
+.l4{background:#c0392b;color:#fff}
+.ob{background:#8e44ad;color:#fff}
+.res_break{background:#e74c3c;color:#fff}
+
 .meta{
   margin-top:10px;
   font-size:13px;
@@ -101,6 +116,7 @@ h2{
   display:block;
   color:var(--muted);
 }
+
 .algos{
   margin-top:12px;
   padding-top:10px;
@@ -134,6 +150,14 @@ h2{
     <div class="filter" data-type="watch">İZLE</div>
     <div class="filter" data-type="volume">HACİM</div>
     <div class="filter" data-type="success">BAŞARILI</div>
+    <div class="filter" data-type="favorite">FAVORİ</div>
+    <div class="filter" data-type="combined">KOMBİNE</div>
+    <div class="filter" data-type="super_combined">SÜPER KOMBİNE</div>
+    <div class="filter" data-type="l2">L2</div>
+    <div class="filter" data-type="l3">L3</div>
+    <div class="filter" data-type="l4">L4</div>
+    <div class="filter" data-type="ob">OB</div>
+    <div class="filter" data-type="res_break">DİR. KIRILIMI</div>
   </div>
   <div class="cards" id="cards"></div>
 </div>
@@ -160,14 +184,32 @@ function renderCards(){
   const cardsEl=document.getElementById("cards");
   cardsEl.innerHTML="";
   let filtered = allSignals;
-  if(currentFilter==="strong"){
-    filtered = allSignals.filter(s=>s.action==="GÜÇLÜ AL");
-  }else if(currentFilter==="watch"){
-    filtered = allSignals.filter(s=>s.action!=="GÜÇLÜ AL");
-  }else if(currentFilter==="volume"){
-    filtered = allSignals.filter(s=>s.volume_badge);
-  }else if(currentFilter==="success"){
-    filtered = allSignals.filter(s=>s.success);
+
+  switch(currentFilter){
+    case "strong":
+      filtered = allSignals.filter(s=>s.action==="GÜÇLÜ AL"); break;
+    case "watch":
+      filtered = allSignals.filter(s=>s.action!=="GÜÇLÜ AL"); break;
+    case "volume":
+      filtered = allSignals.filter(s=>s.volume_badge); break;
+    case "success":
+      filtered = allSignals.filter(s=>s.success); break;
+    case "favorite":
+      filtered = allSignals.filter(s=>s.favorite); break;
+    case "combined":
+      filtered = allSignals.filter(s=>s.combined_algorithms?.length); break;
+    case "super_combined":
+      filtered = allSignals.filter(s=>s.super_combined); break;
+    case "l2":
+      filtered = allSignals.filter(s=>s.l2); break;
+    case "l3":
+      filtered = allSignals.filter(s=>s.l3); break;
+    case "l4":
+      filtered = allSignals.filter(s=>s.l4); break;
+    case "ob":
+      filtered = allSignals.filter(s=>s.ob); break;
+    case "res_break":
+      filtered = allSignals.filter(s=>s.resistance_break); break;
   }
 
   filtered.forEach(sig=>{
@@ -179,25 +221,29 @@ function renderCards(){
         ${sig.success?'<span class="tag success">✅ BAŞARILI</span>':''}
         ${sig.volume_badge?'<span class="tag volume_ok">HACİM</span>':''}
         <span class="tag ${sig.action==="GÜÇLÜ AL"?"strong":"watch"}">${sig.action}</span>
+        ${sig.favorite?'<span class="tag favorite">FAVORİ</span>':''}
+        ${sig.combined_algorithms?.length?'<span class="tag combined">KOMBİNE</span>':''}
+        ${sig.super_combined?'<span class="tag super_combined">SÜPER KOMBİNE</span>':''}
+        ${sig.l2?'<span class="tag l2">L2</span>':''}
+        ${sig.l3?'<span class="tag l3">L3</span>':''}
+        ${sig.l4?'<span class="tag l4">L4</span>':''}
+        ${sig.ob?'<span class="tag ob">OB</span>':''}
+        ${sig.resistance_break?'<span class="tag res_break">DİR. KIRILIMI</span>':''}
       </h2>
 
       <div class="meta">
         <span>💰 Fiyat: ${sig.current_price??'-'}</span>
         <span>📊 Trend: ${sig.ema_trend??'-'}</span>
-
         <span>RSI 15m: ${sig.rsi??'-'}</span>
         <span>RSI 1h: ${sig.rsi_1h??'-'} | Hayali: ${sig.rsi_1h_synthetic??'-'}</span>
         <span>RSI 4h: ${sig.rsi_4h??'-'} | Hayali: ${sig.rsi_4h_synthetic??'-'}</span>
-
         <span>📈 Hacim: ${sig.volume_tag??'-'}</span>
-
         <span>Destek 15m / 1h / 4h / 1d:
           ${sig.support_15m??'-'} /
           ${sig.support_1h??'-'} /
           ${sig.support_4h??'-'} /
           ${sig.support_1d??'-'}
         </span>
-
         <span>Direnç 15m / 1h / 4h / 1d:
           ${sig.resistance_15m??'-'} /
           ${sig.resistance_1h??'-'} /
