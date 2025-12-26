@@ -45,9 +45,7 @@ body.light header{background:#e9ecff}
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
 .yellow{background:#f1c40f;color:#000}
-
 .container{padding:16px}
-
 .filters{
   display:flex;
   flex-wrap:wrap;
@@ -65,13 +63,11 @@ body.light header{background:#e9ecff}
 }
 .filter.active{box-shadow:0 0 5px var(--blue); border:1px solid var(--blue);}
 .filter:hover{opacity:0.8;}
-
 .cards{
   display:flex;
   flex-direction:column;
   gap:14px;
 }
-
 .card{
   background:var(--card);
   border-radius:14px;
@@ -79,7 +75,6 @@ body.light header{background:#e9ecff}
   transition:0.2s;
 }
 .card:hover{transform:scale(1.01);}
-
 h2{
   margin:0;
   font-size:20px;
@@ -88,7 +83,6 @@ h2{
   align-items:center;
   gap:8px;
 }
-
 .tag{
   padding:2px 8px;
   border-radius:10px;
@@ -98,7 +92,6 @@ h2{
 .volume_ok{background:#2ecc71;color:#000}
 .watch{background:#f1c40f;color:#000}
 .strong{background:#2ecc71;color:#000}
-
 .meta{
   margin-top:10px;
   font-size:13px;
@@ -108,7 +101,6 @@ h2{
   display:block;
   color:var(--muted);
 }
-
 .algos{
   margin-top:12px;
   padding-top:10px;
@@ -190,8 +182,8 @@ function renderCards(){
       </h2>
 
       <div class="meta">
-        <span>💰 Fiyat: ${sig.current_price}</span>
-        <span>📊 Trend: ${sig.ema_trend}</span>
+        <span>💰 Fiyat: ${sig.current_price??'-'}</span>
+        <span>📊 Trend: ${sig.ema_trend??'-'}</span>
 
         <span>RSI 15m: ${sig.rsi??'-'}</span>
         <span>RSI 1h: ${sig.rsi_1h??'-'} | Hayali: ${sig.rsi_1h_synthetic??'-'}</span>
@@ -214,12 +206,12 @@ function renderCards(){
         </span>
       </div>
 
-      ${sig.combined_algorithms?`
+      ${sig.combined_algorithms?.length?`
       <div class="algos">
         ${sig.combined_algorithms.map(a=>`
           <div class="algobox">
-            <b>${a.emoji} ${a.type.toUpperCase()}</b>
-            <div>Güç: ${a.strength}</div>
+            <b>${a.emoji??''} ${a.type?.toUpperCase()??''}</b>
+            <div>Güç: ${a.strength??'-'}</div>
             <div>RSI 1h / 4h: ${a.rsi_1h??'-'} / ${a.rsi_4h??'-'}</div>
             ${a.support?`<div>Destek: ${a.support}</div>`:''}
             ${a.resistance?`<div>Direnç: ${a.resistance}</div>`:''}
