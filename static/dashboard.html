@@ -68,7 +68,7 @@ body.light header{background:#e9ecff}
 
 .cards{
   display:flex;
-  flex-direction:column;
+  flex-direction:column-reverse; /* son sinyaller üstte */
   gap:14px;
 }
 
@@ -76,9 +76,9 @@ body.light header{background:#e9ecff}
   background:var(--card);
   border-radius:14px;
   padding:14px;
-  transition:0.2s;
+  transition:0.3s;
 }
-.card:hover{transform:scale(1.01);}
+.card:hover{transform:scale(1.03); box-shadow:0 0 10px rgba(52,152,219,0.5);}
 
 h2{
   margin:0;
@@ -178,33 +178,19 @@ function renderCards(){
   let filtered = allSignals;
 
   switch(currentFilter){
-    case "strong":
-      filtered = allSignals.filter(s=>s.action==="GÜÇLÜ AL"); break;
-    case "watch":
-      filtered = allSignals.filter(s=>s.action!=="GÜÇLÜ AL"); break;
-    case "volume":
-      filtered = allSignals.filter(s=>s.volume_badge); break;
-    case "success":
-      filtered = allSignals.filter(s=>s.success); break;
-    case "favorite":
-      filtered = allSignals.filter(s=>s.favorite); break;
-    case "combined":
-      filtered = allSignals.filter(s=>s.combined_algorithms && s.combined_algorithms.length>0); break;
-    case "super_combined":
-      filtered = allSignals.filter(s=>s.super_combined); break;
-    case "l2":
-      filtered = allSignals.filter(s=>s.l2); break;
-    case "l3":
-      filtered = allSignals.filter(s=>s.l3); break;
-    case "l4":
-      filtered = allSignals.filter(s=>s.l4); break;
-    case "ob":
-      filtered = allSignals.filter(s=>s.ob); break;
-    case "resistance_break":
-      filtered = allSignals.filter(s=>s.resistance_break); break;
+    case "strong": filtered = allSignals.filter(s=>s.action==="GÜÇLÜ AL"); break;
+    case "watch": filtered = allSignals.filter(s=>s.action!=="GÜÇLÜ AL"); break;
+    case "volume": filtered = allSignals.filter(s=>s.volume_badge); break;
+    case "success": filtered = allSignals.filter(s=>s.success); break;
+    case "favorite": filtered = allSignals.filter(s=>s.favorite); break;
+    case "combined": filtered = allSignals.filter(s=>s.combined_algorithms && s.combined_algorithms.length>0); break;
+    case "super_combined": filtered = allSignals.filter(s=>s.super_combined); break;
+    case "l2": filtered = allSignals.filter(s=>s.l2); break;
+    case "l3": filtered = allSignals.filter(s=>s.l3); break;
+    case "l4": filtered = allSignals.filter(s=>s.l4); break;
+    case "ob": filtered = allSignals.filter(s=>s.ob); break;
+    case "resistance_break": filtered = allSignals.filter(s=>s.resistance_break); break;
   }
-
-  filtered.reverse(); // son sinyaller üstte
 
   filtered.forEach(sig=>{
     const div=document.createElement("div");
@@ -215,30 +201,21 @@ function renderCards(){
         ${sig.success?'<span class="tag success">✅ BAŞARILI</span>':''}
         ${sig.volume_badge?'<span class="tag volume_ok">HACİM</span>':''}
         <span class="tag ${sig.action==="GÜÇLÜ AL"?"strong":"watch"}">${sig.action}</span>
+        ${sig.timestamp?`<span class="tag yellow">${sig.timestamp}</span>`:''}
       </h2>
 
       <div class="meta">
         <span>💰 Fiyat: ${sig.current_price}</span>
         <span>📊 Trend: ${sig.ema_trend}</span>
-
         <span>RSI 15m: ${sig.rsi??'-'}</span>
         <span>RSI 1h: ${sig.rsi_1h??'-'} | Hayali: ${sig.rsi_1h_synthetic??'-'}</span>
         <span>RSI 4h: ${sig.rsi_4h??'-'} | Hayali: ${sig.rsi_4h_synthetic??'-'}</span>
-
         <span>📈 Hacim: ${sig.volume_tag??'-'}</span>
-
         <span>Destek 15m / 1h / 4h / 1d:
-          ${sig.support_15m??'-'} /
-          ${sig.support_1h??'-'} /
-          ${sig.support_4h??'-'} /
-          ${sig.support_1d??'-'}
+          ${sig.support_15m??'-'} / ${sig.support_1h??'-'} / ${sig.support_4h??'-'} / ${sig.support_1d??'-'}
         </span>
-
         <span>Direnç 15m / 1h / 4h / 1d:
-          ${sig.resistance_15m??'-'} /
-          ${sig.resistance_1h??'-'} /
-          ${sig.resistance_4h??'-'} /
-          ${sig.resistance_1d??'-'}
+          ${sig.resistance_15m??'-'} / ${sig.resistance_1h??'-'} / ${sig.resistance_4h??'-'} / ${sig.resistance_1d??'-'}
         </span>
       </div>
 
