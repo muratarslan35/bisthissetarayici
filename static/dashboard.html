@@ -179,7 +179,7 @@ function renderCards(){
 
   switch(currentFilter){
     case "strong": filtered = allSignals.filter(s=>s.action==="GÜÇLÜ AL"); break;
-    case "watch": filtered = allSignals.filter(s=>s.action!=="GÜÇLÜ AL"); break;
+    case "watch": filtered = allSignals.filter(s=>s.action==="İZLE"); break;
     case "volume": filtered = allSignals.filter(s=>s.volume_badge); break;
     case "success": filtered = allSignals.filter(s=>s.success); break;
     case "favorite": filtered = allSignals.filter(s=>s.favorite); break;
