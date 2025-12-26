@@ -121,6 +121,9 @@ def background_loop():
                 try:
                     signals = process_signals(item, market_open=market_open())
                     if signals:
+                        # Her sinyale timestamp ekle
+                        for s in signals:
+                            s["timestamp"] = now.strftime("%H:%M:%S")
                         all_signals.extend(signals)
                 except Exception as e:
                     log(f"Sinyal hata {item.get('symbol')}: {e}")
