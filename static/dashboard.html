@@ -68,7 +68,7 @@ body.light header{background:#e9ecff}
 
 .cards{
   display:flex;
-  flex-direction:column-reverse; /* son sinyaller üstte */
+  flex-direction:column; /* dikine */
   gap:14px;
 }
 
@@ -77,8 +77,21 @@ body.light header{background:#e9ecff}
   border-radius:14px;
   padding:14px;
   transition:0.3s;
+  position:relative;
 }
 .card:hover{transform:scale(1.03); box-shadow:0 0 10px rgba(52,152,219,0.5);}
+
+.card .action-tag{
+  position:absolute;
+  top:10px;
+  right:10px;
+  font-weight:bold;
+  font-size:13px;
+  padding:4px 8px;
+  border-radius:12px;
+  background:var(--yellow);
+  color:#000;
+}
 
 h2{
   margin:0;
@@ -116,12 +129,14 @@ h2{
 }
 .algobox{
   margin-top:8px;
-  padding:8px 10px;
+  padding:4px 6px;
   border-radius:10px;
   background:rgba(255,255,255,.06);
   font-size:12px;
+  display:inline-block;
+  margin-right:4px;
 }
-.algobox b{font-size:13px}
+.algobox b{font-size:12px}
 </style>
 </head>
 
@@ -163,6 +178,11 @@ if ("Notification" in window && Notification.permission !== "granted") {
   Notification.requestPermission();
 }
 
+function playSound(){
+  const audio = new Audio("https://www.soundjay.com/button/beep-07.wav");
+  audio.play();
+}
+
 document.querySelectorAll(".filter").forEach(f=>{
   f.addEventListener("click",()=>{
     currentFilter=f.dataset.type;
@@ -195,43 +215,31 @@ function renderCards(){
   filtered.forEach(sig=>{
     const div=document.createElement("div");
     div.className="card";
+
+    // Aksiyon kutusu
+    const actionTag = `<div class="action-tag">${sig.action}</div>`;
+
     div.innerHTML=`
+      ${actionTag}
       <h2>
-        ${sig.symbol}
-        ${sig.success?'<span class="tag success">✅ BAŞARILI</span>':''}
-        ${sig.volume_badge?'<span class="tag volume_ok">HACİM</span>':''}
-        <span class="tag ${sig.action==="GÜÇLÜ AL"?"strong":"watch"}">${sig.action}</span>
+        ${sig.symbol} 
         ${sig.timestamp?`<span class="tag yellow">${sig.timestamp}</span>`:''}
       </h2>
-
       <div class="meta">
-        <span>💰 Fiyat: ${sig.current_price}</span>
-        <span>📊 Trend: ${sig.ema_trend}</span>
-        <span>RSI 15m: ${sig.rsi??'-'}</span>
-        <span>RSI 1h: ${sig.rsi_1h??'-'} | Hayali: ${sig.rsi_1h_synthetic??'-'}</span>
-        <span>RSI 4h: ${sig.rsi_4h??'-'} | Hayali: ${sig.rsi_4h_synthetic??'-'}</span>
+        <span>📊 EMA Trend: ${sig.ema_trend}</span>
+        <span>RSI 1h / 4h: ${sig.rsi_1h??'-'} / ${sig.rsi_4h??'-'}</span>
         <span>📈 Hacim: ${sig.volume_tag??'-'}</span>
-        <span>Destek 15m / 1h / 4h / 1d:
-          ${sig.support_15m??'-'} / ${sig.support_1h??'-'} / ${sig.support_4h??'-'} / ${sig.support_1d??'-'}
-        </span>
-        <span>Direnç 15m / 1h / 4h / 1d:
-          ${sig.resistance_15m??'-'} / ${sig.resistance_1h??'-'} / ${sig.resistance_4h??'-'} / ${sig.resistance_1d??'-'}
-        </span>
+        ${sig.success?'<span class="tag success">✅ BAŞARILI</span>':''}
       </div>
-
       ${sig.combined_algorithms?`
-      <div class="algos">
-        ${sig.combined_algorithms.map(a=>`
-          <div class="algobox">
-            <b>${a.emoji} ${a.type.toUpperCase()}</b>
-            <div>Güç: ${a.strength}</div>
-            <div>RSI 1h / 4h: ${a.rsi_1h??'-'} / ${a.rsi_4h??'-'}</div>
-            ${a.support?`<div>Destek: ${a.support}</div>`:''}
-            ${a.resistance?`<div>Direnç: ${a.resistance}</div>`:''}
-          </div>
-        `).join('')}
-      </div>`:''}
+        <div class="algos">
+          ${sig.combined_algorithms.map(a=>`<div class="algobox"><b>${a.type}</b></div>`).join('')}
+        </div>`:''}
     `;
+
+    // Güçlü Al geldiğinde sesli popup
+    if(sig.action==="GÜÇLÜ AL") playSound();
+
     cardsEl.appendChild(div);
   });
 }
@@ -245,10 +253,6 @@ setInterval(async()=>{
       lastScan=data.last_scan;
       allSignals=data.signals;
       renderCards();
-
-      if(Notification.permission==="granted"){
-        new Notification("📡 Yeni tarama sonuçları geldi");
-      }
     }
 
     document.getElementById("sys").textContent=data.system_active?"Aktif":"Pasif";
@@ -258,7 +262,7 @@ setInterval(async()=>{
     document.getElementById("market").className="badge "+(data.market_open?"green":"yellow");
 
   }catch(e){console.error("Dashboard hata:",e);}
-},10000);
+},5000);
 
 function toggleTheme(){document.body.classList.toggle("light");}
 </script>
