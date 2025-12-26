@@ -259,3 +259,58 @@ def scan_strong_stocks(items):
         update_success(item["symbol"], item["current_price"])
         results.extend(process_signals(item))
     return results
+
+def daily_success_summary():
+    today = now_tr().date()
+    store = successful_signals_store.get(today, {})
+
+    success_list = []
+    for v in store.values():
+        success_list.append({
+            "symbol": v["symbol"],
+            "algorithm": v["algorithm"],
+            "time": v["time"],
+            "price": v["entry"]
+        })
+
+    message = (
+        f"📊 GÜNLÜK BAŞARI ÖZETİ\n"
+        f"Tarih: {today}\n"
+        f"Başarılı Sinyal: {len(success_list)}"
+    )
+
+    return {
+        "date": str(today),
+        "hit": len(success_list),
+        "total": len(store),
+        "success_rate": (len(success_list) / len(store) * 100) if store else 0,
+        "success_signals": success_list,
+        "message": message
+    }
+
+def scan_strong_stocks(items):
+    results = []
+    for item in items:
+        sigs = process_signals(item, market_open=False)
+        if sigs:
+            results.extend(sigs)
+    return results
+
+def format_signal_message(signal):
+    lines = [
+        f"📌 {signal.get('symbol')}",
+        f"💰 Fiyat: {signal.get('current_price')}",
+        f"📊 Trend: {signal.get('ema_trend')}",
+        f"📈 Hacim: {signal.get('volume_tag') or '-'}",
+        f"🎯 Aksiyon: {signal.get('action')}",
+        ""
+    ]
+
+    for alg in signal.get("combined_algorithms", []):
+        lines.append(
+            f"{alg.get('emoji')} {alg.get('type').upper()} | "
+            f"Güç: {alg.get('strength')} | "
+            f"RSI 1h/4h: {alg.get('rsi_1h')}/{alg.get('rsi_4h')}"
+        )
+
+    return "\n".join(lines)
