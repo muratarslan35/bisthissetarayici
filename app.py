@@ -173,7 +173,8 @@ def background_loop():
             now = to_tr_timezone(datetime.now(timezone.utc))
 
             raw_data = fetch_bist_data()
-            LAST_SCAN_TS = int(time.time())
+            # TR saati timestamp olarak sakla
+            LAST_SCAN_TS = int(now.timestamp())
             log(f"Taranan hisse: {len(raw_data)}")
 
             all_signals = []
@@ -282,7 +283,7 @@ def api():
         return jsonify(make_json_safe({
             "system_active": SYSTEM_STARTED,
             "market_open": market_open(),
-            "last_scan": LAST_SCAN_TS,
+            "last_scan": to_tr_timezone(datetime.fromtimestamp(LAST_SCAN_TS)).strftime("%H:%M:%S"),
             "signals": LATEST_SIGNALS,
             "success_signals": SUCCESS_SIGNALS
         }))
