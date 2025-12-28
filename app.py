@@ -10,7 +10,7 @@ from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 
 from fetch_bist import fetch_bist_data
-from signal_engine import process_signals, daily_success_summary
+from signal_engine import process_signals
 from utils import to_tr_timezone
 
 # =========================
@@ -60,32 +60,6 @@ def make_json_safe(obj):
     return obj
 
 # =========================
-# TELEGRAM MESAJ FORMAT
-# =========================
-def format_signal_message(s):
-    lines = [f"📊 {s.get('symbol', '?')}"]
-    lines.append(f"Fiyat: {s.get('current_price', '-')}")
-    lines.append(f"Güç Skoru: {s.get('strength', 0)}/10")
-    lines.append(f"Trend: {s.get('ema_trend', '-')}")
-    lines.append(f"RSI 1H: {s.get('rsi_1h', '-')}")
-    lines.append(f"RSI 4H: {s.get('rsi_4h', '-')}")
-    lines.append(f"Direnç 1H: {s.get('resistance_1h', '-')}")
-    lines.append(f"Direnç 4H: {s.get('resistance_4h', '-')}")
-    
-    algos = ", ".join(s.get("algorithms", []))
-    if algos:
-        lines.append(f"Sinyal Türü: {algos}")
-    
-    added_algos = s.get("added_algorithms", [])
-    if added_algos:
-        lines.append(f"⚡ Güçlenen algoritmalar: {', '.join(added_algos)}")
-    
-    if s.get("success"):
-        lines.append("🏆 BAŞARILI SİNYAL")
-    
-    return "\n".join(lines)
-
-# =========================
 # SUCCESS STORE
 # =========================
 def load_success_store():
@@ -122,6 +96,44 @@ def market_open():
         ((now.hour > 9) or (now.hour == 9 and now.minute >= 55)) and
         now.hour < 18
     )
+
+# =========================
+# TELEGRAM MESAJ FORMAT
+# =========================
+def format_signal_message(s):
+    lines = [f"📊 {s.get('symbol', '?')}"]
+    lines.append(f"Fiyat: {s.get('current_price', '-')}")
+    lines.append(f"Güç Skoru: {s.get('strength', 0)}/10")
+    lines.append(f"Trend: {s.get('ema_trend', '-')}")
+    lines.append(f"RSI 1H: {s.get('rsi_1h', '-')}")
+    lines.append(f"RSI 4H: {s.get('rsi_4h', '-')}")
+    lines.append(f"Direnç 1H: {s.get('resistance_1h', '-')}")
+    lines.append(f"Direnç 4H: {s.get('resistance_4h', '-')}")
+    
+    algos = ", ".join(s.get("algorithms", []))
+    if algos:
+        lines.append(f"Sinyal Türü: {algos}")
+    
+    added_algos = s.get("added_algorithms", [])
+    if added_algos:
+        lines.append(f"⚡ Güçlenen algoritmalar: {', '.join(added_algos)}")
+    
+    if s.get("success"):
+        lines.append("🏆 BAŞARILI SİNYAL")
+    
+    return "\n".join(lines)
+
+# =========================
+# DAILY SUCCESS SUMMARY
+# =========================
+def daily_success_summary():
+    """
+    Günlük başarılı sinyalleri döndürür.
+    """
+    global SUCCESS_SIGNALS
+    if SUCCESS_SIGNALS:
+        return {"success_signals": SUCCESS_SIGNALS.copy()}
+    return None
 
 # =========================
 # TELEGRAM
