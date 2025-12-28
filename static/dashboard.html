@@ -130,6 +130,8 @@ h2{margin:0;font-size:20px}
 let allSignals=[];
 let currentFilter="all";
 let favorites=JSON.parse(localStorage.getItem("favorites")||"[]");
+let lastScanTime = null; // timestamp (ms)
+let scanDisplay = document.getElementById("scan");
 
 function toggleFavorite(symbol){
   favorites=favorites.includes(symbol)
@@ -213,28 +215,36 @@ function render(){
   });
 }
 
-async function update(){
-  const r=await fetch("/api");
-  const d=await r.json();
-  allSignals=d.signals||[];
-  document.getElementById("sys").textContent=d.system_active?"Aktif":"Kapalı";
-  document.getElementById("sys").className="badge "+(d.system_active?"green":"red");
-  document.getElementById("market").textContent=d.market_open?"Açık":"Kapalı";
-  document.getElementById("market").className="badge "+(d.market_open?"green":"yellow");
+// API verilerini al
+async function updateAPI(){
+  const r = await fetch("/api");
+  const d = await r.json();
+  allSignals = d.signals || [];
+  document.getElementById("sys").textContent = d.system_active ? "Aktif" : "Kapalı";
+  document.getElementById("sys").className = "badge " + (d.system_active ? "green" : "red");
+  document.getElementById("market").textContent = d.market_open ? "Açık" : "Kapalı";
+  document.getElementById("market").className = "badge " + (d.market_open ? "green" : "yellow");
 
-  // Last scan fix: parse "YYYY-MM-DD HH:MM:SS" correctly
-  let lastScanDisplay="--:--:--";
   if(d.last_scan){
-    let dt=new Date(d.last_scan.replace(" ","T"));
-    if(!isNaN(dt)) lastScanDisplay=dt.toLocaleTimeString("tr-TR",{hour12:false});
+    lastScanTime = new Date(d.last_scan.replace(" ","T")).getTime();
   }
-  document.getElementById("scan").textContent=lastScanDisplay;
 
   render();
 }
 
-update();
-setInterval(update,5000);
+// Canlı saniye güncelleme
+function updateClock(){
+  if(lastScanTime){
+    const now = Date.now();
+    const display = new Date(lastScanTime + (Date.now()-lastScanTime)).toLocaleTimeString("tr-TR",{hour12:false});
+    scanDisplay.textContent = display;
+  }
+}
+
+// Başlangıç
+updateAPI();
+setInterval(updateAPI, 5000);   // API verilerini 5 sn'de bir güncelle
+setInterval(updateClock, 1000); // Saat animasyonu her saniye güncelle
 </script>
 </body>
 </html>
