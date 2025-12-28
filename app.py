@@ -34,7 +34,7 @@ LATEST_SIGNALS = []
 SUCCESS_SIGNALS = []
 
 persistent_signals = []   # dashboard hafızası
-LAST_SCAN_TS = 0
+LAST_SCAN_TS = None
 SYSTEM_STARTED = False
 
 sent_signal_cache = {}    # telegram tekrar kontrolü
@@ -171,10 +171,9 @@ def background_loop():
     while True:
         try:
             now = to_tr_timezone(datetime.now(timezone.utc))
+            LAST_SCAN_TS = int(now.timestamp())  # TR timestamp kesin atanıyor
 
             raw_data = fetch_bist_data()
-            # TR saati timestamp olarak sakla
-            LAST_SCAN_TS = int(now.timestamp())
             log(f"Taranan hisse: {len(raw_data)}")
 
             all_signals = []
@@ -213,7 +212,6 @@ def background_loop():
                     (x for x in persistent_signals if x["symbol"] == key),
                     None
                 )
-
                 if existing:
                     if meta.get("strength", 0) > existing.get("strength", 0):
                         existing.update(meta)
@@ -229,17 +227,14 @@ def background_loop():
                     grouped[meta["symbol"]].append(meta)
 
                 now_ts = int(time.time())
-
                 for symbol, metas in grouped.items():
                     for meta in metas:
                         key = (symbol, meta.get("type"))
                         prev = sent_signal_cache.get(key, {"strength": 0, "time": 0})
-
                         send_allowed = (
                             meta.get("strength", 0) > prev["strength"] or
                             now_ts - prev["time"] > REPEAT_DELAY
                         )
-
                         if send_allowed:
                             telegram_send(format_signal_message(meta))
                             sent_signal_cache[key] = {
