@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from fetch_bist import fetch_bist_data
 from signal_engine import (
     process_signals,
-    format_signal_message,
     daily_success_summary
 )
 from utils import to_tr_timezone
@@ -62,6 +61,32 @@ def make_json_safe(obj):
     if hasattr(obj, "item"):
         return obj.item()
     return obj
+
+# =========================
+# TELEGRAM MESAJ FORMAT
+# =========================
+def format_signal_message(s):
+    lines = [f"📊 {s.get('symbol', '?')}"]
+    lines.append(f"Fiyat: {s.get('current_price', '-')}")
+    lines.append(f"Güç Skoru: {s.get('strength', 0)}/10")
+    lines.append(f"Trend: {s.get('ema_trend', '-')}")
+    lines.append(f"RSI 1H: {s.get('rsi_1h', '-')}")
+    lines.append(f"RSI 4H: {s.get('rsi_4h', '-')}")
+    lines.append(f"Direnç 1H: {s.get('resistance_1h', '-')}")
+    lines.append(f"Direnç 4H: {s.get('resistance_4h', '-')}")
+    
+    algos = ", ".join(s.get("algorithms", []))
+    if algos:
+        lines.append(f"Sinyal Türü: {algos}")
+    
+    added_algos = s.get("added_algorithms", [])
+    if added_algos:
+        lines.append(f"⚡ Güçlenen algoritmalar: {', '.join(added_algos)}")
+    
+    if s.get("success"):
+        lines.append("🏆 BAŞARILI SİNYAL")
+    
+    return "\n".join(lines)
 
 # =========================
 # SUCCESS STORE
