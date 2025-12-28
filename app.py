@@ -10,10 +10,7 @@ from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 
 from fetch_bist import fetch_bist_data
-from signal_engine import (
-    process_signals,
-    daily_success_summary
-)
+from signal_engine import process_signals, daily_success_summary
 from utils import to_tr_timezone
 
 # =========================
