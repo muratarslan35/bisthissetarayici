@@ -221,7 +221,15 @@ async function update(){
   document.getElementById("sys").className="badge "+(d.system_active?"green":"red");
   document.getElementById("market").textContent=d.market_open?"Açık":"Kapalı";
   document.getElementById("market").className="badge "+(d.market_open?"green":"yellow");
-  document.getElementById("scan").textContent=new Date(d.last_scan*1000).toLocaleTimeString();
+
+  // Last scan fix: parse "YYYY-MM-DD HH:MM:SS" correctly
+  let lastScanDisplay="--:--:--";
+  if(d.last_scan){
+    let dt=new Date(d.last_scan.replace(" ","T"));
+    if(!isNaN(dt)) lastScanDisplay=dt.toLocaleTimeString("tr-TR",{hour12:false});
+  }
+  document.getElementById("scan").textContent=lastScanDisplay;
+
   render();
 }
 
