@@ -16,127 +16,84 @@
   --yellow:#f1c40f;
   --blue:#3498db;
 }
-body{
-  margin:0;
-  font-family:Arial,Helvetica,sans-serif;
-  background:var(--bg);
-  color:var(--text);
-}
-body.light{
-  --bg:#f4f6ff;
-  --card:#ffffff;
-  --text:#222;
-  --muted:#666;
-}
-header{
-  padding:12px 16px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  background:#11142a;
-}
-body.light header{background:#e9ecff}
-
-.badge{
-  padding:4px 10px;
-  border-radius:20px;
-  font-size:12px;
-}
+body{margin:0;font-family:Arial;background:var(--bg);color:var(--text)}
+header{padding:12px 16px;display:flex;justify-content:space-between;background:#11142a}
+.badge{padding:6px 12px;border-radius:12px;font-size:12px}
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
 .yellow{background:var(--yellow);color:#000}
 
 .container{padding:16px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.filter{background:var(--card);padding:6px 12px;border-radius:14px;font-size:12px;cursor:pointer}
+.filter.active{border:1px solid var(--blue);box-shadow:0 0 6px var(--blue)}
 
-.filters{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  margin-bottom:16px;
-}
-.filter{
-  background:var(--card);
-  padding:6px 12px;
-  border-radius:14px;
-  cursor:pointer;
-  font-size:12px;
-  user-select:none;
-  transition:0.2s;
-}
-.filter.active{box-shadow:0 0 5px var(--blue); border:1px solid var(--blue);}
-.filter:hover{opacity:0.8;}
+.cards{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--card);border-radius:14px;padding:14px;position:relative}
 
-.cards{
-  display:flex;
-  flex-direction:column; /* dikine */
-  gap:14px;
+.action-tag{
+  position:absolute;top:10px;right:10px;
+  padding:4px 8px;border-radius:10px;
+  font-size:12px;font-weight:bold;
+  background:var(--yellow);color:#000
 }
 
-.card{
-  background:var(--card);
-  border-radius:14px;
-  padding:14px;
-  transition:0.3s;
-  position:relative;
+.success-tag{
+  position:absolute;bottom:10px;right:10px;
+  padding:4px 10px;border-radius:12px;
+  font-size:11px;font-weight:bold;
+  background:var(--green);color:#000;
 }
-.card:hover{transform:scale(1.03); box-shadow:0 0 10px rgba(52,152,219,0.5);}
 
-.card .action-tag{
-  position:absolute;
-  top:10px;
-  right:10px;
+.volume-strong{
+  position:absolute;top:10px;left:10px;
+  padding:4px 8px;border-radius:10px;
+  font-size:11px;background:var(--green);color:#000;
   font-weight:bold;
-  font-size:13px;
-  padding:4px 8px;
+}
+
+.institutional-tag{
+  position:absolute;
+  bottom:10px;
+  left:10px;
+  padding:4px 10px;
   border-radius:12px;
-  background:var(--yellow);
+  font-size:11px;
+  font-weight:bold;
+  background:#00cec9;
   color:#000;
 }
 
-h2{
-  margin:0;
-  font-size:20px;
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  gap:8px;
+.fav-btn{
+  position:absolute;top:10px;right:55px;
+  font-size:18px;cursor:pointer;
 }
 
-.tag{
-  padding:2px 8px;
-  border-radius:10px;
-  font-size:11px;
-}
-.success{background:#9b59b6}
-.volume_ok{background:#2ecc71;color:#000}
-.watch{background:#f1c40f;color:#000}
-.strong{background:#2ecc71;color:#000}
+.algo-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.algo-tag{padding:3px 8px;border-radius:10px;font-size:11px;color:#000}
 
-.meta{
-  margin-top:10px;
-  font-size:13px;
-  line-height:1.6;
-}
-.meta span{
-  display:block;
-  color:var(--muted);
-}
+.algo-l2{background:#74b9ff}
+.algo-l3{background:#0984e3}
+.algo-l4{background:#6c5ce7}
+.algo-breakout{background:#fdcb6e}
+.algo-three_peak{background:#fab1a0}
+.algo-ob{background:#55efc4}
+.algo-kombine{background:#2ecc71}
+.algo-super_kombine{background:#e84393}
+.algo-squeeze{background:#81ecec}
+.algo-squeeze_break{background:#d63031}
 
-.algos{
-  margin-top:12px;
-  padding-top:10px;
-  border-top:1px solid rgba(255,255,255,.15);
+h2{margin:0;font-size:20px}
+.price{font-size:13px;color:#aaa;margin-top:2px}
+.meta{margin-top:8px;font-size:13px}
+.meta span{display:block;color:var(--muted)}
+.strength{margin-top:6px;font-size:12px;color:#fff}
+
+.timebox{
+  margin-top:8px;font-size:11px;color:#aaa;
+  display:flex;justify-content:space-between;gap:10px;
 }
-.algobox{
-  margin-top:8px;
-  padding:4px 6px;
-  border-radius:10px;
-  background:rgba(255,255,255,.06);
-  font-size:12px;
-  display:inline-block;
-  margin-right:4px;
-}
-.algobox b{font-size:12px}
+.timebox div{line-height:1.4;text-align:right}
 </style>
 </head>
 
@@ -146,126 +103,130 @@ h2{
   <div>
     Sistem: <span id="sys" class="badge">?</span>
     Piyasa: <span id="market" class="badge">?</span>
+    Son Tarama: <span id="scan" class="badge yellow">--:--:--</span>
   </div>
-  <button onclick="toggleTheme()">🌓</button>
 </header>
 
 <div class="container">
-  <div class="filters" id="filters">
-    <div class="filter active" data-type="all">Tümü</div>
-    <div class="filter" data-type="strong">GÜÇLÜ AL</div>
-    <div class="filter" data-type="watch">İZLE</div>
-    <div class="filter" data-type="volume">HACİM</div>
-    <div class="filter" data-type="success">BAŞARILI</div>
-    <div class="filter" data-type="favorite">FAVORİ</div>
-    <div class="filter" data-type="combined">KOMBİNE</div>
-    <div class="filter" data-type="super_combined">SÜPER KOMBİNE</div>
-    <div class="filter" data-type="l2">L2</div>
-    <div class="filter" data-type="l3">L3</div>
-    <div class="filter" data-type="l4">L4</div>
-    <div class="filter" data-type="ob">OB</div>
-    <div class="filter" data-type="resistance_break">DİRENÇ KIRILIMI</div>
-  </div>
-  <div class="cards" id="cards"></div>
+
+<div class="filters">
+  <div class="filter active" data-type="all">Tümü</div>
+  <div class="filter" data-type="GÜÇLÜ AL">GÜÇLÜ AL</div>
+  <div class="filter" data-type="success">BAŞARILI</div>
+  <div class="filter" data-type="favorite">⭐ FAVORİ</div>
+  <div class="filter" data-type="kombine">KOMBİNE</div>
+  <div class="filter" data-type="super_kombine">SÜPER</div>
+  <div class="filter" data-type="squeeze">🫧 SIKIŞMA</div>
+  <div class="filter" data-type="squeeze_break">💥 KIRILIM</div>
+  <div class="filter" data-type="volume">GÜÇLÜ HACİM</div>
+  <div class="filter" data-type="strengthened">GÜÇLENEN</div>
+  <div class="filter" data-type="institutional">🏦 KURUMSAL</div>
+</div>
+
+<div class="cards" id="cards"></div>
 </div>
 
 <script>
-let lastScan = 0;
-let currentFilter = "all";
-let allSignals = [];
+let allSignals=[];
+let currentFilter="all";
+let favorites=JSON.parse(localStorage.getItem("favorites")||"[]");
 
-if ("Notification" in window && Notification.permission !== "granted") {
-  Notification.requestPermission();
-}
-
-function playSound(){
-  const audio = new Audio("https://www.soundjay.com/button/beep-07.wav");
-  audio.play();
+function toggleFavorite(symbol){
+  favorites=favorites.includes(symbol)
+    ?favorites.filter(x=>x!==symbol)
+    :[...favorites,symbol];
+  localStorage.setItem("favorites",JSON.stringify(favorites));
+  render();
 }
 
 document.querySelectorAll(".filter").forEach(f=>{
-  f.addEventListener("click",()=>{
-    currentFilter=f.dataset.type;
-    document.querySelectorAll(".filter").forEach(ff=>ff.classList.remove("active"));
+  f.onclick=()=>{
+    document.querySelectorAll(".filter").forEach(x=>x.classList.remove("active"));
     f.classList.add("active");
-    renderCards();
-  });
+    currentFilter=f.dataset.type;
+    render();
+  };
 });
 
-function renderCards(){
-  const cardsEl=document.getElementById("cards");
-  cardsEl.innerHTML="";
-  let filtered = allSignals;
+function isInstitutional(s){
+  return s.institutional_entry === true
+    || (s.algorithms||[]).includes("ob");
+}
 
-  switch(currentFilter){
-    case "strong": filtered = allSignals.filter(s=>s.action==="GÜÇLÜ AL"); break;
-    case "watch": filtered = allSignals.filter(s=>s.action==="İZLE"); break;
-    case "volume": filtered = allSignals.filter(s=>s.volume_badge); break;
-    case "success": filtered = allSignals.filter(s=>s.success); break;
-    case "favorite": filtered = allSignals.filter(s=>s.favorite); break;
-    case "combined": filtered = allSignals.filter(s=>s.combined_algorithms && s.combined_algorithms.length>0); break;
-    case "super_combined": filtered = allSignals.filter(s=>s.super_combined); break;
-    case "l2": filtered = allSignals.filter(s=>s.l2); break;
-    case "l3": filtered = allSignals.filter(s=>s.l3); break;
-    case "l4": filtered = allSignals.filter(s=>s.l4); break;
-    case "ob": filtered = allSignals.filter(s=>s.ob); break;
-    case "resistance_break": filtered = allSignals.filter(s=>s.resistance_break); break;
-  }
+function render(){
+  const c=document.getElementById("cards");
+  c.innerHTML="";
 
-  filtered.forEach(sig=>{
-    const div=document.createElement("div");
-    div.className="card";
+  allSignals.filter(s=>{
+    if(currentFilter==="all")return true;
+    if(currentFilter==="GÜÇLÜ AL")return s.action==="GÜÇLÜ AL";
+    if(currentFilter==="success")return s.success;
+    if(currentFilter==="favorite")return favorites.includes(s.symbol);
+    if(currentFilter==="volume")return s.volume_tag==="GÜÇLÜ";
+    if(currentFilter==="strengthened")return s.level_change;
+    if(currentFilter==="kombine")return s.combined_type==="KOMBİNE";
+    if(currentFilter==="super_kombine")return s.combined_type==="SÜPER";
+    if(currentFilter==="squeeze")return (s.algorithms||[]).includes("squeeze");
+    if(currentFilter==="squeeze_break")return (s.algorithms||[]).includes("squeeze_break");
+    if(currentFilter==="institutional")return isInstitutional(s);
+    return true;
+  }).forEach(s=>{
+    const d=document.createElement("div");
+    d.className="card";
 
-    // Aksiyon kutusu
-    const actionTag = `<div class="action-tag">${sig.action}</div>`;
+    const algos=(s.algorithms||[])
+      .map(a=>`<div class="algo-tag algo-${a}">${a}</div>`).join("");
 
-    div.innerHTML=`
-      ${actionTag}
-      <h2>
-        ${sig.symbol} 
-        ${sig.timestamp?`<span class="tag yellow">${sig.timestamp}</span>`:''}
-      </h2>
-      <div class="meta">
-        <span>📊 EMA Trend: ${sig.ema_trend}</span>
-        <span>RSI 1h / 4h: ${sig.rsi_1h??'-'} / ${sig.rsi_4h??'-'}</span>
-        <span>📈 Hacim: ${sig.volume_tag??'-'}</span>
-        ${sig.success?'<span class="tag success">✅ BAŞARILI</span>':''}
+    d.innerHTML=`
+      ${s.volume_tag==="GÜÇLÜ"?`<div class="volume-strong">📊 GÜÇLÜ HACİM</div>`:""}
+      ${s.success?`<div class="success-tag">🏆 BAŞARILI</div>`:""}
+      ${isInstitutional(s)?`<div class="institutional-tag">🏦 KURUMSAL GİRİŞ</div>`:""}
+      <div class="fav-btn" onclick="toggleFavorite('${s.symbol}')">
+        ${favorites.includes(s.symbol)?"⭐":"☆"}
       </div>
-      ${sig.combined_algorithms?`
-        <div class="algos">
-          ${sig.combined_algorithms.map(a=>`<div class="algobox"><b>${a.type}</b></div>`).join('')}
-        </div>`:''}
+      <div class="action-tag">${s.action}</div>
+      <div class="algo-tags">${algos}</div>
+
+      <h2>${s.symbol}</h2>
+      <div class="price">Fiyat: ${s.current_price}</div>
+
+      <div class="meta">
+        <span>Trend: ${s.ema_trend}</span>
+        <span>RSI 1h / 4h: ${s.rsi_1h} / ${s.rsi_4h}</span>
+        <span>Direnç 1h / 4h: ${s.resistance_1h} / ${s.resistance_4h}</span>
+      </div>
+
+      <div class="strength">Güç Skoru: ${s.strength} / 10</div>
+
+      <div class="timebox">
+        <div>
+          İlk: ${s.first_signal_time||"-"}<br>
+          ${s.first_algorithms?s.first_algorithms.join(" "):""}
+        </div>
+        <div>
+          Güçlenme: ${s.strengthen_time||"-"}<br>
+          ${s.added_algorithms?s.added_algorithms.map(a=>"+"+a).join(" "):""}
+        </div>
+      </div>
     `;
-
-    // Güçlü Al geldiğinde sesli popup
-    if(sig.action==="GÜÇLÜ AL") playSound();
-
-    cardsEl.appendChild(div);
+    c.appendChild(d);
   });
 }
 
-setInterval(async()=>{
-  try{
-    const res=await fetch("/api");
-    const data=await res.json();
+async function update(){
+  const r=await fetch("/api");
+  const d=await r.json();
+  allSignals=d.signals||[];
+  document.getElementById("sys").textContent=d.system_active?"Aktif":"Kapalı";
+  document.getElementById("sys").className="badge "+(d.system_active?"green":"red");
+  document.getElementById("market").textContent=d.market_open?"Açık":"Kapalı";
+  document.getElementById("market").className="badge "+(d.market_open?"green":"yellow");
+  document.getElementById("scan").textContent=new Date(d.last_scan*1000).toLocaleTimeString();
+  render();
+}
 
-    if(data.last_scan>lastScan){
-      lastScan=data.last_scan;
-      allSignals=data.signals;
-      renderCards();
-    }
-
-    document.getElementById("sys").textContent=data.system_active?"Aktif":"Pasif";
-    document.getElementById("sys").className="badge "+(data.system_active?"green":"red");
-
-    document.getElementById("market").textContent=data.market_open?"Açık":"Kapalı";
-    document.getElementById("market").className="badge "+(data.market_open?"green":"yellow");
-
-  }catch(e){console.error("Dashboard hata:",e);}
-},5000);
-
-function toggleTheme(){document.body.classList.toggle("light");}
+update();
+setInterval(update,5000);
 </script>
-
 </body>
 </html>
