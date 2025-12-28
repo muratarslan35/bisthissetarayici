@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from fetch_bist import fetch_bist_data
 from signal_engine import process_signals
-from utils import to_tr_timezone
+from utils import to_tr_timezone  # utils.py’den TR timezone fonksiyonu
 
 # =========================
 # ENV & PATH
@@ -280,15 +280,16 @@ threading.Thread(target=background_loop, daemon=True).start()
 @app.route("/api")
 def api():
     with data_lock:
-        last_scan_time = (
-            to_tr_timezone(datetime.fromtimestamp(LAST_SCAN_TS))
-            .strftime("%Y-%m-%d %H:%M:%S")
-            if LAST_SCAN_TS else None
-        )
+        last_scan_time = None
+        if LAST_SCAN_TS:
+            dt_utc = datetime.fromtimestamp(LAST_SCAN_TS, tz=timezone.utc)
+            dt_tr = to_tr_timezone(dt_utc)
+            last_scan_time = dt_tr.strftime("%Y-%m-%d %H:%M:%S")
+
         return jsonify(make_json_safe({
             "system_active": SYSTEM_STARTED,
             "market_open": market_open(),
-            "last_scan": last_scan_time,  # artık TR saati
+            "last_scan": last_scan_time,
             "signals": LATEST_SIGNALS,
             "success_signals": SUCCESS_SIGNALS
         }))
