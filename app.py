@@ -280,10 +280,15 @@ threading.Thread(target=background_loop, daemon=True).start()
 @app.route("/api")
 def api():
     with data_lock:
+        last_scan_time = (
+            to_tr_timezone(datetime.fromtimestamp(LAST_SCAN_TS))
+            .strftime("%Y-%m-%d %H:%M:%S")
+            if LAST_SCAN_TS else None
+        )
         return jsonify(make_json_safe({
             "system_active": SYSTEM_STARTED,
             "market_open": market_open(),
-            "last_scan": to_tr_timezone(datetime.fromtimestamp(LAST_SCAN_TS)).strftime("%H:%M:%S"),
+            "last_scan": last_scan_time,  # artık TR saati
             "signals": LATEST_SIGNALS,
             "success_signals": SUCCESS_SIGNALS
         }))
