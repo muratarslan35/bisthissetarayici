@@ -11,12 +11,6 @@ from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 
 from fetch_bist import fetch_bist_data
-from signal_engine import (
-    process_signals,
-    format_signal_message,
-    scan_strong_stocks,
-    daily_success_summary
-)
 from utils import to_tr_timezone
 
 # =========================
@@ -44,10 +38,8 @@ LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
 
 sent_signal_cache = {}    # telegram tekrar kontrolü
-
 data_lock = threading.Lock()
 DAILY_SENT = {"strong_stocks": False, "summary": False}
-
 REPEAT_DELAY = 15 * 60  # 15 dk
 
 # =========================
@@ -120,6 +112,21 @@ def telegram_send(message):
             log(f"Telegram hata: {e}")
 
 # =========================
+# SIGNAL FORMATTING
+# =========================
+def format_signal_message(signal):
+    """
+    Telegram'a gönderilecek mesaj formatını üretir
+    """
+    msg = f"{signal.get('symbol', '?')} - {signal.get('action', '')}\n"
+    msg += f"Güç Skoru: {signal.get('strength', '-')}/10\n"
+    msg += f"Algoritmalar: {', '.join(signal.get('algorithms', []))}\n"
+    if signal.get("level_change"):
+        msg += f"Güçlenme: {signal.get('level_change')} ({signal.get('strengthen_time')})\n"
+    msg += f"Zaman: {signal.get('timestamp', '')}"
+    return msg
+
+# =========================
 # STRONG / LEVEL-UP CHECK
 # =========================
 def is_strong_signal(s):
@@ -134,6 +141,40 @@ def is_strong_signal(s):
     if combined:
         return True
     return False
+
+# =========================
+# PLACEHOLDER: signal_engine LOGIC
+# =========================
+def process_signals(item, market_open=True):
+    """
+    Basit örnek: fetch_bist verisini sinyale çevirir.
+    Gerçek algoritmalar buraya entegre edilmeli.
+    """
+    symbol = item.get("symbol")
+    price = item.get("price")
+    signals = []
+    strength = item.get("strength", 0)
+    algos = item.get("algorithms", [])
+
+    if strength >= 5:
+        signals.append({
+            "symbol": symbol,
+            "current_price": price,
+            "strength": strength,
+            "algorithms": algos,
+            "action": "GÜÇLÜ AL",
+            "timestamp": datetime.now().strftime("%H:%M:%S")
+        })
+    return signals
+
+# =========================
+# DAILY SUCCESS SUMMARY PLACEHOLDER
+# =========================
+def daily_success_summary():
+    """
+    Örnek: Başarılı sinyalleri döndürür
+    """
+    return {"success_signals": [s for s in persistent_signals if s.get("strength",0)>=8]}
 
 # =========================
 # BACKGROUND LOOP
@@ -169,7 +210,7 @@ def background_loop():
 
             log(f"Üretilen sinyal: {len(all_signals)}")
 
-            # Günlük reset
+            # Günlük reset (09:40)
             if (
                 now.weekday() < 5 and
                 last_reset_date != now.date() and
@@ -206,18 +247,13 @@ def background_loop():
                     for meta in metas:
                         key = (symbol, meta.get("type"))
                         prev = sent_signal_cache.get(key, {"strength": 0, "time": 0})
-
                         send_allowed = (
                             meta.get("strength", 0) > prev["strength"] or
                             now_ts - prev["time"] > REPEAT_DELAY
                         )
-
                         if send_allowed:
                             telegram_send(format_signal_message(meta))
-                            sent_signal_cache[key] = {
-                                "strength": meta.get("strength", 0),
-                                "time": now_ts
-                            }
+                            sent_signal_cache[key] = {"strength": meta.get("strength", 0), "time": now_ts}
 
             # GLOBAL API DATA
             with data_lock:
@@ -264,9 +300,4 @@ def dashboard():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        use_reloader=False
-    )
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
