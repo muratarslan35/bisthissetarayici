@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>BIST Sinyal Paneli</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
 :root{
   --bg:#0f1220;
@@ -73,15 +72,15 @@ header{padding:12px 16px;display:flex;flex-wrap:wrap;justify-content:space-betwe
 
 .algo-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 .algo-tag{padding:3px 8px;border-radius:10px;font-size:11px;color:#000;white-space:nowrap}
-.algo-l2{background:#0984e3}         /* EMA Trend */
-.algo-l3{background:#6c5ce7}         /* Destek/Direnç */
-.algo-l4{background:#fdcb6e}         /* Breakout */
-.algo-three_peak{background:#fd79a8} /* Üç Zirve */
-.algo-order_block{background:#d63031} /* Emir Bloğu */
-.algo-squeeze{background:#81ecec}     /* Üçgen Sıkışma */
-.algo-squeeze_break{background:#d63031}/* Üçgen Kırılım */
-.algo-combined{background:#2ecc71}    /* Kombine */
-.algo-super_combined{background:#e84393}/* Süper Kombine */
+.algo-l2{background:#0984e3}
+.algo-l3{background:#6c5ce7}
+.algo-l4{background:#fdcb6e}
+.algo-three_peak{background:#fd79a8}
+.algo-order_block{background:#d63031}
+.algo-squeeze{background:#81ecec}
+.algo-squeeze_break{background:#d63031}
+.algo-kombine{background:#2ecc71}
+.algo-super_kombine{background:#e84393}
 
 h2{margin:0;font-size:20px}
 .price{font-size:13px;color:#aaa;margin-top:2px}
@@ -98,7 +97,6 @@ h2{margin:0;font-size:20px}
 </head>
 
 <body>
-
 <header>
   <div>
     Sistem: <span id="sys" class="badge">?</span>
@@ -155,7 +153,7 @@ document.querySelectorAll(".filter").forEach(f=>{
 });
 
 function isInstitutional(s){
-  return s.institutional_entry===true || (s.algorithms||[]).includes("order_block");
+  return (s.algorithms||[]).includes("order_block");
 }
 
 function render(){
@@ -169,8 +167,8 @@ function render(){
     if(currentFilter==="favorite")return favorites.includes(s.symbol);
     if(currentFilter==="volume")return s.volume_tag==="GÜÇLÜ";
     if(currentFilter==="strengthened")return s.level_change;
-    if(currentFilter==="kombine")return (s.algorithms||[]).includes("combined");
-    if(currentFilter==="super_combined")return (s.algorithms||[]).includes("super_combined");
+    if(currentFilter==="kombine")return (s.algorithms||[]).includes("kombine");
+    if(currentFilter==="super_combined")return (s.algorithms||[]).includes("super_kombine");
     if(currentFilter==="squeeze")return (s.algorithms||[]).includes("squeeze");
     if(currentFilter==="squeeze_break")return (s.algorithms||[]).includes("squeeze_break");
     if(currentFilter==="institutional")return isInstitutional(s);
@@ -188,111 +186,4 @@ function render(){
         order_block:"Emir Bloğu 📦",
         squeeze:"Üçgen Sıkışma 🫧",
         squeeze_break:"Üçgen Kırılım 💥",
-        combined:"Kombine ⚡",
-        super_combined:"Süper Kombine 🔥"
-      };
-      return `<div class="algo-tag algo-${a}">${names[a]||a}</div>`;
-    }).join("");
-
-    d.innerHTML=`
-      ${s.volume_tag==="GÜÇLÜ"?`<div class="volume-strong">📊 GÜÇLÜ HACİM</div>`:""}
-      ${s.success?`<div class="success-tag">🏆 BAŞARILI</div>`:""}
-      ${isInstitutional(s)?`<div class="institutional-tag">🏦 KURUMSAL GİRİŞ</div>`:""}
-      <div class="fav-btn" onclick="toggleFavorite('${s.symbol}')">
-        ${favorites.includes(s.symbol)?"⭐":"☆"}
-      </div>
-      <div class="action-tag">${s.action||""}</div>
-      <div class="algo-tags">${algos}</div>
-
-      <h2>${s.symbol}</h2>
-      <div class="price">Fiyat: ${s.current_price||"-"}</div>
-
-      <div class="meta">
-        <span>Trend: ${s.ema_trend||"-"}</span>
-        <span>RSI 1h / 4h: ${s.rsi_1h||"-"} / ${s.rsi_4h||"-"}</span>
-        <span>Direnç 1h / 4h: ${s.resistance_1h||"-"} / ${s.resistance_4h||"-"}</span>
-      </div>
-
-      <div class="strength">Güç Skoru: ${s.strength||"-"} / 10</div>
-
-      <div class="timebox">
-        <div>
-          İlk: ${s.first_signal_time||"-"}<br>
-          ${(s.first_algorithms||[]).map(a=>{
-            const names={
-              l2:"EMA Trend 📈",
-              l3:"Destek / Direnç 🛡️",
-              l4:"Breakout 🚀",
-              three_peak:"Üç Zirve 🔺",
-              order_block:"Emir Bloğu 📦",
-              squeeze:"Üçgen Sıkışma 🫧",
-              squeeze_break:"Üçgen Kırılım 💥",
-              combined:"Kombine ⚡",
-              super_combined:"Süper Kombine 🔥"
-            };
-            return names[a]||a;
-          }).join(" ")}
-        </div>
-        <div>
-          Güçlenme: ${s.strengthen_time||"-"}<br>
-          ${(s.added_algorithms||[]).map(a=>{
-            const names={
-              l2:"EMA Trend 📈",
-              l3:"Destek / Direnç 🛡️",
-              l4:"Breakout 🚀",
-              three_peak:"Üç Zirve 🔺",
-              order_block:"Emir Bloğu 📦",
-              squeeze:"Üçgen Sıkışma 🫧",
-              squeeze_break:"Üçgen Kırılım 💥",
-              combined:"Kombine ⚡",
-              super_combined:"Süper Kombine 🔥"
-            };
-            return `+${names[a]||a}`;
-          }).join(" ")}
-        </div>
-      </div>
-    `;
-    c.appendChild(d);
-
-    if(s.action==="GÜÇLÜ AL" && !notifiedSymbols.has(s.symbol)){
-      if(Notification.permission==="granted"){
-        new Notification("📈 GÜÇLÜ AL Sinyali", {
-          body: `${s.symbol} için yeni GÜÇLÜ AL sinyali geldi!`,
-          icon: "/favicon.ico"
-        });
-      }
-      notifiedSymbols.add(s.symbol);
-    }
-  });
-}
-
-async function updateAPI(){
-  const r = await fetch("/api");
-  const d = await r.json();
-  allSignals = d.signals || [];
-  document.getElementById("sys").textContent = d.system_active ? "Aktif" : "Kapalı";
-  document.getElementById("sys").className = "badge " + (d.system_active ? "green" : "red");
-  document.getElementById("market").textContent = d.market_open ? "Açık" : "Kapalı";
-  document.getElementById("market").className = "badge " + (d.market_open ? "green" : "yellow");
-
-  if(d.last_scan){
-    lastScanTime = new Date(d.last_scan.replace(" ","T")).getTime();
-  }
-
-  render();
-}
-
-function updateClock(){
-  if(lastScanTime){
-    const now = Date.now();
-    const display = new Date(lastScanTime + (Date.now()-lastScanTime)).toLocaleTimeString("tr-TR",{hour12:false});
-    scanDisplay.textContent = display;
-  }
-}
-
-updateAPI();
-setInterval(updateAPI, 5000);
-setInterval(updateClock, 1000);
-</script>
-</body>
-</html>
+        kombine:"Kombine ⚡
