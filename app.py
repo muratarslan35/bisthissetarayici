@@ -139,14 +139,7 @@ def is_strong_signal(s):
 # BACKGROUND LOOP
 # =========================
 def background_loop():
-    global 
-        LATEST_DATA,
-        LATEST_SIGNALS,
-        LAST_SCAN_TS,
-        SYSTEM_STARTED,
-        sent_signal_cache,
-        persistent_signals
-
+    global LATEST_DATA, LATEST_SIGNALS, LAST_SCAN_TS, SYSTEM_STARTED, sent_signal_cache, persistent_signals
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU BAŞLATILDI")
