@@ -3,7 +3,6 @@ from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 import numpy as np
-
 from utils import (
     nearest_support_resistance_from_history,
     detect_support_resistance_break,
@@ -12,6 +11,9 @@ from utils import (
     to_tr_timezone
 )
 
+# =========================
+# GLOBAL STATE
+# =========================
 success_tracker = {}
 sent_signals = {}
 successful_signals_store = {}
@@ -20,6 +22,9 @@ signal_state = {}
 TARGET_PCT = 0.015
 REPEAT_BLOCK_MINUTES = 45
 
+# =========================
+# TIME HELPERS
+# =========================
 def now_tr():
     return to_tr_timezone(datetime.now(timezone.utc))
 
@@ -30,6 +35,9 @@ def in_repeat_block(symbol, algo):
 def mark_sent(symbol, algo):
     sent_signals[(symbol, algo)] = now_tr() + timedelta(minutes=REPEAT_BLOCK_MINUTES)
 
+# =========================
+# SUCCESS TRACKING
+# =========================
 def register_signal(symbol, price, algo_type):
     today = now_tr().date()
     success_tracker.setdefault(today, {})
@@ -54,6 +62,9 @@ def update_success(symbol, price):
 def fmt(v):
     return round(v, 2) if isinstance(v, (int, float)) else None
 
+# =========================
+# SYNTHETIC RSI
+# =========================
 def synthetic_rsi_from_df(df, current_price, period=14):
     if df is None or "Close" not in df or len(df) < period + 2:
         return None
@@ -70,6 +81,9 @@ def synthetic_rsi_from_df(df, current_price, period=14):
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 2)
 
+# =========================
+# TREND / VOLUME
+# =========================
 def trend_direction(ema20, ema50, ema200):
     if ema20 and ema50 and ema200:
         if ema20 > ema50 > ema200:
@@ -95,6 +109,9 @@ def decide_action(strength, trend, vol):
         return "AL"
     return "TAKİP ET"
 
+# =========================
+# META ENRICH
+# =========================
 def enrich_meta(item, tf, base):
     tf1h = item["tf"].get("1h", {})
     tf4h = item["tf"].get("4h", {})
@@ -120,6 +137,9 @@ def enrich_meta(item, tf, base):
     })
     return base
 
+# =========================
+# VOLATILITY HELPERS
+# =========================
 def bollinger_band_width(df, period=20, std=2):
     if df is None or len(df) < period:
         return None
@@ -142,6 +162,9 @@ def atr(df, period=14):
     ], axis=1).max(axis=1)
     return tr.rolling(period).mean().iloc[-1]
 
+# =========================
+# CORE ALGORITHMS
+# =========================
 def l2_signal(item):
     tf = item["tf"].get("5m", {})
     if tf.get("rsi", 0) > 55 and not in_repeat_block(item["symbol"], "l2"):
@@ -185,18 +208,20 @@ def ob_signal(item):
     if detect_order_block(df) and not in_repeat_block(item["symbol"], "ob"):
         register_signal(item["symbol"], item["current_price"], "ob")
         mark_sent(item["symbol"], "ob")
-        return enrich_meta(item, tf15, {"type": "ob", "emoji": "🧱", "strength": 85})
+        return enrich_meta(item, tf15, {"type": "order_block", "emoji": "🧱", "strength": 85})
 
 def squeeze_signal(item):
     tf = item["tf"].get("15m", {})
     df = tf.get("df")
     if df is None or len(df) < 30:
         return None
+
     bb_width = bollinger_band_width(df)
     atr_val = atr(df)
     vol = tf.get("volume")
     vol_avg = tf.get("volume_avg_20")
     rsi = tf.get("rsi", 0)
+
     is_squeeze = (
         bb_width and bb_width < 0.035
         and atr_val
@@ -204,26 +229,34 @@ def squeeze_signal(item):
         and vol < vol_avg * 0.9
         and 40 <= rsi <= 60
     )
+
     prev_state = signal_state.get(f"{item['symbol']}_squeeze", {})
     if not is_squeeze and prev_state.get("squeeze_active"):
         mark_sent(item["symbol"], "squeeze_break")
         meta = enrich_meta(item, tf, {"type": "squeeze_break", "emoji": "💥", "strength": 78})
         signal_state[f"{item['symbol']}_squeeze"] = {"squeeze_active": False}
         return meta
+
     if is_squeeze:
         signal_state[f"{item['symbol']}_squeeze"] = {"squeeze_active": True}
+
     if is_squeeze and not in_repeat_block(item["symbol"], "squeeze"):
         mark_sent(item["symbol"], "squeeze")
         return enrich_meta(item, tf, {"type": "squeeze", "emoji": "🫧", "strength": 72})
+
     return None
 
+# =========================
+# COMBINED SIGNALS
+# =========================
 def combined_signal(item):
     tf15 = item["tf"].get("15m", {})
-    tf1h = item["tf"].get("1h", {})
     tf4h = item["tf"].get("4h", {})
     tf1d = item["tf"].get("1d", {})
+
     rsi15 = tf15.get("rsi", 100)
     rsi4h = synthetic_rsi_from_df(tf4h.get("df"), item["current_price"])
+
     if not (
         tf1d.get("close") > tf1d.get("open")
         and tf4h.get("close") > tf4h.get("open")
@@ -231,19 +264,22 @@ def combined_signal(item):
         and rsi4h and rsi4h > 55
     ):
         return None
+
     if not in_repeat_block(item["symbol"], "kombine"):
         register_signal(item["symbol"], item["current_price"], "kombine")
         mark_sent(item["symbol"], "kombine")
-        return enrich_meta(item, tf15, {"type": "kombine", "emoji": "🧠", "strength": 75})
+        return enrich_meta(item, tf15, {"type": "combined", "emoji": "🧠", "strength": 75})
 
 def super_combined_signal(item):
     tf15 = item["tf"].get("15m", {})
     tf1h = item["tf"].get("1h", {})
     tf4h = item["tf"].get("4h", {})
     tf1d = item["tf"].get("1d", {})
+
     rsi15 = tf15.get("rsi", 100)
     rsi1h = synthetic_rsi_from_df(tf1h.get("df"), item["current_price"])
     rsi4h = synthetic_rsi_from_df(tf4h.get("df"), item["current_price"])
+
     if not (
         tf1d.get("close") > tf1d.get("open")
         and tf4h.get("close") > tf4h.get("open")
@@ -252,13 +288,18 @@ def super_combined_signal(item):
         and rsi4h and rsi4h > 60
     ):
         return None
+
     if not in_repeat_block(item["symbol"], "super_kombine"):
         register_signal(item["symbol"], item["current_price"], "super_kombine")
         mark_sent(item["symbol"], "super_kombine")
-        return enrich_meta(item, tf15, {"type": "super_kombine", "emoji": "🚀", "strength": 90})
+        return enrich_meta(item, tf15, {"type": "super_combined", "emoji": "🚀", "strength": 90})
 
-def process_signals(item, market_open=True):
+# =========================
+# PROCESS
+# =========================
+def process_signals_all(item):
     signals = []
+
     for fn in (
         l2_signal,
         l3_signal,
@@ -273,17 +314,21 @@ def process_signals(item, market_open=True):
         r = fn(item)
         if r:
             signals.append(r)
+
     if not signals:
         return []
+
     base = signals[0]
     base["combined_algorithms"] = signals
     base["algorithms"] = [a["type"] for a in signals]
-    if base["type"] == "kombine":
+
+    if base["type"] == "combined":
         base["combined_type"] = "KOMBİNE"
-    elif base["type"] == "super_kombine":
+    elif base["type"] == "super_combined":
         base["combined_type"] = "SÜPER"
     else:
         base["combined_type"] = None
+
     prev = signal_state.get(base["symbol"])
     if prev:
         new_algos = list(set(base["algorithms"]) - set(prev["algorithms"]))
@@ -296,12 +341,15 @@ def process_signals(item, market_open=True):
     else:
         base["first_signal_time"] = now_tr().strftime("%H:%M:%S")
         base["first_algorithms"] = base["algorithms"]
+
     signal_state[base["symbol"]] = {
         "algorithms": base["algorithms"],
         "first_signal_time": base["first_signal_time"],
         "first_algorithms": base["first_algorithms"],
     }
+
     today = now_tr().date()
     if today in successful_signals_store and base["symbol"] in successful_signals_store[today]:
         base["success"] = True
+
     return [base]
