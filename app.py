@@ -3,6 +3,7 @@ import time
 import threading
 import requests
 from datetime import datetime, timezone, time as dtime
+from copy import deepcopy
 
 from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
@@ -62,25 +63,29 @@ def telegram_send(msg):
 def clean_signal_for_api(s):
     if not isinstance(s, dict):
         return None
-    return {
-        "symbol": s.get("symbol"),
-        "type": s.get("type"),
-        "current_price": s.get("current_price"),
-        "strength": s.get("strength"),
-        "ema_trend": s.get("trend_direction"),
-        "volume_tag": s.get("volume_tag"),
-        "algorithms": list(s.get("algorithms", [])),
-        "combined_algorithms": s.get("combined_algorithms", []),
-        "rsi_1h": s.get("rsi_1h"),
-        "rsi_4h": s.get("rsi_4h"),
-        "resistance_1h": s.get("resistance_1h"),
-        "resistance_4h": s.get("resistance_4h"),
-        "first_signal_time": s.get("first_signal_time"),
-        "added_algorithms": s.get("added_algorithms"),
-        "level_change": s.get("level_change"),
-        "success": bool(s.get("success", False)),
-        "current_time": s.get("time")
-    }
+    try:
+        return {
+            "symbol": str(s.get("symbol")) if s.get("symbol") is not None else None,
+            "type": str(s.get("type")) if s.get("type") is not None else None,
+            "current_price": float(s.get("current_price")) if s.get("current_price") is not None else None,
+            "strength": float(s.get("strength")) if s.get("strength") is not None else None,
+            "ema_trend": str(s.get("trend_direction")) if s.get("trend_direction") else None,
+            "volume_tag": str(s.get("volume_tag")) if s.get("volume_tag") else None,
+            "algorithms": list(s.get("algorithms") or []),
+            "combined_algorithms": list(s.get("combined_algorithms") or []),
+            "rsi_1h": float(s.get("rsi_1h")) if s.get("rsi_1h") is not None else None,
+            "rsi_4h": float(s.get("rsi_4h")) if s.get("rsi_4h") is not None else None,
+            "resistance_1h": float(s.get("resistance_1h")) if s.get("resistance_1h") is not None else None,
+            "resistance_4h": float(s.get("resistance_4h")) if s.get("resistance_4h") is not None else None,
+            "first_signal_time": str(s.get("first_signal_time")) if s.get("first_signal_time") else None,
+            "added_algorithms": list(s.get("added_algorithms") or []),
+            "level_change": str(s.get("level_change")) if s.get("level_change") else None,
+            "success": bool(s.get("success", False)),
+            "current_time": str(s.get("time")) if s.get("time") else None
+        }
+    except Exception as e:
+        log(f"[WARN] clean_signal_for_api hata: {e} | sinyal: {s}")
+        return None
 
 # =========================
 # TELEGRAM FORMAT
@@ -216,7 +221,7 @@ def background_loop():
                     if not isinstance(s, dict):
                         log(f"[WARN] Geçersiz sinyal: {s}")
                         continue
-                    all_signals.append(s)
+                    all_signals.append(deepcopy(s))
                     try:
                         update_success(s.get("symbol"), s.get("current_price"))
                     except Exception as e:
@@ -265,9 +270,9 @@ def background_loop():
             with data_lock:
                 for s in all_signals:
                     if s and s not in persistent_signals:
-                        persistent_signals.append(s)
+                        persistent_signals.append(deepcopy(s))
                 LATEST_SIGNALS = [
-                    clean_signal_for_api(s)
+                    clean_signal_for_api(deepcopy(s))
                     for s in persistent_signals
                     if s
                 ]
@@ -292,11 +297,20 @@ def api():
         dt = to_tr_timezone(datetime.fromtimestamp(LAST_SCAN_TS, tz=timezone.utc))
         last_scan_str = dt.strftime("%Y-%m-%d %H:%M:%S")
 
+    safe_signals = []
+    with data_lock:
+        for s in LATEST_SIGNALS:
+            try:
+                clean_s = deepcopy(s)
+                safe_signals.append(clean_s)
+            except Exception as e:
+                log(f"[WARN] deepcopy sinyal hata: {e} | sinyal: {s}")
+
     return jsonify({
         "system_active": SYSTEM_STARTED,
         "market_open": market_open(),
         "last_scan": last_scan_str,
-        "signals": LATEST_SIGNALS
+        "signals": safe_signals
     })
 
 @app.route("/")
