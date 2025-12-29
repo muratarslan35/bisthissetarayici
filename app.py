@@ -10,8 +10,12 @@ from copy import deepcopy
 from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 
-from fetch_bist import fetch_bist_data
-from utils import to_tr_timezone
+from utils import (
+    to_tr_timezone,
+    get_fallback_symbols,
+    fetch_yf_ohlcv,
+    calculate_rsi_ema
+)
 
 # =========================
 # ENV & PATH
@@ -38,8 +42,10 @@ LAST_SCAN_TS = 0
 SYSTEM_STARTED = False
 
 sent_signal_cache = {}    # telegram tekrar kontrolü
+
 data_lock = threading.Lock()
 DAILY_SENT = {"strong_stocks": False, "summary": False}
+
 REPEAT_DELAY = 15 * 60  # 15 dk
 
 # =========================
@@ -112,22 +118,7 @@ def telegram_send(message):
             log(f"Telegram hata: {e}")
 
 # =========================
-# SIGNAL FORMATTING
-# =========================
-def format_signal_message(signal):
-    """
-    Telegram'a gönderilecek mesaj formatını üretir
-    """
-    msg = f"{signal.get('symbol', '?')} - {signal.get('action', '')}\n"
-    msg += f"Güç Skoru: {signal.get('strength', '-')}/10\n"
-    msg += f"Algoritmalar: {', '.join(signal.get('algorithms', []))}\n"
-    if signal.get("level_change"):
-        msg += f"Güçlenme: {signal.get('level_change')} ({signal.get('strengthen_time')})\n"
-    msg += f"Zaman: {signal.get('timestamp', '')}"
-    return msg
-
-# =========================
-# STRONG / LEVEL-UP CHECK
+# HIBRIT SİNYAL & LEVEL-UP
 # =========================
 def is_strong_signal(s):
     if not isinstance(s, dict):
@@ -142,39 +133,52 @@ def is_strong_signal(s):
         return True
     return False
 
-# =========================
-# PLACEHOLDER: signal_engine LOGIC
-# =========================
-def process_signals(item, market_open=True):
-    """
-    Basit örnek: fetch_bist verisini sinyale çevirir.
-    Gerçek algoritmalar buraya entegre edilmeli.
-    """
-    symbol = item.get("symbol")
-    price = item.get("price")
-    signals = []
-    strength = item.get("strength", 0)
-    algos = item.get("algorithms", [])
-
-    if strength >= 5:
-        signals.append({
-            "symbol": symbol,
-            "current_price": price,
-            "strength": strength,
-            "algorithms": algos,
-            "action": "GÜÇLÜ AL",
-            "timestamp": datetime.now().strftime("%H:%M:%S")
-        })
-    return signals
+def format_signal_message(meta):
+    """Telegram mesaj formatı"""
+    msg = f"{meta.get('symbol')} - {meta.get('action','')} | Güç Skoru: {meta.get('strength',0)}\n"
+    msg += f"Fiyat: {meta.get('current_price','-')}\n"
+    msg += f"Algoritmalar: {','.join(meta.get('algorithms',[]))}"
+    return msg
 
 # =========================
-# DAILY SUCCESS SUMMARY PLACEHOLDER
+# FETCH & PROCESS
 # =========================
-def daily_success_summary():
-    """
-    Örnek: Başarılı sinyalleri döndürür
-    """
-    return {"success_signals": [s for s in persistent_signals if s.get("strength",0)>=8]}
+def fetch_and_process():
+    symbols = get_fallback_symbols()
+    results = []
+    now = to_tr_timezone(datetime.now(timezone.utc))
+
+    for sym in symbols:
+        try:
+            # YahooFinance OHLCV
+            ohlcv = fetch_yf_ohlcv(sym)
+            rsi_ema_data = calculate_rsi_ema(ohlcv)
+            
+            # Güçlü AL mantığı
+            strength = 0
+            algos = []
+            action = ""
+            if rsi_ema_data["signal"]:
+                strength = rsi_ema_data["strength"]
+                algos = rsi_ema_data["algorithms"]
+                action = "GÜÇLÜ AL"
+
+            results.append({
+                "symbol": sym,
+                "current_price": ohlcv["close"][-1],
+                "timestamp": now.strftime("%H:%M:%S"),
+                "strength": strength,
+                "algorithms": algos,
+                "action": action,
+                "rsi_1h": rsi_ema_data["rsi_1h"],
+                "rsi_4h": rsi_ema_data["rsi_4h"],
+                "ema_trend": rsi_ema_data["ema_trend"],
+                "first_signal_time": now.strftime("%H:%M:%S") if strength>0 else None,
+            })
+        except Exception as e:
+            log(f"{sym} işlenemedi: {e}")
+
+    return results
 
 # =========================
 # BACKGROUND LOOP
@@ -192,25 +196,13 @@ def background_loop():
     while True:
         try:
             now = to_tr_timezone(datetime.now(timezone.utc))
-            raw_data = fetch_bist_data()
+            raw_data = fetch_and_process()
             LAST_SCAN_TS = int(time.time())
             log(f"Taranan hisse: {len(raw_data)}")
 
-            all_signals = []
+            all_signals = raw_data
 
-            for item in raw_data:
-                try:
-                    signals = process_signals(item, market_open=market_open())
-                    if signals:
-                        for s in signals:
-                            s["timestamp"] = now.strftime("%H:%M:%S")
-                        all_signals.extend(signals)
-                except Exception as e:
-                    log(f"Sinyal hata {item.get('symbol')}: {e}")
-
-            log(f"Üretilen sinyal: {len(all_signals)}")
-
-            # Günlük reset (09:40)
+            # Günlük reset
             if (
                 now.weekday() < 5 and
                 last_reset_date != now.date() and
@@ -223,37 +215,28 @@ def background_loop():
                 DAILY_SENT["summary"] = False
                 log("09:40 reset yapıldı")
 
-            # DASHBOARD HAFIZASI & LEVEL-UP
+            # DASHBOARD HAFIZASI
             for meta in all_signals:
                 key = meta["symbol"]
-                existing = next((x for x in persistent_signals if x["symbol"] == key), None)
-
+                existing = next((x for x in persistent_signals if x["symbol"]==key), None)
                 if existing:
-                    if meta.get("strength", 0) > existing.get("strength", 0):
-                        meta["level_change"] = "GÜÇLENEN ⚡"
-                        meta["strengthen_time"] = now.strftime("%H:%M:%S")
+                    if meta.get("strength",0) > existing.get("strength",0):
+                        meta["level_change"]="GÜÇLENEN ⚡"
+                        meta["strengthen_time"]=now.strftime("%H:%M:%S")
                         existing.update(meta)
                 else:
                     persistent_signals.insert(0, meta)
 
             # TELEGRAM GÖNDERİMİ
             if market_open():
-                grouped = defaultdict(list)
-                for meta in all_signals:
-                    grouped[meta["symbol"]].append(meta)
-
                 now_ts = int(time.time())
-                for symbol, metas in grouped.items():
-                    for meta in metas:
-                        key = (symbol, meta.get("type"))
-                        prev = sent_signal_cache.get(key, {"strength": 0, "time": 0})
-                        send_allowed = (
-                            meta.get("strength", 0) > prev["strength"] or
-                            now_ts - prev["time"] > REPEAT_DELAY
-                        )
-                        if send_allowed:
-                            telegram_send(format_signal_message(meta))
-                            sent_signal_cache[key] = {"strength": meta.get("strength", 0), "time": now_ts}
+                for meta in all_signals:
+                    key = (meta["symbol"], meta.get("type"))
+                    prev = sent_signal_cache.get(key, {"strength":0,"time":0})
+                    send_allowed = meta.get("strength",0)>prev["strength"] or now_ts-prev["time"]>REPEAT_DELAY
+                    if send_allowed:
+                        telegram_send(format_signal_message(meta))
+                        sent_signal_cache[key]={"strength":meta.get("strength",0),"time":now_ts}
 
             # GLOBAL API DATA
             with data_lock:
@@ -261,12 +244,10 @@ def background_loop():
                 LATEST_SIGNALS = deepcopy(persistent_signals)
 
             # DAILY SUCCESS
-            summary = daily_success_summary()
-            if summary and summary.get("success_signals"):
-                for s in summary["success_signals"]:
-                    if not any(x["symbol"] == s["symbol"] for x in SUCCESS_SIGNALS):
-                        SUCCESS_SIGNALS.append(s)
-                        save_success_store()
+            for s in all_signals:
+                if s.get("strength",0)>=7 and not any(x["symbol"]==s["symbol"] for x in SUCCESS_SIGNALS):
+                    SUCCESS_SIGNALS.append(s)
+                    save_success_store()
 
         except Exception as e:
             log(f"SCAN ERROR: {e}")
@@ -294,10 +275,10 @@ def api():
 
 @app.route("/")
 def dashboard():
-    return send_from_directory("static", "dashboard.html")
+    return send_from_directory("static","dashboard.html")
 
 # =========================
 # MAIN
 # =========================
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=5000,debug=False,use_reloader=False)
