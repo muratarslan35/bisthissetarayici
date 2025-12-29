@@ -73,12 +73,12 @@ def clean_signal_for_api(s):
             "volume_tag": str(s.get("volume_tag")) if s.get("volume_tag") else None,
             "algorithms": list(s.get("algorithms") or []),
             "combined_algorithms": list(s.get("combined_algorithms") or []),
+            "added_algorithms": list(s.get("added_algorithms") or []),
             "rsi_1h": float(s.get("rsi_1h")) if s.get("rsi_1h") is not None else None,
             "rsi_4h": float(s.get("rsi_4h")) if s.get("rsi_4h") is not None else None,
             "resistance_1h": float(s.get("resistance_1h")) if s.get("resistance_1h") is not None else None,
             "resistance_4h": float(s.get("resistance_4h")) if s.get("resistance_4h") is not None else None,
             "first_signal_time": str(s.get("first_signal_time")) if s.get("first_signal_time") else None,
-            "added_algorithms": list(s.get("added_algorithms") or []),
             "level_change": str(s.get("level_change")) if s.get("level_change") else None,
             "success": bool(s.get("success", False)),
             "current_time": str(s.get("time")) if s.get("time") else None
@@ -88,9 +88,9 @@ def clean_signal_for_api(s):
         return None
 
 # =========================
-# TELEGRAM FORMATS
+# PROFESSIONAL TELEGRAM FORMAT
 # =========================
-def format_signal_message(s, title="📈 SİNYAL"):
+def format_signal_message(s):
     if not s or not isinstance(s, dict):
         return None
 
@@ -98,7 +98,8 @@ def format_signal_message(s, title="📈 SİNYAL"):
     if not symbol:
         return None
 
-    lines = [f"{title} | {symbol}", ""]
+    signal_type = s.get("type", "SİNYAL")
+    lines = [f"📈 {symbol} | {signal_type}", ""]
 
     price = s.get("current_price")
     strength = s.get("strength")
@@ -175,7 +176,7 @@ def market_open():
     )
 
 # =========================
-# STRONG SIGNAL LOGIC
+# STRONG SIGNAL FILTER
 # =========================
 def is_strong_signal(s):
     if not isinstance(s, dict):
@@ -185,20 +186,11 @@ def is_strong_signal(s):
     algos = s.get("algorithms", [])
     combined = s.get("combined_algorithms", [])
     # Güçlü al / kombine / süper kombine ve kurumsal AL mantığı
-    if "super_kombine" in algos or "kombine" in algos or "order_block" in algos or combined:
+    if "super_kombine" in algos or "kombine" in algos or "l2" in algos or "l3" in algos or "order_block" in algos:
+        return True
+    if combined:
         return True
     return False
-
-def is_helper_only(s):
-    """Yalnızca yardımcı algoritmalar tetiklenmiş sinyal"""
-    if not isinstance(s, dict):
-        return False
-    algos = s.get("algorithms", [])
-    strong_keys = ["super_kombine", "kombine", "order_block"]
-    if any(a in strong_keys for a in algos):
-        return False
-    helper_keys = ["l2", "l3", "l4", "three_peak", "squeeze", "squeeze_break"]
-    return any(a in helper_keys for a in algos)
 
 # =========================
 # BACKGROUND LOOP
@@ -253,37 +245,68 @@ def background_loop():
 
             log(f"[SCAN] {len(all_signals)} sinyal işlendi")
 
-            # Persistent ve filtreli sinyaller
-            for s in all_signals:
+            # Güçlü sinyaller
+            strong_signals = [s for s in all_signals if is_strong_signal(s)]
+
+            # Güçlenen sinyal mantığı
+            for s in strong_signals:
                 sym = s.get("symbol")
-                if not sym:
+                typ = s.get("type")
+                strength = s.get("strength", 0)
+                if not sym or not typ:
                     continue
+                key = (sym, typ)
+                prev = sent_signal_cache.get(key, {"time": 0, "strength": 0, "algos": []})
 
-                # Persistent'te var mı kontrol
-                existing = next((p for p in persistent_signals if p.get("symbol") == sym), None)
-
-                # Eğer persistent yoksa ve güçlü al varsa normal mesaj
-                if not existing and is_strong_signal(s):
+                new_algos = s.get("added_algorithms", [])
+                if prev["strength"] < strength or time.time() - prev["time"] > REPEAT_DELAY:
                     msg = format_signal_message(s)
                     if msg:
                         telegram_send(msg)
-
-                # Persistent var ve sadece helper iken güçlü al eklenirse
-                elif existing and is_helper_only(existing) and is_strong_signal(s):
-                    # Algoritmaları birleştir
-                    combined_algos = list(set(existing.get("algorithms", []) + s.get("algorithms", [])))
-                    s["algorithms"] = combined_algos
-                    s["added_algorithms"] = s.get("algorithms", [])
-                    msg = format_signal_message(s, title="📈 GÜÇLENEN SİNYAL")
-                    if msg:
+                        sent_signal_cache[key] = {"time": time.time(), "strength": strength, "algos": new_algos}
+                else:
+                    # Önceki güçlü al sinyali varsa, yeni eklenen algoritmaları bildir
+                    added_new_algos = [a for a in new_algos if a not in prev.get("algos", [])]
+                    if added_new_algos:
+                        s_copy = deepcopy(s)
+                        s_copy["algorithms"] = added_new_algos
+                        msg = f"⚡ GÜÇLENEN SİNYAL\n\n{format_signal_message(s_copy)}"
                         telegram_send(msg)
+                        sent_signal_cache[key]["algos"].extend(added_new_algos)
 
-            # Persistent ve API için güncelle
+            # Başarılı sinyal
+            for s in strong_signals:
+                sym = s.get("symbol")
+                if s.get("success") and sym and sym not in SUCCESS_SENT:
+                    telegram_send(format_success_message(s))
+                    SUCCESS_SENT.add(sym)
+
+            # Günlük özet
+            if now.time() >= dtime(17, 45) and not DAILY_SENT["summary"]:
+                telegram_send(
+                    f"📊 GÜNLÜK ÖZET\n\n"
+                    f"Toplam sinyal: {len(persistent_signals)}\n"
+                    f"Başarılı: {len(SUCCESS_SENT)}"
+                )
+                DAILY_SENT["summary"] = True
+
+            if last_day != now.date():
+                last_day = now.date()
+                DAILY_SENT["summary"] = False
+                SUCCESS_SENT.clear()
+                sent_signal_cache.clear()
+
+            # persistent ve API için temizleme
             with data_lock:
-                for s in all_signals:
-                    if s not in persistent_signals:
-                        persistent_signals.append(deepcopy(s))
-                LATEST_SIGNALS = [clean_signal_for_api(deepcopy(s)) for s in persistent_signals]
+                for s in strong_signals:
+                    if s:
+                        s_copy = deepcopy(s)
+                        s_copy["algorithms"] = list(s_copy.get("algorithms", []))
+                        s_copy["added_algorithms"] = list(s_copy.get("added_algorithms", []))
+                        if s_copy not in persistent_signals:
+                            persistent_signals.append(s_copy)
+                # API için LATEST_SIGNALS
+                LATEST_SIGNALS = [clean_signal_for_api(s) for s in persistent_signals if s]
 
         except Exception as e:
             log(f"SCAN ERROR: {e}")
@@ -309,10 +332,11 @@ def api():
     with data_lock:
         for s in LATEST_SIGNALS:
             try:
-                clean_s = deepcopy(s)
-                safe_signals.append(clean_s)
+                clean_s = clean_signal_for_api(s)
+                if clean_s:
+                    safe_signals.append(clean_s)
             except Exception as e:
-                log(f"[WARN] deepcopy sinyal hata: {e} | sinyal: {s}")
+                log(f"[WARN] clean_signal_for_api sinyal hata: {e} | sinyal: {s}")
 
     return jsonify({
         "system_active": SYSTEM_STARTED,
