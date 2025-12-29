@@ -1,139 +1,62 @@
-# utils.py
-
-import math
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+import yfinance as yf
+from datetime import datetime, timezone, timedelta
 import pandas as pd
-import numpy as np
 
-# ==================================================
-# FALLBACK SYMBOLS
-# ==================================================
-FALLBACK_SYMBOLS = [
-    "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
-    "AKGRT.IS","AKSA.IS","AKSEN.IS","ALARK.IS","ALCTL.IS","ALFAS.IS","ALGN.IS","ALKIM.IS","ALMAD.IS",
-    "ANELE.IS","ARDYZ.IS","ARMDA.IS","ARTI.IS","ASELS.IS","ASUZU.IS","ATEKS.IS","ATPET.IS",
-    "ATLAS.IS","ATSYH.IS","ATTP.IS","AVGYO.IS","AVHOL.IS","AVOD.IS","AYCES.IS","AYDEM.IS","AYEN.IS",
-    "BALSU.IS","BERA.IS","BIMAS.IS","BLCYT.IS","BOBET.IS","BRKSN.IS","BRYAT.IS","BSRN.IS","BTCIM.IS","BURCE.IS",
-    "CANTE.IS","CCOLA.IS","CEMAS.IS","CEMTS.IS","CGLYO.IS","CMENT.IS","CIMSA.IS","CLEBI.IS","COMDO.IS",
-    "CUSAN.IS","DAGHL.IS","DENGE.IS","DERIM.IS","DESA.IS","DEVA.IS","DGNMO.IS","DIRIT.IS","DITAS.IS",
-    "DZGYO.IS","EDIP.IS","EGEEN.IS","EGGUB.IS","EGPRO.IS","EKGYO.IS","EMKEL.IS","ENKAI.IS","ENJSA.IS","ERCB.IS",
-    "EREGL.IS","ERSU.IS","EUREN.IS","FROTO.IS","FFKRL.IS","FMIZP.IS","FONET.IS","GARAN.IS","GEDZA.IS",
-    "GENIL.IS","GEREL.IS","GLBMD.IS","GLRYH.IS","GOZDE.IS","GRSAN.IS","GUBRF.IS","GZNMI.IS","HALKB.IS",
-    "HEKTS.IS","HRKLB.IS","IHLGM.IS","IHGZT.IS","INDES.IS","INVEO.IS","ISATR.IS","ISBTR.IS","ISCTR.IS",
-    "ISFIN.IS","ISGYO.IS","ISKPL.IS","ISMEN.IS","ITTFH.IS","IZMDC.IS","JANTS.IS","KAPLM.IS","KARMA.IS",
-    "KARSN.IS","KATMR.IS","KENT.IS","KERVT.IS","KIMMR.IS","KLGYO.IS","KLMSN.IS","KNFRT.IS","KONTR.IS",
-    "KONYA.IS","KORDS.IS","KOTON.IS","KOZAA.IS","KOZAL.IS","KRDMA.IS","KRDMB.IS","KRDMD.IS","KRGYO.IS",
-    "KRONT.IS","LIDER.IS","LINK.IS","LOGO.IS","LPCIP.IS","LUKSK.IS","MAGEN.IS","MAKIM.IS","MAVI.IS",
-    "MAALT.IS","MARTI.IS","MEPET.IS","MGROS.IS","MIATK.IS","MPARK.IS","MTRKS.IS","NETAS.IS","NIBAS.IS",
-    "ODAS.IS","OYAYO.IS","OTKAR.IS","OYLUM.IS","OZBAL.IS","PAMEL.IS","PANEL.IS","PARSN.IS","PEGAS.IS",
-    "PEKGY.IS","PETKM.IS","PETUN.IS","PGSUS.IS","PKART.IS","PKENT.IS","POLTK.IS","PRKAB.IS","PRZMA.IS",
-    "PSDTC.IS","PSGYO.IS","QNBFL.IS","QUAGR.IS","RAYSG.IS","RODRG.IS","RTALB.IS","RYGYO.IS","SAFKR.IS","SANEL.IS",
-    "SASA.IS","SARKY.IS","SAHOL.IS","SDTTR.IS","SEKUR.IS","SELVA.IS","SEGYO.IS","SELEC.IS","SISE.IS",
-    "SILVR.IS","SKBNK.IS","SMART.IS","SMBYO.IS","SNICA.IS","SOKE.IS","SOKM.IS","SOMA.IS","SUNTK.IS",
-    "SUWEN.IS","SYHGYO.IS","TATGD.IS","TAVHL.IS","TCELL.IS","TDGYO.IS","TEHOL.IS","TERA.IS","TEPLO.IS","THYAO.IS",
-    "TKFEN.IS","TKNSA.IS","TLMAN.IS","TMSN.IS","TMTAS.IS","TOASO.IS","TRCAS.IS","TRGYO.IS","TRILC.IS",
-    "TSGBD.IS","TSGYO.IS","TSKB.IS","TSPOR.IS","TTRAK.IS","TUKAS.IS","TUPRS.IS","TUREX.IS","ULAS.IS",
-    "ULKER.IS","UNLU.IS","USAK.IS","UZERB.IS","VAKBN.IS","VBTYZ.IS","VERUS.IS","VKING.IS","VESBE.IS",
-    "VESPA.IS","VESTL.IS","YEOTK.IS","YGGYO.IS","YKBNK.IS","YONGA.IS","YUNSA.IS","YYAPI.IS","ZEDUR.IS","ZOREN.IS"
-]
+FALLBACK_SYMBOLS = ["GARAN.IS","AKBNK.IS","ASELS.IS","THYAO.IS"]  # fallback dosya listesi
 
-# ==================================================
-# EMA
-# ==================================================
-def calculate_ema(series, period=20):
-    return series.ewm(span=period, adjust=False).mean()
-
-# ==================================================
-# RSI
-# ==================================================
-def calculate_rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(period, min_periods=1).mean()
-    avg_loss = loss.rolling(period, min_periods=1).mean().replace(0, np.nan)
-    rs = avg_gain / avg_loss
-    return (100 - (100 / (1 + rs))).fillna(50)
-
-# ==================================================
-# SUPPORT / RESISTANCE BREAK
-# ==================================================
-def detect_support_resistance_break(df, lookback=20):
-    if df is None or df.empty or len(df) < lookback + 2:
-        return False, False
-    prev_low = df["Low"].iloc[:-1].rolling(lookback, min_periods=1).min().iloc[-1]
-    prev_high = df["High"].iloc[:-1].rolling(lookback, min_periods=1).max().iloc[-1]
-    close = df["Close"].iloc[-1]
-    return close < prev_low, close > prev_high
-
-# ==================================================
-# NEAREST SUPPORT / RESISTANCE
-# ==================================================
-def nearest_support_resistance_from_history(df, lookback=100):
-    if df is None or df.empty or len(df) < 5:
-        return None, None
-
-    highs = df["High"].rolling(3, center=True).max()
-    lows = df["Low"].rolling(3, center=True).min()
-    ph = df["High"][df["High"] == highs]
-    pl = df["Low"][df["Low"] == lows]
-
-    price = df["Close"].iloc[-1]
-
-    resistances = [float(v) for v in ph if v > price]
-    supports = [float(v) for v in pl if v < price]
-
-    nearest_support = max(supports) if supports else None
-    nearest_resistance = min(resistances) if resistances else None
-
-    return nearest_support, nearest_resistance
-
-# ==================================================
-# THREE PEAKS (ÜÇLÜ TEPE KIRILIMI)
-# ==================================================
-def detect_three_peaks(close_series):
-    if close_series is None or close_series.empty or len(close_series) < 5:
-        return False
-
-    peaks = (
-        (close_series.shift(1) < close_series) &
-        (close_series.shift(-1) < close_series)
-    )
-
-    peak_prices = close_series[peaks]
-    if len(peak_prices) < 3:
-        return False
-
-    last_three = peak_prices.iloc[-3:]
-    max_peak = last_three.max()
-    current_price = close_series.iloc[-1]
-
-    return current_price > max_peak
-
-# ==================================================
-# ORDER BLOCK DETECTION
-# ==================================================
-def detect_order_block(df, lookback=20):
-    if df is None or df.empty or len(df) < lookback:
-        return None
-    df['change'] = df['Close'].diff()
-    bullish_blocks = df[(df['change'] > 0) & (df['Close'] > df['Open'])]
-    bearish_blocks = df[(df['change'] < 0) & (df['Close'] < df['Open'])]
-    if not bullish_blocks.empty:
-        low = bullish_blocks['Low'].min()
-        high = bullish_blocks['High'].max()
-        return {"low": low, "high": high}
-    if not bearish_blocks.empty:
-        low = bearish_blocks['Low'].min()
-        high = bearish_blocks['High'].max()
-        return {"low": low, "high": high}
-    return None
-
-# ==================================================
-# TIMEZONE
-# ==================================================
 def to_tr_timezone(dt):
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(ZoneInfo("Europe/Istanbul"))
+    return dt.astimezone(tz=timezone(timedelta(hours=3)))
+
+def get_fallback_symbols():
+    return FALLBACK_SYMBOLS
+
+def fetch_yf_ohlcv(symbol):
+    df = yf.download(symbol, period="7d", interval="15m")
+    if df.empty:
+        raise Exception("Veri alınamadı")
+    return {
+        "close": df["Close"].tolist(),
+        "open": df["Open"].tolist(),
+        "high": df["High"].tolist(),
+        "low": df["Low"].tolist(),
+        "volume": df["Volume"].tolist()
+    }
+
+def calculate_rsi_ema(ohlcv):
+    import numpy as np
+    close = ohlcv["close"]
+    df = pd.DataFrame({"close": close})
+    df["ema9"] = df["close"].ewm(span=9, adjust=False).mean()
+    df["ema21"] = df["close"].ewm(span=21, adjust=False).mean()
+    df["delta"] = df["close"].diff()
+    df["gain"] = df["delta"].clip(lower=0)
+    df["loss"] = -df["delta"].clip(upper=0)
+    df["avg_gain"] = df["gain"].rolling(14).mean()
+    df["avg_loss"] = df["loss"].rolling(14).mean()
+    df["rs"] = df["avg_gain"]/df["avg_loss"]
+    df["rsi"] = 100 - (100/(1+df["rs"]))
+    
+    # EMA trend
+    ema_trend = "↑" if df["ema9"].iloc[-1]>df["ema21"].iloc[-1] else "↓"
+    
+    # RSI 1h & 4h approximation (hayali mumlar)
+    rsi_1h = df["rsi"].rolling(4).mean().iloc[-1]
+    rsi_4h = df["rsi"].rolling(16).mean().iloc[-1]
+    
+    # Güçlü AL mantığı
+    signal = False
+    strength = 0
+    algorithms = []
+    if df["ema9"].iloc[-1]>df["ema21"].iloc[-1] and rsi_1h<70:
+        signal = True
+        strength = 7
+        algorithms.append("l2")
+    
+    return {
+        "ema_trend": ema_trend,
+        "rsi_1h": round(rsi_1h,2),
+        "rsi_4h": round(rsi_4h,2),
+        "signal": signal,
+        "strength": strength,
+        "algorithms": algorithms
+    }
