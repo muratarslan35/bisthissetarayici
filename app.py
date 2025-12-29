@@ -35,7 +35,6 @@ sent_signal_cache = {}
 
 data_lock = threading.Lock()
 REPEAT_DELAY = 15 * 60
-
 DAILY_SENT = {"summary": False}
 
 # =========================
@@ -58,17 +57,36 @@ def telegram_send(msg):
             pass
 
 # =========================
-# TELEGRAM FORMAT (FINAL)
+# SAFE API SERIALIZER
+# =========================
+def clean_signal_for_api(s):
+    """JSON-safe, circular refsiz sinyal"""
+    if not isinstance(s, dict):
+        return None
+
+    return {
+        "symbol": s.get("symbol"),
+        "type": s.get("type"),
+        "current_price": s.get("current_price"),
+        "strength": s.get("strength"),
+        "ema_trend": s.get("ema_trend"),
+        "timeframe": s.get("timeframe"),
+        "entry": s.get("entry"),
+        "target": s.get("target"),
+        "stop": s.get("stop"),
+        "algorithms": list(s.get("algorithms", [])),
+        "success": bool(s.get("success", False))
+    }
+
+# =========================
+# TELEGRAM FORMAT
 # =========================
 def format_signal_message(s):
-    lines = []
-
     symbol = s.get("symbol")
     if not symbol:
         return None
 
-    signal_type = s.get("type", "SİNYAL")
-    lines.append(f"📊 {symbol} | {signal_type}")
+    lines = [f"📊 {symbol} | {s.get('type', 'SİNYAL')}"]
 
     if s.get("current_price") is not None:
         lines.append(f"💰 Fiyat: {round(s['current_price'], 2)}")
@@ -99,8 +117,10 @@ def format_signal_message(s):
             "l5": "HACİM",
             "squeeze": "SQUEEZE"
         }
-        alg_txt = [pretty.get(a, a.upper()) for a in algos]
-        lines.append(f"🧠 Algoritmalar: {', '.join(alg_txt)}")
+        lines.append(
+            "🧠 Algoritmalar: " +
+            ", ".join(pretty.get(a, a.upper()) for a in algos)
+        )
 
     return "\n".join(lines)
 
@@ -109,8 +129,7 @@ def format_success_message(s):
         f"🏆 BAŞARILI SİNYAL\n\n"
         f"{s.get('symbol')}\n"
         f"Giriş: {s.get('entry')}\n"
-        f"Hedef: {s.get('target')}\n"
-        f"Algoritma: {s.get('algorithm')}"
+        f"Hedef: {s.get('target')}"
     )
 
 # =========================
@@ -149,14 +168,8 @@ def background_loop():
             all_signals = []
 
             for item in raw:
-                if not isinstance(item, dict):
-                    continue
-
                 signals = process_signals(item) or []
                 for s in signals:
-                    if not isinstance(s, dict):
-                        continue
-
                     all_signals.append(s)
                     update_success(s.get("symbol"), s.get("current_price"))
 
@@ -197,7 +210,6 @@ def background_loop():
                 )
                 DAILY_SENT["summary"] = True
 
-            # Yeni gün reset
             if last_day != now.date():
                 last_day = now.date()
                 DAILY_SENT["summary"] = False
@@ -208,7 +220,13 @@ def background_loop():
                 for s in all_signals:
                     if s not in persistent_signals:
                         persistent_signals.append(s)
-                LATEST_SIGNALS = persistent_signals.copy()
+
+                # 🔒 API için TEMİZ KOPYA
+                LATEST_SIGNALS = [
+                    clean_signal_for_api(s)
+                    for s in persistent_signals
+                    if clean_signal_for_api(s)
+                ]
 
         except Exception as e:
             log(f"SCAN ERROR: {e}")
