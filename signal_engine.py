@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 import numpy as np
+
 from utils import (
     nearest_support_resistance_from_history,
     detect_support_resistance_break,
@@ -208,14 +209,13 @@ def ob_signal(item):
     if detect_order_block(df) and not in_repeat_block(item["symbol"], "ob"):
         register_signal(item["symbol"], item["current_price"], "ob")
         mark_sent(item["symbol"], "ob")
-        return enrich_meta(item, tf15, {"type": "order_block", "emoji": "🧱", "strength": 85})
+        return enrich_meta(item, tf15, {"type": "ob", "emoji": "🧱", "strength": 85})
 
 def squeeze_signal(item):
     tf = item["tf"].get("15m", {})
     df = tf.get("df")
     if df is None or len(df) < 30:
         return None
-
     bb_width = bollinger_band_width(df)
     atr_val = atr(df)
     vol = tf.get("volume")
@@ -231,6 +231,7 @@ def squeeze_signal(item):
     )
 
     prev_state = signal_state.get(f"{item['symbol']}_squeeze", {})
+
     if not is_squeeze and prev_state.get("squeeze_active"):
         mark_sent(item["symbol"], "squeeze_break")
         meta = enrich_meta(item, tf, {"type": "squeeze_break", "emoji": "💥", "strength": 78})
@@ -251,6 +252,7 @@ def squeeze_signal(item):
 # =========================
 def combined_signal(item):
     tf15 = item["tf"].get("15m", {})
+    tf1h = item["tf"].get("1h", {})
     tf4h = item["tf"].get("4h", {})
     tf1d = item["tf"].get("1d", {})
 
@@ -268,7 +270,7 @@ def combined_signal(item):
     if not in_repeat_block(item["symbol"], "kombine"):
         register_signal(item["symbol"], item["current_price"], "kombine")
         mark_sent(item["symbol"], "kombine")
-        return enrich_meta(item, tf15, {"type": "combined", "emoji": "🧠", "strength": 75})
+        return enrich_meta(item, tf15, {"type": "kombine", "emoji": "🧠", "strength": 75})
 
 def super_combined_signal(item):
     tf15 = item["tf"].get("15m", {})
@@ -292,12 +294,12 @@ def super_combined_signal(item):
     if not in_repeat_block(item["symbol"], "super_kombine"):
         register_signal(item["symbol"], item["current_price"], "super_kombine")
         mark_sent(item["symbol"], "super_kombine")
-        return enrich_meta(item, tf15, {"type": "super_combined", "emoji": "🚀", "strength": 90})
+        return enrich_meta(item, tf15, {"type": "super_kombine", "emoji": "🚀", "strength": 90})
 
 # =========================
-# PROCESS
+# PROCESS SIGNALS
 # =========================
-def process_signals_all(item):
+def process_signals(item, market_open=True):
     signals = []
 
     for fn in (
@@ -322,7 +324,7 @@ def process_signals_all(item):
     base["combined_algorithms"] = signals
     base["algorithms"] = [a["type"] for a in signals]
 
-    if base["type"] == "combined":
+    if base["type"] == "kombine":
         base["combined_type"] = "KOMBİNE"
     elif base["type"] == "super_combined":
         base["combined_type"] = "SÜPER"
