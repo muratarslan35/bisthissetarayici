@@ -79,57 +79,73 @@ def clean_signal_for_api(s):
     }
 
 # =========================
-# TELEGRAM FORMAT
+# TELEGRAM FORMAT (PROFESSIONAL)
 # =========================
 def format_signal_message(s):
     symbol = s.get("symbol")
     if not symbol:
         return None
 
-    lines = [f"📊 {symbol} | {s.get('type', 'SİNYAL')}"]
+    signal_type = s.get("type", "SİNYAL")
+    lines = [f"📊 {symbol} | {signal_type}", ""]
 
-    if s.get("current_price") is not None:
-        lines.append(f"💰 Fiyat: {round(s['current_price'], 2)}")
+    # Fiyat ve güç
+    price = s.get("current_price")
+    strength = s.get("strength")
+    if price is not None:
+        lines.append(f"💰 Fiyat: {round(price, 2)}")
+    if strength is not None:
+        lines.append(f"🔥 Güç: {strength} / 10")
 
-    if s.get("strength") is not None:
-        lines.append(f"🔥 Güç: {s['strength']}")
+    # Trend
+    trend = s.get("ema_trend")
+    if trend and trend != "None":
+        lines.append(f"📈 Trend: {trend}")
 
-    if s.get("ema_trend"):
-        lines.append(f"📈 Trend: {s['ema_trend']}")
+    # Zaman dilimi
+    tf = s.get("timeframe")
+    if tf:
+        lines.append(f"⏱ Zaman Dilimi: {tf}")
 
-    if s.get("timeframe"):
-        lines.append(f"⏱ Zaman: {s['timeframe']}")
+    # Giriş / Hedef / Stop
+    entry = s.get("entry")
+    target = s.get("target")
+    stop = s.get("stop")
+    if entry:
+        lines.append(f"🎯 Giriş: {round(entry, 2)}")
+    if target:
+        lines.append(f"✅ Hedef: {round(target, 2)}")
+    if stop:
+        lines.append(f"🛑 Stop: {round(stop, 2)}")
 
-    if s.get("entry"):
-        lines.append(f"🎯 Giriş: {round(s['entry'], 2)}")
-    if s.get("target"):
-        lines.append(f"✅ Hedef: {round(s['target'], 2)}")
-    if s.get("stop"):
-        lines.append(f"🛑 Stop: {round(s['stop'], 2)}")
-
+    # Algoritmalar
     algos = s.get("algorithms", [])
     if algos:
         pretty = {
-            "l1": "RSI",
-            "l2": "EMA",
-            "l3": "DESTEK/DİRENÇ",
-            "l4": "BREAKOUT",
-            "l5": "HACİM",
-            "squeeze": "SQUEEZE"
+            "l1": "RSI Momentum",
+            "l2": "EMA Trend",
+            "l3": "Destek / Direnç",
+            "l4": "Breakout",
+            "l5": "Hacim Artışı",
+            "squeeze": "Volatility Squeeze"
         }
-        lines.append(
-            "🧠 Algoritmalar: " +
-            ", ".join(pretty.get(a, a.upper()) for a in algos)
-        )
+        lines.append("\n🧠 Tetiklenen Algoritmalar:")
+        for a in algos:
+            lines.append(f"• {pretty.get(a, a.upper())}")
 
     return "\n".join(lines)
 
 def format_success_message(s):
+    symbol = s.get("symbol")
+    entry = s.get("entry")
+    target = s.get("target")
+    algorithm = ", ".join(s.get("algorithms", []))
     return (
         f"🏆 BAŞARILI SİNYAL\n\n"
-        f"{s.get('symbol')}\n"
-        f"Giriş: {s.get('entry')}\n"
-        f"Hedef: {s.get('target')}"
+        f"📊 {symbol}\n"
+        f"🎯 Giriş: {entry}\n"
+        f"✅ Hedef: {target}\n"
+        f"🧠 Algoritma: {algorithm}"
     )
 
 # =========================
@@ -178,21 +194,15 @@ def background_loop():
                 sym = s.get("symbol")
                 typ = s.get("type")
                 strength = s.get("strength", 0)
-
                 if not sym or not typ:
                     continue
-
                 key = (sym, typ)
                 prev = sent_signal_cache.get(key, {"time": 0, "strength": 0})
-
                 if strength > prev["strength"] or time.time() - prev["time"] > REPEAT_DELAY:
                     msg = format_signal_message(s)
                     if msg:
                         telegram_send(msg)
-                        sent_signal_cache[key] = {
-                            "time": time.time(),
-                            "strength": strength
-                        }
+                        sent_signal_cache[key] = {"time": time.time(), "strength": strength}
 
             # Başarılı sinyal
             for s in all_signals:
@@ -220,8 +230,6 @@ def background_loop():
                 for s in all_signals:
                     if s not in persistent_signals:
                         persistent_signals.append(s)
-
-                # 🔒 API için TEMİZ KOPYA
                 LATEST_SIGNALS = [
                     clean_signal_for_api(s)
                     for s in persistent_signals
