@@ -36,9 +36,7 @@ sent_signal_cache = {}
 data_lock = threading.Lock()
 REPEAT_DELAY = 15 * 60
 
-DAILY_SENT = {
-    "summary": False
-}
+DAILY_SENT = {"summary": False}
 
 # =========================
 # UTILS
@@ -47,7 +45,7 @@ def log(msg):
     print(f"[APP] {msg}", flush=True)
 
 def telegram_send(msg):
-    if not TELEGRAM_TOKEN or not CHAT_IDS:
+    if not TELEGRAM_TOKEN or not CHAT_IDS or not msg:
         return
     for cid in CHAT_IDS:
         try:
@@ -59,14 +57,52 @@ def telegram_send(msg):
         except Exception:
             pass
 
+# =========================
+# TELEGRAM FORMAT (FINAL)
+# =========================
 def format_signal_message(s):
-    return (
-        f"📊 {s.get('symbol')}\n"
-        f"Fiyat: {s.get('current_price')}\n"
-        f"Güç: {s.get('strength')}\n"
-        f"Trend: {s.get('ema_trend')}\n"
-        f"Algoritmalar: {', '.join(s.get('algorithms', []))}"
-    )
+    lines = []
+
+    symbol = s.get("symbol")
+    if not symbol:
+        return None
+
+    signal_type = s.get("type", "SİNYAL")
+    lines.append(f"📊 {symbol} | {signal_type}")
+
+    if s.get("current_price") is not None:
+        lines.append(f"💰 Fiyat: {round(s['current_price'], 2)}")
+
+    if s.get("strength") is not None:
+        lines.append(f"🔥 Güç: {s['strength']}")
+
+    if s.get("ema_trend"):
+        lines.append(f"📈 Trend: {s['ema_trend']}")
+
+    if s.get("timeframe"):
+        lines.append(f"⏱ Zaman: {s['timeframe']}")
+
+    if s.get("entry"):
+        lines.append(f"🎯 Giriş: {round(s['entry'], 2)}")
+    if s.get("target"):
+        lines.append(f"✅ Hedef: {round(s['target'], 2)}")
+    if s.get("stop"):
+        lines.append(f"🛑 Stop: {round(s['stop'], 2)}")
+
+    algos = s.get("algorithms", [])
+    if algos:
+        pretty = {
+            "l1": "RSI",
+            "l2": "EMA",
+            "l3": "DESTEK/DİRENÇ",
+            "l4": "BREAKOUT",
+            "l5": "HACİM",
+            "squeeze": "SQUEEZE"
+        }
+        alg_txt = [pretty.get(a, a.upper()) for a in algos]
+        lines.append(f"🧠 Algoritmalar: {', '.join(alg_txt)}")
+
+    return "\n".join(lines)
 
 def format_success_message(s):
     return (
@@ -113,27 +149,18 @@ def background_loop():
             all_signals = []
 
             for item in raw:
-                if not item or not isinstance(item, dict):
+                if not isinstance(item, dict):
                     continue
 
                 signals = process_signals(item) or []
                 for s in signals:
-                    if not s or not isinstance(s, dict):
+                    if not isinstance(s, dict):
                         continue
 
                     all_signals.append(s)
+                    update_success(s.get("symbol"), s.get("current_price"))
 
-                    try:
-                        update_success(
-                            s.get("symbol"),
-                            s.get("current_price")
-                        )
-                    except Exception:
-                        pass
-
-            # -------------------------
-            # TELEGRAM SİNYALLER
-            # -------------------------
+            # Telegram sinyaller
             for s in all_signals:
                 sym = s.get("symbol")
                 typ = s.get("type")
@@ -145,28 +172,23 @@ def background_loop():
                 key = (sym, typ)
                 prev = sent_signal_cache.get(key, {"time": 0, "strength": 0})
 
-                if (
-                    strength > prev["strength"] or
-                    time.time() - prev["time"] > REPEAT_DELAY
-                ):
-                    telegram_send(format_signal_message(s))
-                    sent_signal_cache[key] = {
-                        "time": time.time(),
-                        "strength": strength
-                    }
+                if strength > prev["strength"] or time.time() - prev["time"] > REPEAT_DELAY:
+                    msg = format_signal_message(s)
+                    if msg:
+                        telegram_send(msg)
+                        sent_signal_cache[key] = {
+                            "time": time.time(),
+                            "strength": strength
+                        }
 
-            # -------------------------
-            # BAŞARILI SİNYAL
-            # -------------------------
+            # Başarılı sinyal
             for s in all_signals:
                 sym = s.get("symbol")
                 if s.get("success") and sym and sym not in SUCCESS_SENT:
                     telegram_send(format_success_message(s))
                     SUCCESS_SENT.add(sym)
 
-            # -------------------------
-            # GÜNLÜK ÖZET
-            # -------------------------
+            # Günlük özet
             if now.time() >= dtime(17, 45) and not DAILY_SENT["summary"]:
                 telegram_send(
                     f"📊 GÜNLÜK ÖZET\n\n"
@@ -203,9 +225,15 @@ threading.Thread(target=background_loop, daemon=True).start()
 # =========================
 @app.route("/api")
 def api():
+    last_scan_str = None
+    if LAST_SCAN_TS:
+        dt = to_tr_timezone(datetime.fromtimestamp(LAST_SCAN_TS, tz=timezone.utc))
+        last_scan_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+
     return jsonify({
         "system_active": SYSTEM_STARTED,
-        "last_scan": LAST_SCAN_TS,
+        "market_open": market_open(),
+        "last_scan": last_scan_str,
         "signals": LATEST_SIGNALS
     })
 
