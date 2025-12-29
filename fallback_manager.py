@@ -1,83 +1,58 @@
 import json
 import os
-from datetime import datetime, timezone
-import yfinance as yf
+from datetime import datetime, timedelta
 
-from utils import FALLBACK_SYMBOLS
+STATE_FILE = "fallback_state.json"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATE_FILE = os.path.join(BASE_DIR, "fallback_state.json")
-NO_MOVE_DAYS_LIMIT = 3
-MIN_DAILY_RANGE_PCT = 0.3  # %0.3 altı = hareketsiz kabul
+MAX_INACTIVE_DAYS = 3     # veri yoksa
+MAX_NO_MOVE_DAYS = 5     # mum var ama hareket yoksa
 
-# ------------------ STATE ------------------
-def load_state():
+def _load_state():
     if not os.path.exists(STATE_FILE):
         return {}
-    try:
-        with open(STATE_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    with open(STATE_FILE, "r") as f:
+        return json.load(f)
 
-def save_state(state):
+def _save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
-# ------------------ HAREKET KONTROL ------------------
-def has_daily_movement(symbol):
-    try:
-        df = yf.download(
-            symbol,
-            period="5d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False
-        )
-        if df is None or len(df) < 2:
-            return False
-        last = df.iloc[-1]
-        rng_pct = ((last["High"] - last["Low"]) / last["Close"]) * 100
-        return rng_pct >= MIN_DAILY_RANGE_PCT
-    except Exception:
-        return False
+def ensure_symbol(symbol):
+    state = _load_state()
+    if symbol not in state:
+        state[symbol] = {
+            "inactive_days": 0,
+            "no_move_days": 0,
+            "passive": False,
+            "last_seen": None
+        }
+        _save_state(state)
 
-# ------------------ GÜNCELLE ------------------
-def fallback_daily_update_if_needed(data_list=None):
-    """
-    Her gün bir kez fallback listesini günceller.
-    data_list opsiyonel, fetch_bist_data çıktısı.
-    """
-    state = load_state()
-    today = datetime.now(timezone.utc).date().isoformat()
-    updated = False
+def report_success(symbol):
+    state = _load_state()
+    ensure_symbol(symbol)
+    state[symbol]["inactive_days"] = 0
+    state[symbol]["no_move_days"] = 0
+    state[symbol]["passive"] = False
+    state[symbol]["last_seen"] = datetime.now().strftime("%Y-%m-%d")
+    _save_state(state)
 
-    current_list = FALLBACK_SYMBOLS.copy()
+def report_no_data(symbol):
+    state = _load_state()
+    ensure_symbol(symbol)
+    state[symbol]["inactive_days"] += 1
+    if state[symbol]["inactive_days"] >= MAX_INACTIVE_DAYS:
+        state[symbol]["passive"] = True
+    _save_state(state)
 
-    for sym in current_list:
-        moved = has_daily_movement(sym)
-        sym_state = state.get(sym, {"no_move_days": 0, "last_check": today})
+def report_no_movement(symbol):
+    state = _load_state()
+    ensure_symbol(symbol)
+    state[symbol]["no_move_days"] += 1
+    if state[symbol]["no_move_days"] >= MAX_NO_MOVE_DAYS:
+        state[symbol]["passive"] = True
+    _save_state(state)
 
-        if moved:
-            sym_state["no_move_days"] = 0
-        else:
-            sym_state["no_move_days"] += 1
-            if sym_state["no_move_days"] >= NO_MOVE_DAYS_LIMIT:
-                updated = True  # listeden çıkarılacak
-        sym_state["last_check"] = today
-        state[sym] = sym_state
-
-    save_state(state)
-    return updated
-
-# ------------------ RAPOR ------------------
-def fallback_daily_report_message():
-    """
-    Hareket etmeyen sembolleri raporlar.
-    """
-    state = load_state()
-    removed = [s for s, v in state.items() if v.get("no_move_days", 0) >= NO_MOVE_DAYS_LIMIT]
-    if removed:
-        msg = "📌 Hareketsiz hisseler (fallback listeden çıkarılabilir):\n" + "\n".join(removed)
-        return msg
-    return None
+def get_active_symbols():
+    state = _load_state()
+    return [s for s, v in state.items() if not v.get("passive", False)]
