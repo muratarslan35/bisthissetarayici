@@ -177,6 +177,24 @@ def market_open():
     )
 
 # =========================
+# FILTERED STRONG SIGNAL CHECK
+# =========================
+def is_strong_signal(s):
+    if not isinstance(s, dict):
+        return False
+    # En az bir AL tipi sinyal ve kombinasyon şartları
+    if s.get("strength", 0) < 5:
+        return False
+    algos = s.get("algorithms", [])
+    combined = s.get("combined_algorithms", [])
+    # Güçlü al / kombine / süper kombine kontrolleri
+    if "super_kombine" in algos or "kombine" in algos or "l2" in algos or "l3" in algos:
+        return True
+    if combined:
+        return True
+    return False
+
+# =========================
 # BACKGROUND LOOP
 # =========================
 def background_loop():
@@ -229,8 +247,10 @@ def background_loop():
 
             log(f"[SCAN] {len(all_signals)} sinyal işlendi")
 
-            # Telegram sinyalleri
-            for s in all_signals:
+            # Telegram ve dashboard için filtrelenmiş güçlü sinyaller
+            strong_signals = [s for s in all_signals if is_strong_signal(s)]
+
+            for s in strong_signals:
                 sym = s.get("symbol")
                 typ = s.get("type")
                 strength = s.get("strength", 0)
@@ -245,7 +265,7 @@ def background_loop():
                         sent_signal_cache[key] = {"time": time.time(), "strength": strength}
 
             # Başarılı sinyal
-            for s in all_signals:
+            for s in strong_signals:
                 sym = s.get("symbol")
                 if s.get("success") and sym and sym not in SUCCESS_SENT:
                     telegram_send(format_success_message(s))
@@ -268,7 +288,7 @@ def background_loop():
 
             # persistent ve API için temizleme
             with data_lock:
-                for s in all_signals:
+                for s in strong_signals:
                     if s and s not in persistent_signals:
                         persistent_signals.append(deepcopy(s))
                 LATEST_SIGNALS = [
