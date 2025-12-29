@@ -53,8 +53,8 @@ def telegram_send(msg):
                 json={"chat_id": cid, "text": msg},
                 timeout=5
             )
-        except Exception:
-            pass
+        except Exception as e:
+            log(f"TELEGRAM ERROR: {e}")
 
 # =========================
 # SAFE API SERIALIZER
@@ -192,23 +192,40 @@ def background_loop():
                 time.sleep(60)
                 continue
 
-            raw = fetch_bist_data() or []
+            raw = fetch_bist_data()
+            if not isinstance(raw, list):
+                log(f"[WARN] fetch_bist_data geçersiz veri: {raw}")
+                raw = []
+
             all_signals = []
 
             for item in raw:
-                if not item:
+                if not isinstance(item, dict):
+                    log(f"[WARN] Geçersiz item: {item}")
                     continue
-                signals = process_signals(item) or []
+                try:
+                    signals = process_signals(item)
+                    if not isinstance(signals, list):
+                        log(f"[WARN] process_signals geçersiz dönüş: {signals}")
+                        continue
+                except Exception as e:
+                    log(f"[WARN] process_signals hata: {e} | item: {item}")
+                    continue
+
                 for s in signals:
-                    if not s or not isinstance(s, dict):
+                    if not isinstance(s, dict):
+                        log(f"[WARN] Geçersiz sinyal: {s}")
                         continue
                     all_signals.append(s)
-                    update_success(s.get("symbol"), s.get("current_price"))
+                    try:
+                        update_success(s.get("symbol"), s.get("current_price"))
+                    except Exception as e:
+                        log(f"[WARN] update_success hata: {e} | sinyal: {s}")
+
+            log(f"[SCAN] {len(all_signals)} sinyal işlendi")
 
             # Telegram sinyalleri
             for s in all_signals:
-                if not s or not isinstance(s, dict):
-                    continue
                 sym = s.get("symbol")
                 typ = s.get("type")
                 strength = s.get("strength", 0)
@@ -224,8 +241,6 @@ def background_loop():
 
             # Başarılı sinyal
             for s in all_signals:
-                if not s or not isinstance(s, dict):
-                    continue
                 sym = s.get("symbol")
                 if s.get("success") and sym and sym not in SUCCESS_SENT:
                     telegram_send(format_success_message(s))
@@ -246,6 +261,7 @@ def background_loop():
                 SUCCESS_SENT.clear()
                 sent_signal_cache.clear()
 
+            # persistent ve API için temizleme
             with data_lock:
                 for s in all_signals:
                     if s and s not in persistent_signals:
