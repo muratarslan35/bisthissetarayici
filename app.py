@@ -86,6 +86,9 @@ def clean_signal_for_api(s):
 # TELEGRAM FORMAT
 # =========================
 def format_signal_message(s):
+    if not s or not isinstance(s, dict):
+        return None
+
     symbol = s.get("symbol")
     if not symbol:
         return None
@@ -143,6 +146,8 @@ def format_signal_message(s):
     return "\n".join(lines)
 
 def format_success_message(s):
+    if not s or not isinstance(s, dict):
+        return ""
     symbol = s.get("symbol")
     entry = s.get("entry")
     target = s.get("target")
@@ -191,12 +196,19 @@ def background_loop():
             all_signals = []
 
             for item in raw:
+                if not item:
+                    continue
                 signals = process_signals(item) or []
                 for s in signals:
+                    if not s or not isinstance(s, dict):
+                        continue
                     all_signals.append(s)
                     update_success(s.get("symbol"), s.get("current_price"))
 
+            # Telegram sinyalleri
             for s in all_signals:
+                if not s or not isinstance(s, dict):
+                    continue
                 sym = s.get("symbol")
                 typ = s.get("type")
                 strength = s.get("strength", 0)
@@ -210,12 +222,16 @@ def background_loop():
                         telegram_send(msg)
                         sent_signal_cache[key] = {"time": time.time(), "strength": strength}
 
+            # Başarılı sinyal
             for s in all_signals:
+                if not s or not isinstance(s, dict):
+                    continue
                 sym = s.get("symbol")
                 if s.get("success") and sym and sym not in SUCCESS_SENT:
                     telegram_send(format_success_message(s))
                     SUCCESS_SENT.add(sym)
 
+            # Günlük özet
             if now.time() >= dtime(17, 45) and not DAILY_SENT["summary"]:
                 telegram_send(
                     f"📊 GÜNLÜK ÖZET\n\n"
@@ -232,12 +248,12 @@ def background_loop():
 
             with data_lock:
                 for s in all_signals:
-                    if s not in persistent_signals:
+                    if s and s not in persistent_signals:
                         persistent_signals.append(s)
                 LATEST_SIGNALS = [
                     clean_signal_for_api(s)
                     for s in persistent_signals
-                    if clean_signal_for_api(s)
+                    if s
                 ]
 
         except Exception as e:
