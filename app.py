@@ -60,33 +60,30 @@ def telegram_send(msg):
 # SAFE API SERIALIZER
 # =========================
 def clean_signal_for_api(s):
-    """JSON-safe, circular refsiz sinyal"""
     if not isinstance(s, dict):
         return None
-
     return {
         "symbol": s.get("symbol"),
         "type": s.get("type"),
         "current_price": s.get("current_price"),
         "strength": s.get("strength"),
-        "ema_trend": s.get("ema_trend"),
-        "timeframe": s.get("timeframe"),
-        "entry": s.get("entry"),
-        "target": s.get("target"),
-        "stop": s.get("stop"),
+        "ema_trend": s.get("trend_direction"),
+        "volume_tag": s.get("volume_tag"),
         "algorithms": list(s.get("algorithms", [])),
+        "combined_algorithms": s.get("combined_algorithms", []),
         "rsi_1h": s.get("rsi_1h"),
         "rsi_4h": s.get("rsi_4h"),
-        "direnc_1h": s.get("direnc_1h"),
-        "direnc_4h": s.get("direnc_4h"),
-        "ilk": s.get("ilk"),
-        "guclenme": s.get("guclenme"),
+        "resistance_1h": s.get("resistance_1h"),
+        "resistance_4h": s.get("resistance_4h"),
         "first_signal_time": s.get("first_signal_time"),
-        "success": bool(s.get("success", False))
+        "added_algorithms": s.get("added_algorithms"),
+        "level_change": s.get("level_change"),
+        "success": bool(s.get("success", False)),
+        "current_time": s.get("time")
     }
 
 # =========================
-# TELEGRAM FORMAT (PROFESSIONAL)
+# TELEGRAM FORMAT
 # =========================
 def format_signal_message(s):
     symbol = s.get("symbol")
@@ -104,61 +101,46 @@ def format_signal_message(s):
     if strength is not None:
         lines.append(f"🔥 Güç: {strength} / 10")
 
-    # Trend
+    # Trend ve hacim
     trend = s.get("ema_trend")
-    if trend and trend != "None":
+    volume_tag = s.get("volume_tag")
+    if trend:
         lines.append(f"📈 Trend: {trend}")
-
-    # Zaman dilimi
-    tf = s.get("timeframe")
-    if tf:
-        lines.append(f"⏱ Zaman Dilimi: {tf}")
-
-    # Giriş / Hedef / Stop
-    entry = s.get("entry")
-    target = s.get("target")
-    stop = s.get("stop")
-    if entry:
-        lines.append(f"🎯 Giriş: {round(entry, 2)}")
-    if target:
-        lines.append(f"✅ Hedef: {round(target, 2)}")
-    if stop:
-        lines.append(f"🛑 Stop: {round(stop, 2)}")
+    if volume_tag:
+        lines.append(f"📊 Hacim: {volume_tag}")
 
     # Algoritmalar
     algos = s.get("algorithms", [])
+    added_algos = s.get("added_algorithms", [])
     if algos:
         pretty = {
-            "l1": "RSI Momentum",
             "l2": "EMA Trend",
             "l3": "Destek / Direnç",
             "l4": "Breakout",
-            "l5": "Hacim Artışı",
-            "squeeze": "Volatility Squeeze"
+            "three_peak": "Üç Zirve",
+            "order_block": "Order Block",
+            "squeeze": "Üçgen Sıkışma",
+            "squeeze_break": "Üçgen Kırılım",
+            "combined": "Kombine",
+            "super_combined": "Süper Kombine"
         }
         lines.append("\n🧠 Tetiklenen Algoritmalar:")
         for a in algos:
-            lines.append(f"• {pretty.get(a, a.upper())}")
+            prefix = "+" if a in added_algos else "•"
+            lines.append(f"{prefix} {pretty.get(a, a.upper())}")
 
-    # Ek veriler
+    # RSI / Direnç
     rsi_1h = s.get("rsi_1h")
     rsi_4h = s.get("rsi_4h")
     if rsi_1h or rsi_4h:
         lines.append(f"\n📊 RSI 1h / 4h: {rsi_1h} / {rsi_4h}")
 
-    direnc_1h = s.get("direnc_1h")
-    direnc_4h = s.get("direnc_4h")
-    if direnc_1h or direnc_4h:
-        lines.append(f"📌 Direnç 1h / 4h: {direnc_1h} / {direnc_4h}")
+    res_1h = s.get("resistance_1h")
+    res_4h = s.get("resistance_4h")
+    if res_1h or res_4h:
+        lines.append(f"📌 Direnç 1h / 4h: {res_1h} / {res_4h}")
 
-    ilk = s.get("ilk")
-    if ilk:
-        lines.append(f"🕹 İlk: {ilk}")
-
-    guclenme = s.get("guclenme")
-    if guclenme:
-        lines.append(f"⚡ Güçlenme: {guclenme}")
-
+    # İlk sinyal zamanı
     first_time = s.get("first_signal_time")
     if first_time:
         lines.append(f"🕒 İlk Sinyal: {first_time}")
@@ -219,7 +201,7 @@ def background_loop():
                     all_signals.append(s)
                     update_success(s.get("symbol"), s.get("current_price"))
 
-            # Telegram sinyaller
+            # Telegram sinyalleri
             for s in all_signals:
                 sym = s.get("symbol")
                 typ = s.get("type")
