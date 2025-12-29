@@ -3,13 +3,15 @@ from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 import numpy as np
+import yfinance as yf
 
 from utils import (
     nearest_support_resistance_from_history,
     detect_support_resistance_break,
     detect_three_peaks,
     detect_order_block,
-    to_tr_timezone
+    to_tr_timezone,
+    load_fallback_symbols
 )
 
 # =========================
@@ -64,8 +66,29 @@ def fmt(v):
     return round(v, 2) if isinstance(v, (int, float)) else None
 
 # =========================
-# SYNTHETIC RSI
+# HYBRID DATA FETCH & INDICATORS
 # =========================
+def fetch_hybrid_data(symbol, period="7d", interval="15m"):
+    try:
+        df = yf.download(symbol, period=period, interval=interval, progress=False)
+        if df.empty:
+            return None
+        df = df.tail(200)
+        df["EMA20"] = df["Close"].ewm(span=20, adjust=False).mean()
+        df["EMA50"] = df["Close"].ewm(span=50, adjust=False).mean()
+        df["EMA200"] = df["Close"].ewm(span=200, adjust=False).mean()
+        delta = df["Close"].diff()
+        up = delta.clip(lower=0)
+        down = -delta.clip(upper=0)
+        roll_up = up.rolling(14).mean()
+        roll_down = down.rolling(14).mean()
+        df["RSI"] = 100 - (100 / (1 + roll_up / roll_down))
+        df["Volume_avg_20"] = df["Volume"].rolling(20).mean()
+        return df
+    except Exception as e:
+        print(f"[signal_engine] Veri çekme hatası {symbol}: {e}")
+        return None
+
 def synthetic_rsi_from_df(df, current_price, period=14):
     if df is None or "Close" not in df or len(df) < period + 2:
         return None
@@ -83,7 +106,7 @@ def synthetic_rsi_from_df(df, current_price, period=14):
     return round(100 - (100 / (1 + rs)), 2)
 
 # =========================
-# TREND / VOLUME
+# TREND & VOLUME HELPERS
 # =========================
 def trend_direction(ema20, ema50, ema200):
     if ema20 and ema50 and ema200:
@@ -110,15 +133,12 @@ def decide_action(strength, trend, vol):
         return "AL"
     return "TAKİP ET"
 
-# =========================
-# META ENRICH
-# =========================
 def enrich_meta(item, tf, base):
     tf1h = item["tf"].get("1h", {})
     tf4h = item["tf"].get("4h", {})
 
-    ema_tr = trend_direction(tf.get("ema20"), tf.get("ema50"), tf.get("ema200"))
-    vol_tag = volume_strength(tf.get("volume"), tf.get("volume_avg_20"))
+    ema_tr = trend_direction(tf.get("EMA20"), tf.get("EMA50"), tf.get("EMA200"))
+    vol_tag = volume_strength(tf.get("Volume"), tf.get("Volume_avg_20"))
 
     base.update({
         "symbol": item["symbol"],
@@ -164,23 +184,23 @@ def atr(df, period=14):
     return tr.rolling(period).mean().iloc[-1]
 
 # =========================
-# CORE ALGORITHMS
+# SIGNAL ALGORITHMS
 # =========================
 def l2_signal(item):
     tf = item["tf"].get("5m", {})
-    if tf.get("rsi", 0) > 55 and not in_repeat_block(item["symbol"], "l2"):
+    if tf.get("RSI", 0) > 55 and not in_repeat_block(item["symbol"], "l2"):
         mark_sent(item["symbol"], "l2")
         return enrich_meta(item, tf, {"type": "l2", "emoji": "📈", "strength": 55})
 
 def l3_signal(item):
     tf = item["tf"].get("5m", {})
-    if tf.get("rsi", 0) > 60 and not in_repeat_block(item["symbol"], "l3"):
+    if tf.get("RSI", 0) > 60 and not in_repeat_block(item["symbol"], "l3"):
         mark_sent(item["symbol"], "l3")
         return enrich_meta(item, tf, {"type": "l3", "emoji": "🔥", "strength": 65})
 
 def l4_signal(item):
     tf = item["tf"].get("15m", {})
-    if tf.get("rsi", 0) > 65 and not in_repeat_block(item["symbol"], "l4"):
+    if tf.get("RSI", 0) > 65 and not in_repeat_block(item["symbol"], "l4"):
         mark_sent(item["symbol"], "l4")
         return enrich_meta(item, tf, {"type": "l4", "emoji": "💎", "strength": 75})
 
@@ -218,9 +238,9 @@ def squeeze_signal(item):
         return None
     bb_width = bollinger_band_width(df)
     atr_val = atr(df)
-    vol = tf.get("volume")
-    vol_avg = tf.get("volume_avg_20")
-    rsi = tf.get("rsi", 0)
+    vol = tf.get("Volume")
+    vol_avg = tf.get("Volume_avg_20")
+    rsi = tf.get("RSI", 0)
 
     is_squeeze = (
         bb_width and bb_width < 0.035
@@ -256,12 +276,12 @@ def combined_signal(item):
     tf4h = item["tf"].get("4h", {})
     tf1d = item["tf"].get("1d", {})
 
-    rsi15 = tf15.get("rsi", 100)
+    rsi15 = tf15.get("RSI", 100)
     rsi4h = synthetic_rsi_from_df(tf4h.get("df"), item["current_price"])
 
     if not (
-        tf1d.get("close") > tf1d.get("open")
-        and tf4h.get("close") > tf4h.get("open")
+        tf1d.get("Close", 0) > tf1d.get("Open", 0)
+        and tf4h.get("Close", 0) > tf4h.get("Open", 0)
         and 28 <= rsi15 <= 38
         and rsi4h and rsi4h > 55
     ):
@@ -278,13 +298,13 @@ def super_combined_signal(item):
     tf4h = item["tf"].get("4h", {})
     tf1d = item["tf"].get("1d", {})
 
-    rsi15 = tf15.get("rsi", 100)
+    rsi15 = tf15.get("RSI", 100)
     rsi1h = synthetic_rsi_from_df(tf1h.get("df"), item["current_price"])
     rsi4h = synthetic_rsi_from_df(tf4h.get("df"), item["current_price"])
 
     if not (
-        tf1d.get("close") > tf1d.get("open")
-        and tf4h.get("close") > tf4h.get("open")
+        tf1d.get("Close", 0) > tf1d.get("Open", 0)
+        and tf4h.get("Close", 0) > tf4h.get("Open", 0)
         and 25 <= rsi15 <= 35
         and rsi1h and rsi1h > 55
         and rsi4h and rsi4h > 60
@@ -300,18 +320,24 @@ def super_combined_signal(item):
 # PROCESS SIGNALS
 # =========================
 def process_signals(item, market_open=True):
-    signals = []
+    fallback_symbols = load_fallback_symbols()
+    if item["symbol"] not in fallback_symbols:
+        return []
 
+    tf_data = {
+        "15m": fetch_hybrid_data(item["symbol"], interval="15m"),
+        "1h": fetch_hybrid_data(item["symbol"], interval="1h"),
+        "4h": fetch_hybrid_data(item["symbol"], interval="4h"),
+        "1d": fetch_hybrid_data(item["symbol"], interval="1d")
+    }
+
+    item["tf"] = {k: {"df": v} if v is not None else {} for k, v in tf_data.items()}
+
+    signals = []
     for fn in (
-        l2_signal,
-        l3_signal,
-        l4_signal,
-        breakout_signal,
-        three_peak_signal,
-        ob_signal,
-        squeeze_signal,
-        combined_signal,
-        super_combined_signal
+        l2_signal, l3_signal, l4_signal, breakout_signal,
+        three_peak_signal, ob_signal, squeeze_signal,
+        combined_signal, super_combined_signal
     ):
         r = fn(item)
         if r:
@@ -326,7 +352,7 @@ def process_signals(item, market_open=True):
 
     if base["type"] == "kombine":
         base["combined_type"] = "KOMBİNE"
-    elif base["type"] == "super_combined":
+    elif base["type"] == "super_kombine":
         base["combined_type"] = "SÜPER"
     else:
         base["combined_type"] = None
