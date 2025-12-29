@@ -130,7 +130,7 @@ function render(){
       case "success": return s.success;
       case "favorite": return favorites.includes(s.symbol);
       case "volume": return s.volume_tag==="GÜÇLÜ";
-      case "strengthened": return s.level_change;
+      case "strengthened": return !!s.level_change;
       case "kombine": return (s.algorithms||[]).includes("kombine");
       case "super_combined": return (s.algorithms||[]).includes("super_kombine");
       case "squeeze": return (s.algorithms||[]).includes("squeeze");
