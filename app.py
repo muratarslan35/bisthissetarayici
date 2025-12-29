@@ -1,4 +1,3 @@
-
 import os
 import time
 import json
@@ -11,11 +10,11 @@ from flask import Flask, jsonify, send_from_directory
 from dotenv import load_dotenv
 
 from fetch_bist import fetch_bist_data
-from signal_engine import process_signals
+from signal_engine import process_signals, update_success
 from utils import to_tr_timezone
 
 # =========================
-# ENV & PATH
+# ENV
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -23,27 +22,25 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
-SUCCESS_STORE_FILE = os.path.join(BASE_DIR, "successful_signals.json")
-
 # =========================
-# FLASK APP
+# FLASK
 # =========================
 app = Flask(__name__)
 
-LATEST_DATA = []
 LATEST_SIGNALS = []
-SUCCESS_SIGNALS = []
-
 persistent_signals = []
-LAST_SCAN_TS = None
-SYSTEM_STARTED = False
+SUCCESS_SENT = set()
 
+SYSTEM_STARTED = False
+LAST_SCAN_TS = None
 sent_signal_cache = {}
 
 data_lock = threading.Lock()
-DAILY_SENT = {"strong_stocks": False, "summary": False}
+REPEAT_DELAY = 15 * 60
 
-REPEAT_DELAY = 15 * 60  # 15 dk
+DAILY_SENT = {
+    "summary": False
+}
 
 # =========================
 # UTILS
@@ -51,44 +48,39 @@ REPEAT_DELAY = 15 * 60  # 15 dk
 def log(msg):
     print(f"[APP] {msg}", flush=True)
 
-def make_json_safe(obj):
-    if isinstance(obj, dict):
-        return {k: make_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [make_json_safe(v) for v in obj]
-    if hasattr(obj, "item"):
-        return obj.item()
-    return obj
-
-# =========================
-# SUCCESS STORE
-# =========================
-def load_success_store():
-    global SUCCESS_SIGNALS
-    if os.path.exists(SUCCESS_STORE_FILE):
+def telegram_send(msg):
+    if not TELEGRAM_TOKEN or not CHAT_IDS:
+        return
+    for cid in CHAT_IDS:
         try:
-            with open(SUCCESS_STORE_FILE, "r", encoding="utf-8") as f:
-                SUCCESS_SIGNALS = json.load(f)
-        except Exception:
-            SUCCESS_SIGNALS = []
-    else:
-        SUCCESS_SIGNALS = []
+            requests.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                json={"chat_id": cid, "text": msg},
+                timeout=5
+            )
+        except:
+            pass
 
-def save_success_store():
-    try:
-        with open(SUCCESS_STORE_FILE, "w", encoding="utf-8") as f:
-            json.dump(SUCCESS_SIGNALS, f, ensure_ascii=False)
-    except Exception as e:
-        log(f"Başarı kaydetme hatası: {e}")
+def format_signal_message(s):
+    return (
+        f"📊 {s['symbol']}\n"
+        f"Fiyat: {s.get('current_price')}\n"
+        f"Güç: {s.get('strength')}\n"
+        f"Trend: {s.get('ema_trend')}\n"
+        f"Algoritmalar: {', '.join(s.get('algorithms', []))}"
+    )
 
-def reset_success_store():
-    global SUCCESS_SIGNALS, persistent_signals
-    SUCCESS_SIGNALS = []
-    persistent_signals = []
-    save_success_store()
+def format_success_message(s):
+    return (
+        f"🏆 BAŞARILI SİNYAL\n\n"
+        f"{s['symbol']}\n"
+        f"Giriş: {s['entry']}\n"
+        f"Hedef: {s['target']}\n"
+        f"Algoritma: {s['algorithm']}"
+    )
 
 # =========================
-# MARKET TIME
+# MARKET
 # =========================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
@@ -99,103 +91,84 @@ def market_open():
     )
 
 # =========================
-# TELEGRAM
-# =========================
-def telegram_send(message):
-    if not TELEGRAM_TOKEN or not CHAT_IDS or not message:
-        return
-
-    for cid in CHAT_IDS:
-        try:
-            requests.post(
-                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={"chat_id": cid, "text": message},
-                timeout=5
-            )
-        except Exception as e:
-            log(f"Telegram hata: {e}")
-
-# =========================
-# BACKGROUND LOOP
+# BACKGROUND
 # =========================
 def background_loop():
-    global LATEST_DATA, LATEST_SIGNALS, LAST_SCAN_TS
-    global SYSTEM_STARTED, sent_signal_cache, persistent_signals
+    global SYSTEM_STARTED, LAST_SCAN_TS, LATEST_SIGNALS
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU BAŞLATILDI")
     log("Bot başlatıldı")
 
-    load_success_store()
-    last_reset_date = None
+    last_day = None
 
     while True:
         try:
             now = to_tr_timezone(datetime.now(timezone.utc))
             LAST_SCAN_TS = int(now.timestamp())
 
-            # 🚨 KRİTİK DÜZELTME
             if not market_open():
                 time.sleep(60)
                 continue
 
-            raw_data = fetch_bist_data()
+            raw = fetch_bist_data()
             all_signals = []
 
-            for item in raw_data:
-                try:
-                    signals = process_signals(item, market_open=True)
-                    if signals:
-                        for s in signals:
-                            s["timestamp"] = now.strftime("%H:%M:%S")
-                        all_signals.extend(signals)
-                except Exception as e:
-                    log(f"Sinyal hata {item.get('symbol')}: {e}")
+            for item in raw:
+                signals = process_signals(item)
+                for s in signals:
+                    all_signals.append(s)
+                    update_success(s["symbol"], s["current_price"])
 
-            # 09:40 reset
-            if (
-                now.weekday() < 5 and
-                last_reset_date != now.date() and
-                now.time() >= dtime(9, 40)
-            ):
-                last_reset_date = now.date()
-                reset_success_store()
-                sent_signal_cache = {}
-                DAILY_SENT["strong_stocks"] = False
+            # -------------------------
+            # TELEGRAM SİNYALLER
+            # -------------------------
+            for s in all_signals:
+                key = (s["symbol"], s["type"])
+                prev = sent_signal_cache.get(key, {"time": 0, "strength": 0})
+
+                if (
+                    s["strength"] > prev["strength"] or
+                    time.time() - prev["time"] > REPEAT_DELAY
+                ):
+                    telegram_send(format_signal_message(s))
+                    sent_signal_cache[key] = {
+                        "time": time.time(),
+                        "strength": s["strength"]
+                    }
+
+            # -------------------------
+            # BAŞARILI SİNYAL
+            # -------------------------
+            for s in all_signals:
+                if s.get("success") and s["symbol"] not in SUCCESS_SENT:
+                    telegram_send(format_success_message(s))
+                    SUCCESS_SENT.add(s["symbol"])
+
+            # -------------------------
+            # GÜNLÜK ÖZET
+            # -------------------------
+            if now.time() >= dtime(17, 45) and not DAILY_SENT["summary"]:
+                total = len(persistent_signals)
+                success = len(SUCCESS_SENT)
+
+                telegram_send(
+                    f"📊 GÜNLÜK ÖZET\n\n"
+                    f"Toplam sinyal: {total}\n"
+                    f"Başarılı: {success}"
+                )
+                DAILY_SENT["summary"] = True
+
+            # Yeni gün reset
+            if last_day != now.date():
+                last_day = now.date()
                 DAILY_SENT["summary"] = False
-
-            # Dashboard hafızası
-            for meta in all_signals:
-                key = meta["symbol"]
-                existing = next((x for x in persistent_signals if x["symbol"] == key), None)
-                if existing:
-                    if meta.get("strength", 0) > existing.get("strength", 0):
-                        existing.update(meta)
-                else:
-                    persistent_signals.insert(0, meta)
-
-            # Telegram
-            grouped = defaultdict(list)
-            for meta in all_signals:
-                grouped[meta["symbol"]].append(meta)
-
-            now_ts = int(time.time())
-            for symbol, metas in grouped.items():
-                for meta in metas:
-                    key = (symbol, meta.get("type"))
-                    prev = sent_signal_cache.get(key, {"strength": 0, "time": 0})
-                    if (
-                        meta.get("strength", 0) > prev["strength"] or
-                        now_ts - prev["time"] > REPEAT_DELAY
-                    ):
-                        telegram_send(meta.get("symbol"))
-                        sent_signal_cache[key] = {
-                            "strength": meta.get("strength", 0),
-                            "time": now_ts
-                        }
+                SUCCESS_SENT.clear()
 
             with data_lock:
-                LATEST_DATA = raw_data
+                for s in all_signals:
+                    if s not in persistent_signals:
+                        persistent_signals.append(s)
                 LATEST_SIGNALS = persistent_signals.copy()
 
         except Exception as e:
@@ -213,32 +186,17 @@ threading.Thread(target=background_loop, daemon=True).start()
 # =========================
 @app.route("/api")
 def api():
-    with data_lock:
-        last_scan_time = None
-        if LAST_SCAN_TS:
-            dt_utc = datetime.fromtimestamp(LAST_SCAN_TS, tz=timezone.utc)
-            dt_tr = to_tr_timezone(dt_utc)
-            last_scan_time = dt_tr.strftime("%Y-%m-%d %H:%M:%S")
-
-        return jsonify(make_json_safe({
-            "system_active": SYSTEM_STARTED,
-            "market_open": market_open(),
-            "last_scan": last_scan_time,
-            "signals": LATEST_SIGNALS,
-            "success_signals": SUCCESS_SIGNALS
-        }))
+    return jsonify({
+        "system_active": SYSTEM_STARTED,
+        "signals": LATEST_SIGNALS
+    })
 
 @app.route("/")
 def dashboard():
     return send_from_directory("static", "dashboard.html")
 
 # =========================
-# MAIN
+# RUN
 # =========================
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        use_reloader=False
-    )
+    app.run(host="0.0.0.0", port=5000, debug=False)
