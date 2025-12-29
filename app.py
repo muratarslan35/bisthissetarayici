@@ -81,15 +81,14 @@ def clean_signal_for_api(s):
             "added_algorithms": list(s.get("added_algorithms") or []),
             "level_change": str(s.get("level_change")) if s.get("level_change") else None,
             "success": bool(s.get("success", False)),
-            "current_time": str(s.get("time")) if s.get("time") else None,
-            "kurumsal_al": bool(s.get("kurumsal_al", False))
+            "current_time": str(s.get("time")) if s.get("time") else None
         }
     except Exception as e:
         log(f"[WARN] clean_signal_for_api hata: {e} | sinyal: {s}")
         return None
 
 # =========================
-# TELEGRAM FORMAT (Profesyonel)
+# PROFESSIONAL TELEGRAM FORMAT
 # =========================
 def format_signal_message(s):
     if not s or not isinstance(s, dict):
@@ -100,53 +99,56 @@ def format_signal_message(s):
         return None
 
     signal_type = s.get("type", "SİNYAL")
-    kurumsal = "DOĞRULANDI" if s.get("kurumsal_al") else "ONAYLANMADI"
+    lines = [f"📈 {symbol} | {signal_type}", ""]
 
-    lines = [
-        f"📊 Sembol: {symbol}",
-        f"🕒 İlk Sinyal: {s.get('first_signal_time') or '—'}",
-        f"💰 Fiyat: {round(s.get('current_price', 0), 2) if s.get('current_price') else '—'}",
-        f"🔥 Güç: {s.get('strength', '—')} / 10",
-        f"📈 Trend: {s.get('ema_trend') or '—'}",
-        f"✅ Kurumsal AL: {kurumsal}"
-    ]
+    price = s.get("current_price")
+    strength = s.get("strength")
+    trend = s.get("ema_trend")
+    volume = s.get("volume_tag")
+    if price is not None:
+        lines.append(f"💰 Fiyat: {price:.2f} ₺")
+    if strength is not None:
+        lines.append(f"🔥 Güç: {strength:.1f} / 10")
+    if trend:
+        lines.append(f"📊 Trend: {trend}")
+    if volume:
+        lines.append(f"📉 Hacim: {volume}")
 
-    # Algoritmalar listesi
-    algos = s.get("algorithms") or []
-    added_algos = s.get("added_algorithms") or []
+    algos = s.get("algorithms", [])
+    added_algos = s.get("added_algorithms", [])
     if algos:
-        lines.append("\n🧠 Algoritmalar:")
         pretty = {
             "l2": "EMA Trend",
             "l3": "Destek / Direnç",
             "l4": "Breakout",
-            "three_peak": "Three Peak",
+            "three_peak": "Üç Zirve",
             "order_block": "Order Block",
             "squeeze": "Üçgen Sıkışma",
             "squeeze_break": "Üçgen Kırılım",
             "kombine": "Kombine",
             "super_kombine": "Süper Kombine"
         }
+        lines.append("\n🧠 Tetiklenen Algoritmalar:")
         for a in algos:
             prefix = "+" if a in added_algos else "•"
             lines.append(f"{prefix} {pretty.get(a, a.upper())}")
 
-    # RSI ve dirençler
     rsi_1h = s.get("rsi_1h")
     rsi_4h = s.get("rsi_4h")
     if rsi_1h or rsi_4h:
-        lines.append(f"\n📊 RSI 1h / 4h: {rsi_1h or '—'} / {rsi_4h or '—'}")
+        lines.append(f"\n📊 RSI: 1h {rsi_1h:.2f} / 4h {rsi_4h:.2f}")
 
     res_1h = s.get("resistance_1h")
     res_4h = s.get("resistance_4h")
     if res_1h or res_4h:
-        lines.append(f"📌 Direnç 1h / 4h: {res_1h or '—'} / {res_4h or '—'}")
+        lines.append(f"📌 Direnç: 1h {res_1h} / 4h {res_4h}")
+
+    first_time = s.get("first_signal_time")
+    if first_time:
+        lines.append(f"🕒 İlk Sinyal: {first_time}")
 
     return "\n".join(lines)
 
-# =========================
-# SUCCESS MESSAGE
-# =========================
 def format_success_message(s):
     if not s or not isinstance(s, dict):
         return ""
@@ -163,7 +165,7 @@ def format_success_message(s):
     )
 
 # =========================
-# MARKET
+# MARKET CHECK
 # =========================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
@@ -172,6 +174,23 @@ def market_open():
         ((now.hour > 9) or (now.hour == 9 and now.minute >= 55)) and
         now.hour < 18
     )
+
+# =========================
+# STRONG SIGNAL FILTER
+# =========================
+def is_strong_signal(s):
+    if not isinstance(s, dict):
+        return False
+    if s.get("strength", 0) < 5:
+        return False
+    algos = s.get("algorithms", [])
+    combined = s.get("combined_algorithms", [])
+    # Güçlü al / kombine / süper kombine ve kurumsal AL mantığı
+    if "super_kombine" in algos or "kombine" in algos or "l2" in algos or "l3" in algos or "order_block" in algos:
+        return True
+    if combined:
+        return True
+    return False
 
 # =========================
 # BACKGROUND LOOP
@@ -218,19 +237,6 @@ def background_loop():
                     if not isinstance(s, dict):
                         log(f"[WARN] Geçersiz sinyal: {s}")
                         continue
-
-                    # Kurumsal AL mantığı
-                    kurumsal_al = False
-                    if "super_kombine" in s.get("algorithms", []) or "kombine" in s.get("algorithms", []):
-                        kurumsal_al = True
-                    else:
-                        # Diğer algoritmaların desteklediği güçlü AL kontrolü
-                        destek_algos = ["l2", "l3", "l4", "order_block", "three_peak", "squeeze", "squeeze_break"]
-                        count = sum(1 for a in s.get("algorithms", []) if a in destek_algos)
-                        if count >= 2 and s.get("strength", 0) >= 6.5:
-                            kurumsal_al = True
-                    s["kurumsal_al"] = kurumsal_al
-
                     all_signals.append(deepcopy(s))
                     try:
                         update_success(s.get("symbol"), s.get("current_price"))
@@ -239,8 +245,10 @@ def background_loop():
 
             log(f"[SCAN] {len(all_signals)} sinyal işlendi")
 
-            # Telegram sinyalleri
-            for s in all_signals:
+            # Güçlü sinyaller
+            strong_signals = [s for s in all_signals if is_strong_signal(s)]
+
+            for s in strong_signals:
                 sym = s.get("symbol")
                 typ = s.get("type")
                 strength = s.get("strength", 0)
@@ -248,14 +256,14 @@ def background_loop():
                     continue
                 key = (sym, typ)
                 prev = sent_signal_cache.get(key, {"time": 0, "strength": 0})
-                if s.get("kurumsal_al") and (strength > prev["strength"] or time.time() - prev["time"] > REPEAT_DELAY):
+                if strength > prev["strength"] or time.time() - prev["time"] > REPEAT_DELAY:
                     msg = format_signal_message(s)
                     if msg:
                         telegram_send(msg)
                         sent_signal_cache[key] = {"time": time.time(), "strength": strength}
 
             # Başarılı sinyal
-            for s in all_signals:
+            for s in strong_signals:
                 sym = s.get("symbol")
                 if s.get("success") and sym and sym not in SUCCESS_SENT:
                     telegram_send(format_success_message(s))
@@ -278,7 +286,7 @@ def background_loop():
 
             # persistent ve API için temizleme
             with data_lock:
-                for s in all_signals:
+                for s in strong_signals:
                     if s and s not in persistent_signals:
                         persistent_signals.append(deepcopy(s))
                 LATEST_SIGNALS = [
