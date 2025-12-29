@@ -115,6 +115,7 @@ def fetch_timeframe_indicators(df, symbol=None):
         "rsi": float(rsi.iloc[-1]),
         "support_break": bool(s_break),
         "resistance_break": bool(r_break),
+        "df": df  # ileride signal engine için gerekli
     }
 
     try:
