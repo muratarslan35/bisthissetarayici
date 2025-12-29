@@ -76,8 +76,6 @@ h2{margin:0;font-size:20px}
   <div class="filter" data-type="favorite">⭐ FAVORİ</div>
   <div class="filter" data-type="kombine">KOMBİNE ⚡</div>
   <div class="filter" data-type="super_combined">SÜPER KOMBİNE 🔥</div>
-  <div class="filter" data-type="squeeze">🫧 ÜÇGEN SIKIŞMA</div>
-  <div class="filter" data-type="squeeze_break">💥 ÜÇGEN KIRILIM</div>
   <div class="filter" data-type="volume">GÜÇLÜ HACİM 📊</div>
   <div class="filter" data-type="strengthened">GÜÇLENEN ⚡</div>
   <div class="filter" data-type="institutional">🏦 KURUMSAL</div>
@@ -115,10 +113,6 @@ document.querySelectorAll(".filter").forEach(f=>{
   };
 });
 
-function isInstitutional(s){
-  return (s.algorithms||[]).includes("order_block");
-}
-
 function render(){
   const c = document.getElementById("cards");
   c.innerHTML = "";
@@ -130,12 +124,10 @@ function render(){
       case "success": return s.success;
       case "favorite": return favorites.includes(s.symbol);
       case "volume": return s.volume_tag==="GÜÇLÜ";
-      case "strengthened": return !!s.level_change;
+      case "strengthened": return s.level_change;
       case "kombine": return (s.algorithms||[]).includes("kombine");
       case "super_combined": return (s.algorithms||[]).includes("super_kombine");
-      case "squeeze": return (s.algorithms||[]).includes("squeeze");
-      case "squeeze_break": return (s.algorithms||[]).includes("squeeze_break");
-      case "institutional": return isInstitutional(s);
+      case "institutional": return s.institutional;
       default: return true;
     }
   });
@@ -162,7 +154,7 @@ function render(){
     d.innerHTML = `
       ${s.volume_tag==="GÜÇLÜ"?`<div class="volume-strong">📊 GÜÇLÜ HACİM</div>`:""}
       ${s.success?`<div class="success-tag">🏆 BAŞARILI</div>`:""}
-      ${isInstitutional(s)?`<div class="institutional-tag">🏦 KURUMSAL</div>`:""}
+      ${s.institutional?`<div class="institutional-tag">🏦 KURUMSAL</div>`:""}
       <div class="fav-btn" onclick="toggleFavorite('${s.symbol}')">
         ${favorites.includes(s.symbol)?"⭐":"☆"}
       </div>
@@ -175,46 +167,12 @@ function render(){
       <div class="meta">
         <span>Trend: ${s.ema_trend||"-"}</span>
         <span>RSI 1h / 4h: ${s.rsi_1h||"-"} / ${s.rsi_4h||"-"}</span>
-        <span>Direnç 1h / 4h: ${s.resistance_1h||"-"} / ${s.resistance_4h||"-"}</span>
       </div>
 
       <div class="strength">Güç Skoru: ${s.strength||"-"} / 10</div>
 
       <div class="timebox">
-        <div>
-          İlk: ${s.first_signal_time||"-"}<br>
-          ${(s.first_algorithms||[]).map(a=>{
-            const names = {
-              l2:"EMA Trend 📈",
-              l3:"Destek / Direnç 🛡️",
-              l4:"Breakout 🚀",
-              three_peak:"Üç Zirve 🔺",
-              order_block:"Emir Bloğu 📦",
-              squeeze:"Üçgen Sıkışma 🫧",
-              squeeze_break:"Üçgen Kırılım 💥",
-              kombine:"Kombine ⚡",
-              super_kombine:"Süper KOMBİNE 🔥"
-            };
-            return names[a]||a;
-          }).join(" ")}
-        </div>
-        <div>
-          Güçlenme: ${s.strengthen_time||"-"}<br>
-          ${(s.added_algorithms||[]).map(a=>{
-            const names = {
-              l2:"EMA Trend 📈",
-              l3:"Destek / Direnç 🛡️",
-              l4:"Breakout 🚀",
-              three_peak:"Üç Zirve 🔺",
-              order_block:"Emir Bloğu 📦",
-              squeeze:"Üçgen Sıkışma 🫧",
-              squeeze_break:"Üçgen Kırılım 💥",
-              kombine:"Kombine ⚡",
-              super_kombine:"Süper KOMBİNE 🔥"
-            };
-            return `+${names[a]||a}`;
-          }).join(" ")}
-        </div>
+        <div>İlk: ${s.first_signal_time||"-"}</div>
       </div>
     `;
     c.appendChild(d);
@@ -245,7 +203,7 @@ async function updateAPI(){
     marketBadge.className = "badge " + (d.market_open ? "green" : "yellow");
 
     if(d.last_scan){
-      lastScanTime = new Date(d.last_scan.replace(" ","T")).getTime();
+      lastScanTime = new Date(d.last_scan*1000);
     }
 
     render();
@@ -256,8 +214,8 @@ async function updateAPI(){
 
 function updateClock(){
   if(lastScanTime){
-    const now = Date.now();
-    const display = new Date(lastScanTime + (now - lastScanTime)).toLocaleTimeString("tr-TR",{hour12:false});
+    const now = new Date();
+    const display = new Date(lastScanTime.getTime() + (now-lastScanTime)).toLocaleTimeString("tr-TR",{hour12:false});
     scanDisplay.textContent = display;
   }
 }
