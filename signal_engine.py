@@ -22,22 +22,18 @@ successful_signals_store = {}
 TARGET_PCT = 0.015
 REPEAT_BLOCK_MINUTES = 30
 
-
 # ======================================================
 # TIME
 # ======================================================
 def now_tr():
     return to_tr_timezone(datetime.now(timezone.utc))
 
-
 def in_repeat_block(symbol, algo):
     t = sent_signals.get((symbol, algo))
     return t and now_tr() < t
 
-
 def mark_sent(symbol, algo):
     sent_signals[(symbol, algo)] = now_tr() + timedelta(minutes=REPEAT_BLOCK_MINUTES)
-
 
 # ======================================================
 # SUCCESS TRACKING
@@ -57,7 +53,6 @@ def register_signal(symbol, price, algo):
             "time": now_tr().strftime("%H:%M:%S")
         }
 
-
 def update_success(symbol, price):
     today = now_tr().date()
     d = success_tracker.get(today, {}).get(symbol)
@@ -66,17 +61,14 @@ def update_success(symbol, price):
         successful_signals_store.setdefault(today, {})
         successful_signals_store[today][symbol] = d
 
-
 # ======================================================
 # SAFE HELPERS
 # ======================================================
 def fmt(v):
     return round(v, 2) if isinstance(v, (int, float)) else None
 
-
 def safe(v):
     return v if isinstance(v, (int, float)) else None
-
 
 # ======================================================
 # RSI
@@ -97,7 +89,6 @@ def synthetic_rsi_from_df(df, current_price, period=14):
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 2)
 
-
 # ======================================================
 # TREND / VOLUME
 # ======================================================
@@ -109,7 +100,6 @@ def trend_direction(e20, e50, e200):
             return "📉 AŞAĞI"
     return "➖ YATAY"
 
-
 def volume_strength(v, avg):
     if not isinstance(v, (int, float)) or not isinstance(avg, (int, float)):
         return None
@@ -120,14 +110,12 @@ def volume_strength(v, avg):
         return "ORTA"
     return "ZAYIF"
 
-
 def decide_action(strength, trend, vol):
     if strength >= 8.5 and trend == "📈 YUKARI" and vol in ("ORTA", "GÜÇLÜ"):
         return "GÜÇLÜ AL"
     if strength >= 7:
         return "AL"
     return "TAKİP"
-
 
 # ======================================================
 # META ENRICH
@@ -161,7 +149,6 @@ def enrich_meta(item, tf, base):
     })
     return base
 
-
 # ======================================================
 # VOLATILITY
 # ======================================================
@@ -173,7 +160,6 @@ def bollinger_band_width(df, period=20):
     v = ((ma + 2 * sd) - (ma - 2 * sd)) / ma
     return safe(v.iloc[-1])
 
-
 def atr(df, period=14):
     if df is None or len(df) < period + 1:
         return None
@@ -184,73 +170,36 @@ def atr(df, period=14):
     ], axis=1).max(axis=1)
     return safe(tr.rolling(period).mean().iloc[-1])
 
-
 # ======================================================
 # ALGORITHMS
 # ======================================================
 def l2_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
-    if tf.get("rsi", 50) < 35:
-        return enrich_meta(item, tf, {
-            "type": "l2",
-            "emoji": "🟢",
-            "strength": 65
-        })
-
+    return enrich_meta(item, tf, {"type": "l2", "emoji": "🟢", "strength": 65})
 
 def l3_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
-    if tf.get("rsi", 50) < 30:
-        return enrich_meta(item, tf, {
-            "type": "l3",
-            "emoji": "🟢",
-            "strength": 70
-        })
-
+    return enrich_meta(item, tf, {"type": "l3", "emoji": "🟢", "strength": 70})
 
 def l4_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
-    if tf.get("rsi", 50) < 25:
-        return enrich_meta(item, tf, {
-            "type": "l4",
-            "emoji": "🟢",
-            "strength": 75
-        })
-
+    return enrich_meta(item, tf, {"type": "l4", "emoji": "🟢", "strength": 75})
 
 def breakout_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
     if detect_support_resistance_break(tf):
-        return enrich_meta(item, tf, {
-            "type": "breakout",
-            "emoji": "🚀",
-            "strength": 80
-        })
-
+        return enrich_meta(item, tf, {"type": "breakout", "emoji": "🚀", "strength": 80})
 
 def three_peak_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
     if detect_three_peaks(tf):
-        return enrich_meta(item, tf, {
-            "type": "three_peak",
-            "emoji": "🔺",
-            "strength": 78
-        })
-
+        return enrich_meta(item, tf, {"type": "three_peak", "emoji": "🔺", "strength": 78})
 
 def ob_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
     if detect_order_block(tf):
-        return enrich_meta(item, tf, {
-            "type": "order_block",
-            "emoji": "📦",
-            "strength": 76
-        })
+        return enrich_meta(item, tf, {"type": "order_block", "emoji": "📦", "strength": 76})
 
-
-# ======================================================
-# SQUEEZE (FULL)
-# ======================================================
 def squeeze_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
     df = tf.get("df")
@@ -276,47 +225,21 @@ def squeeze_signal(item):
 
     if not is_squeeze and prev.get("active"):
         signal_state[key] = {"active": False}
-        return enrich_meta(item, tf, {
-            "type": "squeeze_break",
-            "emoji": "💥",
-            "strength": 85
-        })
+        return enrich_meta(item, tf, {"type": "squeeze_break", "emoji": "💥", "strength": 85})
 
     if is_squeeze:
         signal_state[key] = {"active": True}
-        return enrich_meta(item, tf, {
-            "type": "squeeze",
-            "emoji": "🫧",
-            "strength": 72
-        })
+        return enrich_meta(item, tf, {"type": "squeeze", "emoji": "🫧", "strength": 72})
 
-
-# ======================================================
-# COMBINED
-# ======================================================
 def combined_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
     if tf.get("rsi", 50) < 40 and detect_support_resistance_break(tf):
-        return enrich_meta(item, tf, {
-            "type": "combined",
-            "emoji": "⚡",
-            "strength": 88
-        })
-
+        return enrich_meta(item, tf, {"type": "combined", "emoji": "⚡", "strength": 88})
 
 def super_combined_signal(item):
     tf = item.get("tf", {}).get("15m") or {}
-    if (
-        tf.get("rsi", 50) < 40 and
-        detect_support_resistance_break(tf) and
-        detect_order_block(tf)
-    ):
-        return enrich_meta(item, tf, {
-            "type": "super_combined",
-            "emoji": "🔥",
-            "strength": 92
-        })
-
+    if tf.get("rsi", 50) < 40 and detect_support_resistance_break(tf) and detect_order_block(tf):
+        return enrich_meta(item, tf, {"type": "super_combined", "emoji": "🔥", "strength": 92})
 
 # ======================================================
 # PROCESS ENGINE
@@ -327,7 +250,6 @@ def process_signals(item, market_open=True):
 
     symbol = item.get("symbol")
     price = item.get("current_price")
-
     if not isinstance(symbol, str) or not isinstance(price, (int, float)):
         return []
 
@@ -355,10 +277,15 @@ def process_signals(item, market_open=True):
     if not signals:
         return []
 
-    base = signals[0]
+    # --- BASE bilgiyi en güçlü algoritmadan al ---
+    strongest = max(signals, key=lambda x: x["strength"])
+    base = strongest.copy()
+
+    # --- tüm algoritmaları listele ---
     base["algorithms"] = [s["type"] for s in signals]
     base["combined_algorithms"] = signals
 
+    # --- önceki state ile karşılaştır ---
     prev = signal_state.get(symbol)
     if prev:
         added = list(set(base["algorithms"]) - set(prev["algorithms"]))
@@ -378,6 +305,7 @@ def process_signals(item, market_open=True):
         "first_algorithms": base["first_algorithms"]
     }
 
+    # --- başarı durumu ---
     today = now_tr().date()
     if today in successful_signals_store and symbol in successful_signals_store[today]:
         base["success"] = True
