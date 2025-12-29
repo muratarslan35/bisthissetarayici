@@ -1,3 +1,4 @@
+
 import os
 import time
 import json
@@ -11,7 +12,7 @@ from dotenv import load_dotenv
 
 from fetch_bist import fetch_bist_data
 from signal_engine import process_signals
-from utils import to_tr_timezone  # utils.py’den TR timezone fonksiyonu
+from utils import to_tr_timezone
 
 # =========================
 # ENV & PATH
@@ -33,11 +34,11 @@ LATEST_DATA = []
 LATEST_SIGNALS = []
 SUCCESS_SIGNALS = []
 
-persistent_signals = []   # dashboard hafızası
+persistent_signals = []
 LAST_SCAN_TS = None
 SYSTEM_STARTED = False
 
-sent_signal_cache = {}    # telegram tekrar kontrolü
+sent_signal_cache = {}
 
 data_lock = threading.Lock()
 DAILY_SENT = {"strong_stocks": False, "summary": False}
@@ -98,44 +99,6 @@ def market_open():
     )
 
 # =========================
-# TELEGRAM MESAJ FORMAT
-# =========================
-def format_signal_message(s):
-    lines = [f"📊 {s.get('symbol', '?')}"]
-    lines.append(f"Fiyat: {s.get('current_price', '-')}")
-    lines.append(f"Güç Skoru: {s.get('strength', 0)}/10")
-    lines.append(f"Trend: {s.get('ema_trend', '-')}")
-    lines.append(f"RSI 1H: {s.get('rsi_1h', '-')}")
-    lines.append(f"RSI 4H: {s.get('rsi_4h', '-')}")
-    lines.append(f"Direnç 1H: {s.get('resistance_1h', '-')}")
-    lines.append(f"Direnç 4H: {s.get('resistance_4h', '-')}")
-    
-    algos = ", ".join(s.get("algorithms", []))
-    if algos:
-        lines.append(f"Sinyal Türü: {algos}")
-    
-    added_algos = s.get("added_algorithms", [])
-    if added_algos:
-        lines.append(f"⚡ Güçlenen algoritmalar: {', '.join(added_algos)}")
-    
-    if s.get("success"):
-        lines.append("🏆 BAŞARILI SİNYAL")
-    
-    return "\n".join(lines)
-
-# =========================
-# DAILY SUCCESS SUMMARY
-# =========================
-def daily_success_summary():
-    """
-    Günlük başarılı sinyalleri döndürür.
-    """
-    global SUCCESS_SIGNALS
-    if SUCCESS_SIGNALS:
-        return {"success_signals": SUCCESS_SIGNALS.copy()}
-    return None
-
-# =========================
 # TELEGRAM
 # =========================
 def telegram_send(message):
@@ -146,10 +109,7 @@ def telegram_send(message):
         try:
             requests.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={
-                    "chat_id": cid,
-                    "text": message
-                },
+                json={"chat_id": cid, "text": message},
                 timeout=5
             )
         except Exception as e:
@@ -159,7 +119,8 @@ def telegram_send(message):
 # BACKGROUND LOOP
 # =========================
 def background_loop():
-    global LATEST_DATA, LATEST_SIGNALS, LAST_SCAN_TS, SYSTEM_STARTED, sent_signal_cache, persistent_signals
+    global LATEST_DATA, LATEST_SIGNALS, LAST_SCAN_TS
+    global SYSTEM_STARTED, sent_signal_cache, persistent_signals
 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU BAŞLATILDI")
@@ -171,16 +132,19 @@ def background_loop():
     while True:
         try:
             now = to_tr_timezone(datetime.now(timezone.utc))
-            LAST_SCAN_TS = int(now.timestamp())  # TR timestamp kesin atanıyor
+            LAST_SCAN_TS = int(now.timestamp())
+
+            # 🚨 KRİTİK DÜZELTME
+            if not market_open():
+                time.sleep(60)
+                continue
 
             raw_data = fetch_bist_data()
-            log(f"Taranan hisse: {len(raw_data)}")
-
             all_signals = []
 
             for item in raw_data:
                 try:
-                    signals = process_signals(item, market_open=market_open())
+                    signals = process_signals(item, market_open=True)
                     if signals:
                         for s in signals:
                             s["timestamp"] = now.strftime("%H:%M:%S")
@@ -188,9 +152,7 @@ def background_loop():
                 except Exception as e:
                     log(f"Sinyal hata {item.get('symbol')}: {e}")
 
-            log(f"Üretilen sinyal: {len(all_signals)}")
-
-            # ⏰ Günlük reset (09:40)
+            # 09:40 reset
             if (
                 now.weekday() < 5 and
                 last_reset_date != now.date() and
@@ -201,63 +163,40 @@ def background_loop():
                 sent_signal_cache = {}
                 DAILY_SENT["strong_stocks"] = False
                 DAILY_SENT["summary"] = False
-                log("09:40 reset yapıldı")
 
-            # =========================
-            # DASHBOARD HAFIZASI
-            # =========================
+            # Dashboard hafızası
             for meta in all_signals:
                 key = meta["symbol"]
-                existing = next(
-                    (x for x in persistent_signals if x["symbol"] == key),
-                    None
-                )
+                existing = next((x for x in persistent_signals if x["symbol"] == key), None)
                 if existing:
                     if meta.get("strength", 0) > existing.get("strength", 0):
                         existing.update(meta)
                 else:
                     persistent_signals.insert(0, meta)
 
-            # =========================
-            # TELEGRAM SEND
-            # =========================
-            if market_open():
-                grouped = defaultdict(list)
-                for meta in all_signals:
-                    grouped[meta["symbol"]].append(meta)
+            # Telegram
+            grouped = defaultdict(list)
+            for meta in all_signals:
+                grouped[meta["symbol"]].append(meta)
 
-                now_ts = int(time.time())
-                for symbol, metas in grouped.items():
-                    for meta in metas:
-                        key = (symbol, meta.get("type"))
-                        prev = sent_signal_cache.get(key, {"strength": 0, "time": 0})
-                        send_allowed = (
-                            meta.get("strength", 0) > prev["strength"] or
-                            now_ts - prev["time"] > REPEAT_DELAY
-                        )
-                        if send_allowed:
-                            telegram_send(format_signal_message(meta))
-                            sent_signal_cache[key] = {
-                                "strength": meta.get("strength", 0),
-                                "time": now_ts
-                            }
+            now_ts = int(time.time())
+            for symbol, metas in grouped.items():
+                for meta in metas:
+                    key = (symbol, meta.get("type"))
+                    prev = sent_signal_cache.get(key, {"strength": 0, "time": 0})
+                    if (
+                        meta.get("strength", 0) > prev["strength"] or
+                        now_ts - prev["time"] > REPEAT_DELAY
+                    ):
+                        telegram_send(meta.get("symbol"))
+                        sent_signal_cache[key] = {
+                            "strength": meta.get("strength", 0),
+                            "time": now_ts
+                        }
 
-            # =========================
-            # GLOBAL API DATA
-            # =========================
             with data_lock:
                 LATEST_DATA = raw_data
                 LATEST_SIGNALS = persistent_signals.copy()
-
-            # =========================
-            # DAILY SUCCESS
-            # =========================
-            summary = daily_success_summary()
-            if summary and summary.get("success_signals"):
-                for s in summary["success_signals"]:
-                    if not any(x["symbol"] == s["symbol"] for x in SUCCESS_SIGNALS):
-                        SUCCESS_SIGNALS.append(s)
-                        save_success_store()
 
         except Exception as e:
             log(f"SCAN ERROR: {e}")
