@@ -16,27 +16,18 @@ from utils import (
     to_tr_timezone
 )
 
+import fallback_manager   # 🔴 YENİ – PASİF / AKTİF YÖNETİCİ
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "fallback_state.json")
 os.makedirs(BASE_DIR, exist_ok=True)
 
-def load_state():
-    if os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
-
-STATE = load_state()
-
+# ---------------------------------------------------
+# TradingView canlı fiyat cache
+# ---------------------------------------------------
 _TV_CACHE = {}
 _TV_CACHE_TTL = 60
+
 
 def tv_live_price(symbol):
     now = time.time()
@@ -58,6 +49,10 @@ def tv_live_price(symbol):
         pass
     return None
 
+
+# ---------------------------------------------------
+# yfinance güvenli veri çekme
+# ---------------------------------------------------
 def yf_download_safe(ticker, period, interval):
     try:
         df = yf.download(
@@ -75,28 +70,43 @@ def yf_download_safe(ticker, period, interval):
     except Exception:
         return None
 
+
+# ---------------------------------------------------
+# Incremental RSI / EMA
+# ---------------------------------------------------
 def incremental_indicators(prev_close_series, prev_rsi_series, prev_ema_series, new_close):
-    close_series = prev_close_series.append(pd.Series([new_close]), ignore_index=True)
+    close_series = prev_close_series.append(
+        pd.Series([new_close]), ignore_index=True
+    )
     rsi_series = calculate_rsi(close_series)
-    ema_series = {k: calculate_ema(close_series, k) for k in [20,50,100,200]}
+    ema_series = {k: calculate_ema(close_series, k) for k in [20, 50, 100, 200]}
     return close_series, rsi_series, ema_series
 
+
+# ---------------------------------------------------
+# Timeframe indikatörleri
+# ---------------------------------------------------
 def fetch_timeframe_indicators(df, symbol=None, prev=None):
     if df is None or df.empty or len(df) < 20:
         return None
 
     close = df["Close"].copy()
-    live = None
+
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
         if live:
             close.iloc[-1] = live
 
     if prev:
-        close, rsi_series, ema_series = incremental_indicators(prev.get("close"), prev.get("rsi_series"), prev.get("ema_series"), close.iloc[-1])
+        close, rsi_series, ema_series = incremental_indicators(
+            prev["close"],
+            prev["rsi_series"],
+            prev["ema_series"],
+            close.iloc[-1]
+        )
     else:
         rsi_series = calculate_rsi(close)
-        ema_series = {k: calculate_ema(close, k) for k in [20,50,100,200]}
+        ema_series = {k: calculate_ema(close, k) for k in [20, 50, 100, 200]}
 
     out = {
         "df": df,
@@ -125,10 +135,20 @@ def fetch_timeframe_indicators(df, symbol=None, prev=None):
 
     return out
 
+
+# ---------------------------------------------------
+# Incremental cache
+# ---------------------------------------------------
 _prev_1h = {}
 _prev_4h = {}
 
+
+# ---------------------------------------------------
+# TEK HİSSE ANALİZİ
+# ---------------------------------------------------
 def fetch_one_symbol(sym):
+    fallback_manager.ensure_symbol(sym)
+
     df_15m = yf_download_safe(sym, "7d", "15m")
     used_tf = "15m"
 
@@ -137,20 +157,13 @@ def fetch_one_symbol(sym):
         used_tf = "30m"
 
     if df_15m is None:
+        fallback_manager.report_no_data(sym)
         return None
 
     tf_main = fetch_timeframe_indicators(df_15m, sym)
     if tf_main is None:
+        fallback_manager.report_no_movement(sym)
         return None
-
-    symbol = sym.replace(".IS", "")
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-
-    s = STATE.setdefault(symbol, {
-        "inactive_days": 0,
-        "active_days": 0,
-        "last_day": today
-    })
 
     active = (
         tf_main["resistance_break"]
@@ -159,23 +172,18 @@ def fetch_one_symbol(sym):
         or tf_main["rsi"] > 70
     )
 
-    if s["last_day"] != today:
-        if active:
-            s["active_days"] += 1
-            s["inactive_days"] = 0
-        else:
-            s["inactive_days"] += 1
-        s["last_day"] = today
+    if active:
+        fallback_manager.report_success(sym)
+    else:
+        fallback_manager.report_no_movement(sym)
 
-    STATE[symbol] = s
-    save_state(STATE)
+    symbol = sym.replace(".IS", "")
 
     df_5m = yf_download_safe(sym, "3d", "5m")
     df_1h = yf_download_safe(sym, "14d", "60m")
     df_4h = yf_download_safe(sym, "60d", "4h")
     df_1d = yf_download_safe(sym, "120d", "1d")
 
-    global _prev_1h, _prev_4h
     prev_1h = _prev_1h.get(symbol)
     prev_4h = _prev_4h.get(symbol)
 
@@ -183,9 +191,18 @@ def fetch_one_symbol(sym):
     tf_4h = fetch_timeframe_indicators(df_4h, sym, prev_4h)
 
     if tf_1h:
-        _prev_1h[symbol] = {"close": tf_1h["close"], "rsi_series": tf_1h["rsi_series"], "ema_series": tf_1h["ema_series"]}
+        _prev_1h[symbol] = {
+            "close": tf_1h["close"],
+            "rsi_series": tf_1h["rsi_series"],
+            "ema_series": tf_1h["ema_series"]
+        }
+
     if tf_4h:
-        _prev_4h[symbol] = {"close": tf_4h["close"], "rsi_series": tf_4h["rsi_series"], "ema_series": tf_4h["ema_series"]}
+        _prev_4h[symbol] = {
+            "close": tf_4h["close"],
+            "rsi_series": tf_4h["rsi_series"],
+            "ema_series": tf_4h["ema_series"]
+        }
 
     ns, nr = nearest_support_resistance_from_history(df_15m)
 
@@ -207,14 +224,24 @@ def fetch_one_symbol(sym):
         }
     }
 
+
+# ---------------------------------------------------
+# BIST TARAYICI (fallback entegre)
+# ---------------------------------------------------
 def fetch_bist_data():
     out = []
-    for s in FALLBACK_SYMBOLS:
+
+    active_symbols = fallback_manager.get_active_symbols()
+    if not active_symbols:
+        active_symbols = FALLBACK_SYMBOLS
+
+    for s in active_symbols:
         try:
             r = fetch_one_symbol(s)
             if r:
                 out.append(r)
         except Exception:
-            continue
+            fallback_manager.report_no_data(s)
         time.sleep(0.15)
+
     return out
