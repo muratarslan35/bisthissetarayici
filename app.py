@@ -93,7 +93,6 @@ def format_signal_message(s):
     signal_type = s.get("type", "SİNYAL")
     lines = [f"📊 {symbol} | {signal_type}", ""]
 
-    # Fiyat ve güç
     price = s.get("current_price")
     strength = s.get("strength")
     if price is not None:
@@ -101,7 +100,6 @@ def format_signal_message(s):
     if strength is not None:
         lines.append(f"🔥 Güç: {strength} / 10")
 
-    # Trend ve hacim
     trend = s.get("ema_trend")
     volume_tag = s.get("volume_tag")
     if trend:
@@ -109,7 +107,6 @@ def format_signal_message(s):
     if volume_tag:
         lines.append(f"📊 Hacim: {volume_tag}")
 
-    # Algoritmalar
     algos = s.get("algorithms", [])
     added_algos = s.get("added_algorithms", [])
     if algos:
@@ -121,15 +118,14 @@ def format_signal_message(s):
             "order_block": "Order Block",
             "squeeze": "Üçgen Sıkışma",
             "squeeze_break": "Üçgen Kırılım",
-            "combined": "Kombine",
-            "super_combined": "Süper Kombine"
+            "kombine": "Kombine",
+            "super_kombine": "Süper Kombine"
         }
         lines.append("\n🧠 Tetiklenen Algoritmalar:")
         for a in algos:
             prefix = "+" if a in added_algos else "•"
             lines.append(f"{prefix} {pretty.get(a, a.upper())}")
 
-    # RSI / Direnç
     rsi_1h = s.get("rsi_1h")
     rsi_4h = s.get("rsi_4h")
     if rsi_1h or rsi_4h:
@@ -140,7 +136,6 @@ def format_signal_message(s):
     if res_1h or res_4h:
         lines.append(f"📌 Direnç 1h / 4h: {res_1h} / {res_4h}")
 
-    # İlk sinyal zamanı
     first_time = s.get("first_signal_time")
     if first_time:
         lines.append(f"🕒 İlk Sinyal: {first_time}")
@@ -201,7 +196,6 @@ def background_loop():
                     all_signals.append(s)
                     update_success(s.get("symbol"), s.get("current_price"))
 
-            # Telegram sinyalleri
             for s in all_signals:
                 sym = s.get("symbol")
                 typ = s.get("type")
@@ -216,14 +210,12 @@ def background_loop():
                         telegram_send(msg)
                         sent_signal_cache[key] = {"time": time.time(), "strength": strength}
 
-            # Başarılı sinyal
             for s in all_signals:
                 sym = s.get("symbol")
                 if s.get("success") and sym and sym not in SUCCESS_SENT:
                     telegram_send(format_success_message(s))
                     SUCCESS_SENT.add(sym)
 
-            # Günlük özet
             if now.time() >= dtime(17, 45) and not DAILY_SENT["summary"]:
                 telegram_send(
                     f"📊 GÜNLÜK ÖZET\n\n"
