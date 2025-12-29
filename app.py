@@ -60,7 +60,7 @@ def telegram_send(msg):
 # SAFE API SERIALIZER
 # =========================
 def clean_signal_for_api(s):
-    """JSON-safe, circular refsiz sinyal"""
+    """JSON-safe, tüm alanlar ve circular reference yok"""
     if not isinstance(s, dict):
         return None
 
@@ -75,6 +75,12 @@ def clean_signal_for_api(s):
         "target": s.get("target"),
         "stop": s.get("stop"),
         "algorithms": list(s.get("algorithms", [])),
+        "rsi_1h": s.get("rsi_1h"),
+        "rsi_4h": s.get("rsi_4h"),
+        "direnc_1h": s.get("direnc_1h"),
+        "direnc_4h": s.get("direnc_4h"),
+        "ilk": s.get("ilk"),
+        "guclenme": s.get("guclenme"),
         "success": bool(s.get("success", False))
     }
 
@@ -132,6 +138,23 @@ def format_signal_message(s):
         lines.append("\n🧠 Tetiklenen Algoritmalar:")
         for a in algos:
             lines.append(f"• {pretty.get(a, a.upper())}")
+
+    # RSI / Direnç / İlk / Güçlenme
+    rsi_1h = s.get("rsi_1h")
+    rsi_4h = s.get("rsi_4h")
+    direnc_1h = s.get("direnc_1h")
+    direnc_4h = s.get("direnc_4h")
+    ilk = s.get("ilk")
+    guclenme = s.get("guclenme")
+
+    if rsi_1h or rsi_4h:
+        lines.append(f"\n📊 RSI 1h / 4h: {rsi_1h or '-'} / {rsi_4h or '-'}")
+    if direnc_1h or direnc_4h:
+        lines.append(f"📊 Direnç 1h / 4h: {direnc_1h or '-'} / {direnc_4h or '-'}")
+    if ilk:
+        lines.append(f"🎯 İlk: {ilk}")
+    if guclenme:
+        lines.append(f"⚡ Güçlenme: {guclenme}")
 
     return "\n".join(lines)
 
