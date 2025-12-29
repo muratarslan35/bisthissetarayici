@@ -17,15 +17,15 @@
   --blue:#3498db;
 }
 body{margin:0;font-family:Arial;background:var(--bg);color:var(--text)}
-header{padding:12px 16px;display:flex;justify-content:space-between;background:#11142a}
+header{padding:12px 16px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;background:#11142a;gap:6px}
 .badge{padding:6px 12px;border-radius:12px;font-size:12px}
 .green{background:var(--green);color:#000}
 .red{background:var(--red)}
 .yellow{background:var(--yellow);color:#000}
 
 .container{padding:16px}
-.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
-.filter{background:var(--card);padding:6px 12px;border-radius:14px;font-size:12px;cursor:pointer}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;justify-content:center}
+.filter{background:var(--card);padding:6px 12px;border-radius:14px;font-size:12px;cursor:pointer;white-space:nowrap}
 .filter.active{border:1px solid var(--blue);box-shadow:0 0 6px var(--blue)}
 
 .cards{display:flex;flex-direction:column;gap:14px}
@@ -132,6 +132,14 @@ let currentFilter="all";
 let favorites=JSON.parse(localStorage.getItem("favorites")||"[]");
 let lastScanTime = null; // timestamp (ms)
 let scanDisplay = document.getElementById("scan");
+let notifiedSymbols = new Set(); // GÜÇLÜ AL için bildirim kontrolü
+
+// Tarayıcı notification izni iste
+if("Notification" in window){
+  if(Notification.permission==="default"){
+    Notification.requestPermission();
+  }
+}
 
 function toggleFavorite(symbol){
   favorites=favorites.includes(symbol)
@@ -212,6 +220,17 @@ function render(){
       </div>
     `;
     c.appendChild(d);
+
+    // GÜÇLÜ AL bildirim
+    if(s.action==="GÜÇLÜ AL" && !notifiedSymbols.has(s.symbol)){
+      if(Notification.permission==="granted"){
+        new Notification("📈 GÜÇLÜ AL Sinyali", {
+          body: `${s.symbol} için yeni GÜÇLÜ AL sinyali geldi!`,
+          icon: "/favicon.ico"
+        });
+      }
+      notifiedSymbols.add(s.symbol);
+    }
   });
 }
 
