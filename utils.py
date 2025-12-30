@@ -1,14 +1,12 @@
+# utils.py
 import math
-import requests
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
-
 import pandas as pd
 import numpy as np
 
-
 # =====================================================
-# FALLBACK SYMBOLS (SENİN LİSTEN – EKSİKSİZ)
+# FALLBACK SYMBOL LIST (EKSİKSİZ – SENİN LİSTEN)
 # =====================================================
 FALLBACK_SYMBOLS = [
 "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
@@ -39,125 +37,82 @@ FALLBACK_SYMBOLS = [
 "VESPA.IS","VESTL.IS","YEOTK.IS","YGGYO.IS","YKBNK.IS","YONGA.IS","YUNSA.IS","YYAPI.IS","ZEDUR.IS","ZOREN.IS"
 ]
 
-
 # =====================================================
 # TIMEZONE
 # =====================================================
 def to_tr_timezone(dt):
+    if dt is None:
+        return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(ZoneInfo("Europe/Istanbul"))
 
-
 # =====================================================
-# INDICATORS
+# RSI & EMA
 # =====================================================
 def calculate_rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-
     avg_gain = gain.rolling(period, min_periods=1).mean()
     avg_loss = loss.rolling(period, min_periods=1).mean()
-
     rs = avg_gain / avg_loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
     return rsi.fillna(50)
 
-
-def calculate_ema(series, period):
-    return series.ewm(span=period, adjust=False).mean()
-
-
-# =====================================================
-# TRADINGVIEW LIVE PRICE
-# =====================================================
-def fetch_tradingview_price(symbol):
-    try:
-        url = "https://scanner.tradingview.com/turkey/scan"
-        payload = {
-            "symbols": {"tickers": [f"BIST:{symbol.replace('.IS','')}"], "query": {"types": []}},
-            "columns": ["close"]
-        }
-        r = requests.post(url, json=payload, timeout=5)
-        data = r.json()
-        return float(data["data"][0]["d"][0])
-    except Exception:
-        return None
-
+def moving_averages(df, windows=[20, 50, 100, 200]):
+    result = {}
+    for w in windows:
+        result[w] = df["Close"].rolling(w, min_periods=1).mean().iloc[-1] if "Close" in df else None
+    return result
 
 # =====================================================
-# HAYALİ MUM (LIVE CLOSE ENTEGRASYONU)
+# DESTEK / DİRENÇ
 # =====================================================
-def apply_virtual_candle(df, live_price):
-    if df.empty:
-        return df
+def detect_support_resistance_break(df, lookback=20):
+    if df is None or df.empty:
+        return False, False
+    if not {"High", "Low", "Close"}.issubset(df.columns):
+        return False, False
+    if len(df) < lookback + 1:
+        return False, False
 
-    df = df.copy()
-    last_idx = df.index[-1]
+    history = df.iloc[:-1].tail(lookback)
+    support = history["Low"].min()
+    resistance = history["High"].max()
+    close = df["Close"].iloc[-1]
 
-    df.loc[last_idx, "Close"] = live_price
-    df.loc[last_idx, "High"] = max(df.loc[last_idx, "High"], live_price)
-    df.loc[last_idx, "Low"] = min(df.loc[last_idx, "Low"], live_price)
-
-    return df
-
-
-# =====================================================
-# TIMEFRAME BUILDER
-# =====================================================
-def enrich_df(df, live_price):
-    df = apply_virtual_candle(df, live_price)
-
-    df["RSI"] = calculate_rsi(df["Close"])
-    df["EMA20"] = calculate_ema(df["Close"], 20)
-    df["EMA50"] = calculate_ema(df["Close"], 50)
-    df["EMA100"] = calculate_ema(df["Close"], 100)
-    df["EMA200"] = calculate_ema(df["Close"], 200)
-
-    return df
-
-
-def build_timeframes(df_5m, df_15m, df_1h, df_4h):
-    """
-    signal_engine için tek merkezli veri
-    """
-    return {
-        "5m": df_5m,
-        "15m": df_15m,
-        "1h": df_1h,
-        "4h": df_4h
-}
-
+    return close < support, close > resistance
 
 def nearest_support_resistance_from_history(df, lookback=100):
-    """
-    Geçmiş mumlardan en yakın destek / direnç seviyesini bulur
-    Pivot yaklaşımı kullanır (signal_engine uyumlu)
-    """
     if df is None or df.empty:
         return None, None
+    highs = df["High"].rolling(3, center=True).max()
+    lows = df["Low"].rolling(3, center=True).min()
+    ph = df["High"][df["High"] == highs].dropna()
+    pl = df["Low"][df["Low"] == lows].dropna()
+    current = df["Close"].iloc[-1]
 
-    if not {"High", "Low", "Close"}.issubset(df.columns):
-        return None, None
-
-    data = df.tail(lookback)
-
-    highs = data["High"]
-    lows = data["Low"]
-    close = data["Close"].iloc[-1]
-
-    pivot_highs = []
-    pivot_lows = []
-
-    for i in range(2, len(data) - 2):
-        if highs.iloc[i] > highs.iloc[i - 1] and highs.iloc[i] > highs.iloc[i + 1]:
-            pivot_highs.append(highs.iloc[i])
-
-        if lows.iloc[i] < lows.iloc[i - 1] and lows.iloc[i] < lows.iloc[i + 1]:
-            pivot_lows.append(lows.iloc[i])
-
-    resistance = min([p for p in pivot_highs if p > close], default=None)
-    support = max([p for p in pivot_lows if p < close], default=None)
-
+    resistance = min([v for v in ph if v > current], default=None)
+    support = max([v for v in pl if v < current], default=None)
     return support, resistance
+
+# =====================================================
+# FORMASYONLAR
+# =====================================================
+def detect_three_peaks(close_series):
+    if close_series is None or len(close_series) < 5:
+        return False
+    peaks = (close_series > close_series.shift(1)) & (close_series > close_series.shift(-1))
+    idx = close_series[peaks].index
+    if len(idx) < 3:
+        return False
+    last_three = close_series.loc[idx[-3:]]
+    return close_series.iloc[-1] > last_three.max()
+
+def detect_order_block(df, lookback=20):
+    if df is None or len(df) < lookback:
+        return False
+    body = abs(df["Close"] - df["Open"])
+    avg_body = body.rolling(lookback).mean()
+    return body.iloc[-1] > avg_body.iloc[-1] * 2
