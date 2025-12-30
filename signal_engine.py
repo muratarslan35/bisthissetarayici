@@ -1,214 +1,308 @@
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
-import numpy as np
 import pandas as pd
+import numpy as np
 
 from utils import (
-    calculate_rsi,
-    moving_averages,
+    nearest_support_resistance_from_history,
     detect_support_resistance_break,
     detect_three_peaks,
+    detect_order_block,
+    calculate_rsi,
+    moving_averages,
     to_tr_timezone
 )
 
-# ======================================================
-# GLOBAL AYARLAR
-# ======================================================
+# =====================================================
+# GLOBAL STATE (HAFIZA & KONTROL)
+# =====================================================
+sent_block = {}              # tekrar engeli
+signal_memory = {}           # güçlenen sinyaller
+success_tracker = {}         # %1.5 başarı takibi
 
-TARGET_PCT = 0.015          # %1.5 başarı hedefi
-REPEAT_BLOCK_MIN = 45       # aynı sinyal tekrar süresi (dk)
+TARGET_PCT = 0.015
+REPEAT_MIN = 45
 
-# ======================================================
-# HAFIZA & STATE
-# ======================================================
 
-signal_memory = defaultdict(lambda: {
-    "helpers": set(),
-    "first_seen": None,
-    "main_signal": None,
-    "entry_price": None,
-    "target": None,
-    "success": False
-})
-
-sent_block = {}  # (symbol, signal_type) -> datetime
-
-# ======================================================
+# =====================================================
 # TIME
-# ======================================================
-
+# =====================================================
 def now_tr():
-    return to_tr_timezone(datetime.utcnow())
+    return to_tr_timezone(datetime.now(timezone.utc))
 
-def in_block(symbol, signal_type):
-    t = sent_block.get((symbol, signal_type))
+
+def in_repeat(symbol, key):
+    t = sent_block.get((symbol, key))
     return t and now_tr() < t
 
-def mark_block(symbol, signal_type):
-    sent_block[(symbol, signal_type)] = now_tr() + timedelta(minutes=REPEAT_BLOCK_MIN)
 
-# ======================================================
-# YARDIMCI ALGORTİMALAR
-# ======================================================
+def mark_repeat(symbol, key):
+    sent_block[(symbol, key)] = now_tr() + timedelta(minutes=REPEAT_MIN)
 
-def l2_pullback(df):
-    return df["Close"].iloc[-1] > df["Low"].rolling(10).min().iloc[-1]
 
-def l3_impulse(df):
-    return df["Close"].iloc[-1] > df["Close"].rolling(20).mean().iloc[-1]
+# =====================================================
+# SUCCESS TRACKING (%1.5)
+# =====================================================
+def register_success(symbol, price, algo):
+    today = now_tr().date()
+    success_tracker.setdefault(today, {})
+    if symbol not in success_tracker[today]:
+        success_tracker[today][symbol] = {
+            "symbol": symbol,
+            "entry": price,
+            "target": round(price * (1 + TARGET_PCT), 2),
+            "hit": False,
+            "algorithm": algo,
+            "time": now_tr().strftime("%H:%M:%S")
+        }
 
-def l4_trend_expand(df):
-    return df["Close"].iloc[-1] > df["High"].rolling(50).mean().iloc[-1]
 
-def order_block(df):
-    body = abs(df["Close"] - df["Open"])
-    return body.iloc[-1] > body.rolling(20).mean().iloc[-1] * 1.6
+def update_success(symbol, price):
+    today = now_tr().date()
+    d = success_tracker.get(today, {}).get(symbol)
+    if d and not d["hit"] and price >= d["target"]:
+        d["hit"] = True
 
-def kurumsal_order_block(df):
-    return df["Volume"].iloc[-1] > df["Volume"].rolling(20).mean().iloc[-1] * 2
 
-def volume_confirm(df):
-    return df["Volume"].iloc[-1] > df["Volume"].rolling(20).mean().iloc[-1] * 1.4
+# =====================================================
+# CORE HELPERS
+# =====================================================
+def ema_trend(tf):
+    e20, e50, e200 = tf.get("ema20"), tf.get("ema50"), tf.get("ema200")
+    if e20 and e50 and e200:
+        if e20 > e50 > e200:
+            return "YUKARI"
+        if e20 < e50 < e200:
+            return "AŞAĞI"
+    return "YATAY"
 
-def squeeze_break(df):
-    high = df["High"].rolling(20).max()
-    low = df["Low"].rolling(20).min()
-    width = (high - low) / high
-    return width.iloc[-2] < 0.04 and df["Close"].iloc[-1] > high.iloc[-2]
 
-def triangle_break(df):
-    highs = df["High"].rolling(5).max()
-    return df["Close"].iloc[-1] > highs.iloc[-2]
+def volume_tag(v, avg):
+    if not v or not avg:
+        return "ZAYIF"
+    if v > avg * 1.5:
+        return "GÜÇLÜ"
+    if v > avg:
+        return "ORTA"
+    return "ZAYIF"
 
-def triple_top_break(df):
-    return detect_three_peaks(df["Close"])
 
-# ======================================================
-# TREND DOĞRULAMA
-# ======================================================
+def action_from_strength(strength):
+    if strength >= 8.5:
+        return "GÜÇLÜ AL"
+    if strength >= 7:
+        return "AL"
+    return "TAKİP"
 
-def trend_confirm(rsi, ema20, ema50):
-    return rsi > 50 and ema20 > ema50
 
-def strong_trend(rsi, ema20, ema50, ema200):
-    return rsi > 55 and ema20 > ema50 > ema200
+# =====================================================
+# BASE META BUILDER (TEK STANDART)
+# =====================================================
+def build_meta(item, tf, base):
+    tf1h = item["tf"].get("1h", {})
+    tf4h = item["tf"].get("4h", {})
 
-# ======================================================
-# ANA MANTIK
-# ======================================================
+    trend = ema_trend(tf)
+    vol = volume_tag(tf.get("volume"), tf.get("volume_avg_20"))
 
-def process_symbol(symbol, df15):
-    """
-    df15: 15m dataframe (hayali mum uygulanmış olmalı)
-    """
-
-    if df15 is None or len(df15) < 60:
-        return None
-
-    price = df15["Close"].iloc[-1]
-    rsi = calculate_rsi(df15["Close"]).iloc[-1]
-    emas = moving_averages(df15, [20, 50, 200])
-
-    ema20 = emas[20]
-    ema50 = emas[50]
-    ema200 = emas[200]
-
-    helpers = set()
-
-    # ---------------------------
-    # YARDIMCILARI TOPLA
-    # ---------------------------
-
-    if l2_pullback(df15): helpers.add("l2")
-    if l3_impulse(df15): helpers.add("l3")
-    if l4_trend_expand(df15): helpers.add("l4")
-    if order_block(df15): helpers.add("ob")
-    if kurumsal_order_block(df15): helpers.add("kurumsal_ob")
-    if volume_confirm(df15): helpers.add("volume")
-    if squeeze_break(df15): helpers.add("squeeze")
-    if triangle_break(df15): helpers.add("triangle")
-    if triple_top_break(df15): helpers.add("triple_top")
-
-    mem = signal_memory[symbol]
-
-    if not mem["first_seen"]:
-        mem["first_seen"] = now_tr()
-
-    mem["helpers"].update(helpers)
-
-    # ==================================================
-    # SÜPER KOMBİNE
-    # ==================================================
-
-    if (
-        {"l3", "ob", "volume", "squeeze"}.issubset(mem["helpers"])
-        and strong_trend(rsi, ema20, ema50, ema200)
-        and not in_block(symbol, "super_kombine")
-    ):
-        mem["main_signal"] = "SÜPER KOMBİNE"
-        mem["entry_price"] = price
-        mem["target"] = price * (1 + TARGET_PCT)
-        mark_block(symbol, "super_kombine")
-        return build_signal(symbol, mem, price, rsi, "🚀")
-
-    # ==================================================
-    # KOMBİNE
-    # ==================================================
-
-    if (
-        {"l2", "l3"}.issubset(mem["helpers"])
-        and trend_confirm(rsi, ema20, ema50)
-        and not in_block(symbol, "kombine")
-    ):
-        mem["main_signal"] = "KOMBİNE"
-        mem["entry_price"] = price
-        mem["target"] = price * (1 + TARGET_PCT)
-        mark_block(symbol, "kombine")
-        return build_signal(symbol, mem, price, rsi, "🧠")
-
-    # ==================================================
-    # YARDIMCIDAN GÜÇLÜ AL'A EVRİLEN
-    # ==================================================
-
-    if (
-        {"squeeze", "triangle"}.intersection(mem["helpers"])
-        and {"volume", "ob"}.intersection(mem["helpers"])
-        and strong_trend(rsi, ema20, ema50, ema200)
-        and not in_block(symbol, "guclu_al")
-    ):
-        mem["main_signal"] = "GÜÇLÜ AL"
-        mem["entry_price"] = price
-        mem["target"] = price * (1 + TARGET_PCT)
-        mark_block(symbol, "guclu_al")
-        return build_signal(symbol, mem, price, rsi, "🔥")
-
-    return None
-
-# ======================================================
-# SİNYAL ÇIKTI
-# ======================================================
-
-def build_signal(symbol, mem, price, rsi, emoji):
-    return {
-        "symbol": symbol,
-        "signal": mem["main_signal"],
-        "emoji": emoji,
-        "price": round(price, 2),
-        "target": round(mem["target"], 2),
-        "rsi": round(rsi, 1),
-        "helpers": sorted(list(mem["helpers"])),
-        "first_seen": mem["first_seen"].strftime("%H:%M:%S"),
+    base.update({
+        "symbol": item["symbol"],
+        "price": round(item["current_price"], 2),
         "time": now_tr().strftime("%H:%M:%S"),
-        "success": mem["success"]
+        "trend": trend,
+        "ema_trend": trend,
+        "volume": vol,
+
+        "rsi_15m": tf.get("rsi"),
+        "rsi_1h": calculate_rsi(tf1h.get("df", pd.DataFrame())["Close"]).iloc[-1]
+        if tf1h.get("df") is not None else None,
+        "rsi_4h": calculate_rsi(tf4h.get("df", pd.DataFrame())["Close"]).iloc[-1]
+        if tf4h.get("df") is not None else None,
+
+        "strength": round(base["strength"], 1),
+        "signal": action_from_strength(base["strength"]),
+        "success": False
+    })
+
+    return base
+
+
+# =====================================================
+# ALGORITHMS (YARDIMCILAR)
+# =====================================================
+def l2(item):
+    tf = item["tf"]["5m"]
+    if tf["rsi"] > 50 and not in_repeat(item["symbol"], "l2"):
+        mark_repeat(item["symbol"], "l2")
+        return build_meta(item, tf, {
+            "type": "L2",
+            "emoji": "📈",
+            "strength": 6.8
+        })
+
+
+def l3(item):
+    tf = item["tf"]["5m"]
+    if tf["rsi"] > 55 and not in_repeat(item["symbol"], "l3"):
+        mark_repeat(item["symbol"], "l3")
+        return build_meta(item, tf, {
+            "type": "L3",
+            "emoji": "🔥",
+            "strength": 7.4
+        })
+
+
+def l4(item):
+    tf = item["tf"]["15m"]
+    if tf["rsi"] > 60 and not in_repeat(item["symbol"], "l4"):
+        mark_repeat(item["symbol"], "l4")
+        return build_meta(item, tf, {
+            "type": "L4",
+            "emoji": "💎",
+            "strength": 8.0
+        })
+
+
+def order_block_signal(item):
+    tf = item["tf"]["15m"]
+    if detect_order_block(tf["df"]) and not in_repeat(item["symbol"], "ob"):
+        register_success(item["symbol"], item["current_price"], "OB")
+        mark_repeat(item["symbol"], "ob")
+        return build_meta(item, tf, {
+            "type": "ORDER_BLOCK",
+            "emoji": "🧱",
+            "strength": 8.6
+        })
+
+
+def three_peak_break(item):
+    tf = item["tf"]["15m"]
+    if detect_three_peaks(tf["df"]["Close"]) and not in_repeat(item["symbol"], "3peak"):
+        mark_repeat(item["symbol"], "3peak")
+        return build_meta(item, tf, {
+            "type": "ÜÇLÜ_TEPE_KIRILIM",
+            "emoji": "📉➡️📈",
+            "strength": 8.2
+        })
+
+
+def breakout(item):
+    tf = item["tf"]["15m"]
+    _, r = detect_support_resistance_break(tf["df"])
+    if r and not in_repeat(item["symbol"], "breakout"):
+        mark_repeat(item["symbol"], "breakout")
+        return build_meta(item, tf, {
+            "type": "DİRENÇ_KIRILIM",
+            "emoji": "🚧",
+            "strength": 8.1
+        })
+
+
+# =====================================================
+# KOMBİNE & SUPER KOMBİNE
+# =====================================================
+def kombine(item):
+    tf15 = item["tf"]["15m"]
+    tf4h = item["tf"]["4h"]
+
+    if (
+        tf15["rsi"] < 40 and
+        ema_trend(tf4h) == "YUKARI" and
+        not in_repeat(item["symbol"], "kombine")
+    ):
+        register_success(item["symbol"], item["current_price"], "KOMBİNE")
+        mark_repeat(item["symbol"], "kombine")
+        return build_meta(item, tf15, {
+            "type": "KOMBİNE",
+            "emoji": "🧠",
+            "strength": 8.5
+        })
+
+
+def super_kombine(item):
+    tf15 = item["tf"]["15m"]
+    tf1h = item["tf"]["1h"]
+    tf4h = item["tf"]["4h"]
+
+    if (
+        tf15["rsi"] < 35 and
+        ema_trend(tf1h) == "YUKARI" and
+        ema_trend(tf4h) == "YUKARI" and
+        not in_repeat(item["symbol"], "super")
+    ):
+        register_success(item["symbol"], item["current_price"], "SUPER")
+        mark_repeat(item["symbol"], "super")
+        return build_meta(item, tf15, {
+            "type": "SUPER_KOMBİNE",
+            "emoji": "🚀",
+            "strength": 9.2
+        })
+
+
+# =====================================================
+# PROCESS SIGNALS (ANA MOTOR)
+# =====================================================
+def process_signals(item, market_open=True):
+    signals = []
+
+    for fn in (
+        l2, l3, l4,
+        breakout,
+        three_peak_break,
+        order_block_signal,
+        kombine,
+        super_kombine
+    ):
+        r = fn(item)
+        if r:
+            signals.append(r)
+
+    if not signals:
+        return []
+
+    main = max(signals, key=lambda x: x["strength"])
+    main["helpers"] = [s["type"] for s in signals if s["type"] != main["type"]]
+
+    prev = signal_memory.get(item["symbol"])
+    if prev:
+        added = list(set(main["helpers"]) - set(prev["helpers"]))
+        if added:
+            main["level_change"] = True
+            main["new_helpers"] = added
+            main["first_seen"] = prev["first_seen"]
+        else:
+            main["level_change"] = False
+            main["first_seen"] = prev["first_seen"]
+    else:
+        main["first_seen"] = main["time"]
+        main["level_change"] = False
+
+    today = now_tr().date()
+    if today in success_tracker and item["symbol"] in success_tracker[today]:
+        if success_tracker[today][item["symbol"]]["hit"]:
+            main["success"] = True
+
+    signal_memory[item["symbol"]] = {
+        "helpers": main["helpers"],
+        "first_seen": main["first_seen"]
     }
 
-# ======================================================
-# BAŞARI TAKİBİ
-# ======================================================
+    return [main]
 
-def update_success(symbol, current_price):
-    mem = signal_memory.get(symbol)
-    if mem and mem["target"] and not mem["success"]:
-        if current_price >= mem["target"]:
-            mem["success"] = True
+
+# =====================================================
+# MESSAGE FORMAT (TELEGRAM + DASHBOARD)
+# =====================================================
+def format_signal_message(s):
+    return (
+        f"{s['emoji']} {s['symbol']} — {s['signal']}\n"
+        f"Fiyat: {s['price']}\n"
+        f"Güç: {s['strength']}\n"
+        f"Trend: {s['trend']} | Hacim: {s['volume']}\n"
+        f"RSI 15m / 1h / 4h: {s['rsi_15m']} / {s['rsi_1h']} / {s['rsi_4h']}\n"
+        f"Ana: {s['type']}\n"
+        f"Yardımcılar: {', '.join(s['helpers']) if s['helpers'] else '-'}\n"
+        f"İlk: {s['first_seen']} | Şimdi: {s['time']}"
+    )
