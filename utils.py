@@ -133,3 +133,65 @@ def detect_three_peaks(close_series):
 def detect_order_block(df, lookback=20):
     body = (df["Close"] - df["Open"]).abs()
     return body.iloc[-1] > body.rolling(lookback).mean().iloc[-1] * 2
+
+
+# =====================================================
+# VOLUME HELPERS
+# =====================================================
+def volume_average(df, period=20):
+    if df is None or df.empty:
+        return None
+    return df["Volume"].rolling(period, min_periods=1).mean().iloc[-1]
+
+
+# =====================================================
+# TIMEFRAME INDICATOR ENRICH
+# =====================================================
+def enrich_tf_indicators(df):
+    """
+    Bir timeframe için RSI, EMA ve hacim ortalamasını hazırlar
+    """
+    if df is None or df.empty:
+        return {}
+
+    rsi_series = calculate_rsi(df["Close"])
+    emas = moving_averages(df)
+
+    return {
+        "df": df,
+        "rsi": rsi_series.iloc[-1],
+        "ema20": emas.get(20),
+        "ema50": emas.get(50),
+        "ema200": emas.get(200),
+        "volume": df["Volume"].iloc[-1],
+        "volume_avg_20": volume_average(df, 20)
+    }
+
+
+# =====================================================
+# BUILD TIMEFRAMES (SIGNAL ENGINE BEKLENTİSİ)
+# =====================================================
+def build_timeframes(
+    df_5m: pd.DataFrame,
+    df_15m: pd.DataFrame = None,
+    df_1h: pd.DataFrame = None,
+    df_4h: pd.DataFrame = None
+):
+    """
+    signal_engine item["tf"] yapısını birebir üretir
+    """
+    tfs = {}
+
+    if df_5m is not None:
+        tfs["5m"] = enrich_tf_indicators(df_5m)
+
+    if df_15m is not None:
+        tfs["15m"] = enrich_tf_indicators(df_15m)
+
+    if df_1h is not None:
+        tfs["1h"] = enrich_tf_indicators(df_1h)
+
+    if df_4h is not None:
+        tfs["4h"] = enrich_tf_indicators(df_4h)
+
+    return tfs
