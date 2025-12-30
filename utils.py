@@ -1,12 +1,16 @@
 # utils.py
 import math
+import json
+import time
+import requests
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
+
 import pandas as pd
 import numpy as np
 
 # =====================================================
-# FALLBACK SYMBOL LIST (EKSİKSİZ – SENİN LİSTEN)
+# FALLBACK SYMBOLS (EKSİKSİZ)
 # =====================================================
 FALLBACK_SYMBOLS = [
 "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
@@ -41,78 +45,91 @@ FALLBACK_SYMBOLS = [
 # TIMEZONE
 # =====================================================
 def to_tr_timezone(dt):
-    if dt is None:
-        return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(ZoneInfo("Europe/Istanbul"))
 
 # =====================================================
-# RSI & EMA
+# TRADINGVIEW LIVE PRICE (HIBRIT – GERÇEĞE YAKIN)
+# =====================================================
+def fetch_tradingview_price(symbol):
+    """
+    TradingView public quote endpoint mantığı.
+    Gecikme: genelde saniyeler – Yahoo'dan DAHA GÜNCEL.
+    """
+    try:
+        tv_symbol = f"BIST:{symbol.replace('.IS','')}"
+        url = "https://symbol-search.tradingview.com/symbol_search/"
+        r = requests.get(
+            url,
+            params={"text": tv_symbol, "exchange": "BIST"},
+            timeout=5
+        )
+        if r.status_code != 200:
+            return None
+
+        data = r.json()
+        if not data:
+            return None
+
+        symbol_id = data[0]["symbol"]
+
+        quote_url = "https://scanner.tradingview.com/symbol"
+        qr = requests.post(
+            quote_url,
+            json={
+                "symbols": {"tickers": [symbol_id], "query": {"types": []}},
+                "columns": ["close"]
+            },
+            timeout=5
+        )
+        qd = qr.json()
+        return qd["data"][0]["d"][0]
+
+    except Exception:
+        return None
+
+# =====================================================
+# RSI / EMA
 # =====================================================
 def calculate_rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
     avg_gain = gain.rolling(period, min_periods=1).mean()
-    avg_loss = loss.rolling(period, min_periods=1).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(50)
+    avg_loss = loss.rolling(period, min_periods=1).mean().replace(0, np.nan)
+    rs = avg_gain / avg_loss
+    return (100 - (100 / (1 + rs))).fillna(50)
 
-def moving_averages(df, windows=[20, 50, 100, 200]):
-    result = {}
-    for w in windows:
-        result[w] = df["Close"].rolling(w, min_periods=1).mean().iloc[-1] if "Close" in df else None
-    return result
+def moving_averages(df, windows=[20,50,100,200]):
+    return {w: df["Close"].rolling(w, min_periods=1).mean().iloc[-1] for w in windows}
 
 # =====================================================
 # DESTEK / DİRENÇ
 # =====================================================
 def detect_support_resistance_break(df, lookback=20):
-    if df is None or df.empty:
-        return False, False
-    if not {"High", "Low", "Close"}.issubset(df.columns):
-        return False, False
-    if len(df) < lookback + 1:
-        return False, False
-
-    history = df.iloc[:-1].tail(lookback)
-    support = history["Low"].min()
-    resistance = history["High"].max()
+    prev = df.iloc[:-1].tail(lookback)
     close = df["Close"].iloc[-1]
-
-    return close < support, close > resistance
+    return close < prev["Low"].min(), close > prev["High"].max()
 
 def nearest_support_resistance_from_history(df, lookback=100):
-    if df is None or df.empty:
-        return None, None
-    highs = df["High"].rolling(3, center=True).max()
-    lows = df["Low"].rolling(3, center=True).min()
-    ph = df["High"][df["High"] == highs].dropna()
-    pl = df["Low"][df["Low"] == lows].dropna()
-    current = df["Close"].iloc[-1]
-
-    resistance = min([v for v in ph if v > current], default=None)
-    support = max([v for v in pl if v < current], default=None)
-    return support, resistance
+    piv_h = df["High"].rolling(3, center=True).max()
+    piv_l = df["Low"].rolling(3, center=True).min()
+    ph = df["High"][df["High"] == piv_h]
+    pl = df["Low"][df["Low"] == piv_l]
+    cur = df["Close"].iloc[-1]
+    res = min([x for x in ph if x > cur], default=None)
+    sup = max([x for x in pl if x < cur], default=None)
+    return sup, res
 
 # =====================================================
 # FORMASYONLAR
 # =====================================================
 def detect_three_peaks(close_series):
-    if close_series is None or len(close_series) < 5:
-        return False
     peaks = (close_series > close_series.shift(1)) & (close_series > close_series.shift(-1))
     idx = close_series[peaks].index
-    if len(idx) < 3:
-        return False
-    last_three = close_series.loc[idx[-3:]]
-    return close_series.iloc[-1] > last_three.max()
+    return len(idx) >= 3 and close_series.iloc[-1] > close_series.loc[idx[-3:]].max()
 
 def detect_order_block(df, lookback=20):
-    if df is None or len(df) < lookback:
-        return False
-    body = abs(df["Close"] - df["Open"])
-    avg_body = body.rolling(lookback).mean()
-    return body.iloc[-1] > avg_body.iloc[-1] * 2
+    body = (df["Close"] - df["Open"]).abs()
+    return body.iloc[-1] > body.rolling(lookback).mean().iloc[-1] * 2
