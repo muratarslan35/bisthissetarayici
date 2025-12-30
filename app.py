@@ -8,8 +8,10 @@ import yfinance as yf
 from utils import (
     FALLBACK_SYMBOLS,
     fetch_tradingview_price,
+    fetch_bist_fallback,
     build_timeframes,
-    to_tr_timezone
+    to_tr_timezone,
+    send_telegram_message
 )
 
 from signal_engine import (
@@ -18,10 +20,7 @@ from signal_engine import (
     update_success
 )
 
-# =====================================================
-# APP
-# =====================================================
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates", static_folder="static")
 
 SCAN_INTERVAL = 60
 signals_cache = []
@@ -29,22 +28,13 @@ last_scan_time = None
 bot_running = True
 
 
-# =====================================================
-# DATA FETCH
-# =====================================================
 def fetch_symbol_data(symbol):
-    """
-    Hibrit veri:
-    - Anlık fiyat: TradingView
-    - Mumlar: YahooFinance
-    """
-
-    # ---- LIVE PRICE (TRADINGVIEW)
     price = fetch_tradingview_price(symbol)
+    if not price:
+        price = fetch_bist_fallback(symbol)
     if not price:
         return None
 
-    # ---- HISTORICAL (YFINANCE)
     try:
         df_5m = yf.download(symbol, period="5d", interval="5m", progress=False)
         df_15m = yf.download(symbol, period="10d", interval="15m", progress=False)
@@ -65,18 +55,15 @@ def fetch_symbol_data(symbol):
 
     return {
         "symbol": symbol,
-        "current_price": price,
+        "current_price": float(price),
         "tf": tf
     }
 
 
-# =====================================================
-# MAIN SCAN LOOP
-# =====================================================
 def scan_loop():
     global signals_cache, last_scan_time
 
-    print("[APP] Bot başlatıldı")
+    send_telegram_message("🤖 BIST BOT BAŞLATILDI")
 
     while bot_running:
         all_signals = []
@@ -88,14 +75,13 @@ def scan_loop():
                 continue
 
             scanned += 1
-
-            # başarı takibi (%1.5)
             update_success(symbol, data["current_price"])
 
             signals = process_signals(data)
             if signals:
                 for s in signals:
-                    print(format_signal_message(s))
+                    msg = format_signal_message(s)
+                    send_telegram_message(msg)
                 all_signals.extend(signals)
 
         signals_cache = sorted(
@@ -106,15 +92,9 @@ def scan_loop():
 
         last_scan_time = to_tr_timezone(datetime.now(timezone.utc))
 
-        print(f"[APP] Taranan hisse: {scanned}")
-        print(f"[APP] Üretilen sinyal: {len(signals_cache)}")
-
         time.sleep(SCAN_INTERVAL)
 
 
-# =====================================================
-# ROUTES
-# =====================================================
 @app.route("/")
 def dashboard():
     return render_template(
@@ -133,9 +113,6 @@ def api_signals():
     })
 
 
-# =====================================================
-# START
-# =====================================================
 def start_bot():
     t = threading.Thread(target=scan_loop, daemon=True)
     t.start()
