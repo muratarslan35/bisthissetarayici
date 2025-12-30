@@ -128,3 +128,36 @@ def build_timeframes(df_5m, df_15m, df_1h, df_4h):
         "1h": df_1h,
         "4h": df_4h
 }
+
+
+def nearest_support_resistance_from_history(df, lookback=100):
+    """
+    Geçmiş mumlardan en yakın destek / direnç seviyesini bulur
+    Pivot yaklaşımı kullanır (signal_engine uyumlu)
+    """
+    if df is None or df.empty:
+        return None, None
+
+    if not {"High", "Low", "Close"}.issubset(df.columns):
+        return None, None
+
+    data = df.tail(lookback)
+
+    highs = data["High"]
+    lows = data["Low"]
+    close = data["Close"].iloc[-1]
+
+    pivot_highs = []
+    pivot_lows = []
+
+    for i in range(2, len(data) - 2):
+        if highs.iloc[i] > highs.iloc[i - 1] and highs.iloc[i] > highs.iloc[i + 1]:
+            pivot_highs.append(highs.iloc[i])
+
+        if lows.iloc[i] < lows.iloc[i - 1] and lows.iloc[i] < lows.iloc[i + 1]:
+            pivot_lows.append(lows.iloc[i])
+
+    resistance = min([p for p in pivot_highs if p > close], default=None)
+    support = max([p for p in pivot_lows if p < close], default=None)
+
+    return support, resistance
