@@ -1,0 +1,10 @@
+flask
+gunicorn
+requests
+pandas
+numpy
+yfinance
+beautifulsoup4
+python-dateutil
+pytz
+tzdata
