@@ -61,9 +61,13 @@ def market_open():
     )
 
 # ================= BACKGROUND =================
-def background_loop():
-    global SYSTEM_STARTED, LAST_SCAN_TS, LATEST_SIGNALS, DAILY_SENT, LAST_DAY
 
+def background_loop():
+    global SYSTEM_STARTED
+    print("ENV TEST TOKEN:", TELEGRAM_TOKEN)
+    print("ENV TEST CHAT IDS:", CHAT_IDS)
+    telegram_send("🧪 ENV TEST MESAJI")
+ 
     SYSTEM_STARTED = True
     telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
 
