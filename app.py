@@ -30,6 +30,8 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
+print("TELEGRAM INIT:", bool(TELEGRAM_TOKEN), CHAT_IDS)
+
 # ==================================================
 # FLASK
 # ==================================================
@@ -73,8 +75,8 @@ def telegram_send(msg):
                 json={"chat_id": cid, "text": msg},
                 timeout=5
             )
-        except Exception:
-            pass
+        except Exception as e:
+            print("TELEGRAM ERROR:", e)
 
 # ==================================================
 # MARKET HOURS
@@ -94,7 +96,7 @@ def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY
 
     SYSTEM_STARTED = True
-    telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
+    print("BACKGROUND LOOP STARTED")
 
     while True:
         try:
@@ -103,7 +105,6 @@ def background_loop():
             now = to_tr_timezone(datetime.now(timezone.utc))
             today = now.date()
 
-            # Gün değiştiyse bayrakları sıfırla
             if LAST_DAY != today:
                 DAILY_SENT = {"strong_stocks": False, "summary": False}
                 LAST_DAY = today
@@ -116,28 +117,25 @@ def background_loop():
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
 
-                # --------- SİNYALLERİ SEMBOL BAZLI TOPLA ---------
                 grouped = defaultdict(list)
                 for meta in signals:
                     sym = meta.get("symbol")
                     if sym:
                         grouped[sym].append(meta)
 
-                # --------- GELİŞMİŞ TELEGRAM MESAJI ---------
                 for symbol, alg_list in grouped.items():
                     msg = format_signal_message(symbol, alg_list)
                     telegram_send(msg)
 
-                # --------- DASHBOARD ---------
                 dashboard_signals = []
                 seen_symbols = set()
+
                 for meta in signals:
                     sym = meta.get("symbol")
-                    if sym in seen_symbols:
+                    if not sym or sym in seen_symbols:
                         continue
                     seen_symbols.add(sym)
-                    # Tek hisse için birleştirilmiş algoritmalar
-                    combined_algorithms = meta.get("combined_algorithms", [meta])
+
                     dashboard_signals.append({
                         "symbol": sym,
                         "price": meta.get("price") or meta.get("current_price"),
@@ -152,7 +150,7 @@ def background_loop():
                         "rsi": meta.get("rsi"),
                         "time": to_tr_timezone(datetime.now(timezone.utc)).strftime("%H:%M:%S"),
                         "details": meta,
-                        "combined_algorithms": combined_algorithms
+                        "combined_algorithms": meta.get("combined_algorithms", [meta])
                     })
 
                 with data_lock:
@@ -160,7 +158,6 @@ def background_loop():
 
             # ================= MARKET KAPALI =================
             else:
-                # Güçlü hisseler – sadece 1 kez gönder
                 if not DAILY_SENT["strong_stocks"]:
                     strong = scan_strong_stocks(raw_data)
                     if strong:
@@ -170,24 +167,24 @@ def background_loop():
                         )
                     DAILY_SENT["strong_stocks"] = True
 
-                # Gün sonu başarı özeti – sadece 1 kez gönder
                 if not DAILY_SENT["summary"]:
                     summary = daily_success_summary(include_details=True, max_failures=0)
                     if summary:
                         lines = [
-                            f"📊 GÜN SONU BAŞARI ÖZETİ",
+                            "📊 GÜN SONU BAŞARI ÖZETİ",
                             f"Tarih: {summary['date']}",
-                            f"Toplam Başarılı: {summary['hit']} / Toplam Sinyal: {summary['total']}",
+                            f"Toplam Başarılı: {summary['hit']} / {summary['total']}",
                             f"Başarı Oranı: %{summary['success_rate']:.2f}",
                             "",
                             "Başarılı Sinyaller:"
                         ]
                         for s in summary.get("success_signals", []):
-                            lines.append(f"• {s['symbol']} | {s['algorithm']} | Saat: {s['time']} | Fiyat: {s['price']}")
+                            lines.append(
+                                f"• {s['symbol']} | {s['algorithm']} | {s['time']} | {s['price']}"
+                            )
                         telegram_send("\n".join(lines))
                     DAILY_SENT["summary"] = True
 
-                # Fallback güncelleme
                 updated = fallback_daily_update_if_needed(raw_data)
                 if updated:
                     msg = fallback_daily_report_message()
@@ -198,11 +195,6 @@ def background_loop():
             print("SCAN ERROR:", e)
 
         time.sleep(60)
-
-# ==================================================
-# THREAD
-# ==================================================
-threading.Thread(target=background_loop, daemon=True).start()
 
 # ==================================================
 # API
@@ -225,4 +217,13 @@ def dashboard():
 # RUN
 # ==================================================
 if __name__ == "__main__":
+    print("APP MAIN STARTED")
+
+    telegram_send("🤖 BIST SİNYAL BOTU BAŞLATILDI")
+
+    threading.Thread(
+        target=background_loop,
+        daemon=True
+    ).start()
+
     app.run(host="0.0.0.0", port=5000)
