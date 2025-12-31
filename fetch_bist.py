@@ -30,8 +30,11 @@ def load_state():
     return {}
 
 def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f, indent=2)
+    except Exception:
+        pass
 
 STATE = load_state()
 
@@ -51,9 +54,10 @@ def tv_live_price(symbol):
         )
         js = r.json()
         price = js.get("price")
-        if price:
-            _TV_CACHE[symbol] = {"price": float(price), "ts": now}
-            return float(price)
+        if price is not None:
+            price = float(price)
+            _TV_CACHE[symbol] = {"price": price, "ts": now}
+            return price
     except Exception:
         pass
     return None
@@ -79,12 +83,14 @@ def fetch_timeframe_indicators(df, symbol=None):
     if df is None or df.empty or len(df) < 20:
         return None
 
+    df = df.copy()
     close = df["Close"].copy()
 
     if symbol:
         live = tv_live_price(symbol.replace(".IS", ""))
-        if live:
+        if live is not None:
             close.iloc[-1] = live
+            df.loc[df.index[-1], "Close"] = live
 
     rsi = calculate_rsi(close)
 
@@ -119,6 +125,10 @@ def fetch_one_symbol(sym):
     if df_15m is None:
         df_15m = yf_download_safe(sym, "14d", "30m")
         used_tf = "30m"
+
+    if df_15m is None:
+        df_15m = yf_download_safe(sym, "14d", "60m")
+        used_tf = "1h"
 
     if df_15m is None:
         return None
@@ -173,9 +183,9 @@ def fetch_one_symbol(sym):
         "tf": {
             "5m": fetch_timeframe_indicators(df_5m, sym) if df_5m is not None else None,
             used_tf: tf_main,
-            "1h": fetch_timeframe_indicators(df_1h, sym),
-            "4h": fetch_timeframe_indicators(df_4h, sym),
-            "1d": fetch_timeframe_indicators(df_1d, sym)
+            "1h": fetch_timeframe_indicators(df_1h, sym) if df_1h is not None else None,
+            "4h": fetch_timeframe_indicators(df_4h, sym) if df_4h is not None else None,
+            "1d": fetch_timeframe_indicators(df_1d, sym) if df_1d is not None else None
         }
     }
 
@@ -184,9 +194,9 @@ def fetch_bist_data():
     for s in FALLBACK_SYMBOLS:
         try:
             r = fetch_one_symbol(s)
-            if r:
+            if r is not None:
                 out.append(r)
         except Exception:
-            continue
+            pass
         time.sleep(0.15)
     return out
