@@ -4,6 +4,10 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import numpy as np
 
+# =========================================================
+# FALLBACK SYMBOL LIST (AKTİF KULLANILACAK)
+# =========================================================
+
 FALLBACK_SYMBOLS = [
     "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
     "AKGRT.IS","AKSA.IS","AKSEN.IS","ALARK.IS","ALCTL.IS","ALFAS.IS","ALGN.IS","ALKIM.IS","ALMAD.IS",
@@ -32,6 +36,24 @@ FALLBACK_SYMBOLS = [
     "ULKER.IS","UNLU.IS","USAK.IS","UZERB.IS","VAKBN.IS","VBTYZ.IS","VERUS.IS","VKING.IS","VESBE.IS",
     "VESPA.IS","VESTL.IS","YEOTK.IS","YGGYO.IS","YKBNK.IS","YONGA.IS","YUNSA.IS","YYAPI.IS","ZEDUR.IS","ZOREN.IS"
 ]
+
+# =========================================================
+# 🔥 EN KRİTİK EKLEME — FALLBACK AKTİF EDİCİ
+# =========================================================
+
+def resolve_symbols(data: dict | None):
+    """
+    fetch_bist / yfinance boş veya eksik dönerse
+    sistem FALLBACK_SYMBOLS ile taramaya devam eder
+    """
+    if not data or not isinstance(data, dict) or len(data) == 0:
+        return FALLBACK_SYMBOLS
+    return list(data.keys())
+
+
+# =========================================================
+# TEKNİK GÖSTERGELER (AYNI)
+# =========================================================
 
 def calculate_ema(series, period=20):
     return series.ewm(span=period, adjust=False).mean()
@@ -63,8 +85,10 @@ def nearest_support_resistance_from_history(df, lookback=100):
     price = df["Close"].iloc[-1]
     resistances = [float(v) for v in ph if v > price]
     supports = [float(v) for v in pl if v < price]
-    return (max(supports) if supports else None,
-            min(resistances) if resistances else None)
+    return (
+        max(supports) if supports else None,
+        min(resistances) if resistances else None
+    )
 
 def detect_three_peaks(close_series):
     if close_series is None or close_series.empty or len(close_series) < 5:
