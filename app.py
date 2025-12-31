@@ -21,27 +21,12 @@ from fallback_manager import (
     fallback_daily_report_message
 )
 
-# ==================================================
-# ENV
-# ==================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
 
-# ==================================================
-# TELEGRAM STATE
-# ==================================================
-TELEGRAM_ENABLED = True
-TELEGRAM_FAIL_COUNT = 0
-TELEGRAM_MAX_FAIL = 3
-LAST_TELEGRAM_CHECK = 0
-TELEGRAM_RETRY_INTERVAL = 300  # 5 dk
-
-# ==================================================
-# FLASK
-# ==================================================
 app = Flask(__name__)
 
 LATEST_DATA = []
@@ -51,15 +36,10 @@ SYSTEM_STARTED = False
 
 data_lock = threading.Lock()
 
-# ==================================================
-# DAILY FLAGS
-# ==================================================
 DAILY_SENT = {"strong_stocks": False, "summary": False}
 LAST_DAY = None
 
-# ==================================================
-# JSON SAFE
-# ==================================================
+
 def make_json_safe(obj):
     if isinstance(obj, dict):
         return {k: make_json_safe(v) for k, v in obj.items()}
@@ -69,43 +49,10 @@ def make_json_safe(obj):
         return obj.item()
     return obj
 
-# ==================================================
-# TELEGRAM CHECK
-# ==================================================
-def telegram_healthcheck():
-    global TELEGRAM_ENABLED, TELEGRAM_FAIL_COUNT, LAST_TELEGRAM_CHECK
 
-    now = time.time()
-    if now - LAST_TELEGRAM_CHECK < TELEGRAM_RETRY_INTERVAL:
-        return
-
-    LAST_TELEGRAM_CHECK = now
-
-    try:
-        r = requests.get(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getMe",
-            timeout=5
-        )
-        if r.status_code == 200:
-            TELEGRAM_ENABLED = True
-            TELEGRAM_FAIL_COUNT = 0
-            print("✅ Telegram tekrar aktif")
-    except Exception:
-        pass
-
-# ==================================================
-# TELEGRAM SEND
-# ==================================================
 def telegram_send(msg):
-    global TELEGRAM_ENABLED, TELEGRAM_FAIL_COUNT
-
     if not TELEGRAM_TOKEN or not CHAT_IDS or not msg:
         return
-
-    if not TELEGRAM_ENABLED:
-        telegram_healthcheck()
-        return
-
     for cid in CHAT_IDS:
         try:
             requests.post(
@@ -113,18 +60,10 @@ def telegram_send(msg):
                 json={"chat_id": cid, "text": msg},
                 timeout=5
             )
-            TELEGRAM_FAIL_COUNT = 0
         except Exception as e:
-            TELEGRAM_FAIL_COUNT += 1
             print(f"Telegram gönderilemedi {cid}: {e}")
 
-            if TELEGRAM_FAIL_COUNT >= TELEGRAM_MAX_FAIL:
-                TELEGRAM_ENABLED = False
-                print("⚠️ Telegram devre dışı bırakıldı")
 
-# ==================================================
-# MARKET HOURS
-# ==================================================
 def market_open():
     now = to_tr_timezone(datetime.now(timezone.utc))
     return (
@@ -133,14 +72,12 @@ def market_open():
         now.hour < 18
     )
 
-# ==================================================
-# BACKGROUND LOOP
-# ==================================================
+
 def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY
 
     SYSTEM_STARTED = True
-    telegram_send("🤖 BIST SİNYAL BOTU BAŞLADI")
+    telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
 
     while True:
         try:
@@ -161,14 +98,16 @@ def background_loop():
                 signals = safe_process_bist_data(raw_data, market_open=True)
 
                 grouped = defaultdict(list)
-                for s in signals:
-                    if s.get("symbol"):
-                        grouped[s["symbol"]].append(s)
+                for meta in signals:
+                    sym = meta.get("symbol")
+                    if sym:
+                        grouped[sym].append(meta)
 
-                for symbol, algs in grouped.items():
-                    telegram_send(format_signal_message(symbol, algs))
+                for symbol, alg_list in grouped.items():
+                    msg = format_signal_message(symbol, alg_list)
+                    telegram_send(msg)
 
-                dashboard = []
+                dashboard_signals = []
                 seen = set()
 
                 for meta in signals:
@@ -177,39 +116,54 @@ def background_loop():
                         continue
                     seen.add(sym)
 
-                    dashboard.append({
+                    dashboard_signals.append({
                         "symbol": sym,
                         "price": meta.get("price") or meta.get("current_price"),
                         "type": meta.get("type"),
+                        "title": meta.get("title", meta.get("type")),
                         "direction": meta.get("direction", "up"),
-                        "strength": meta.get("trend_strength", 50),
+                        "trend_strength": meta.get("trend_strength", meta.get("strength", 50)),
                         "support": meta.get("support"),
                         "resistance": meta.get("resistance"),
                         "rsi": meta.get("rsi"),
                         "time": now.strftime("%H:%M:%S"),
-                        "details": meta
+                        "details": meta,
+                        "combined_algorithms": meta.get("combined_algorithms", [])
                     })
 
                 with data_lock:
-                    LATEST_SIGNALS = dashboard
+                    LATEST_SIGNALS = dashboard_signals
 
             else:
                 if not DAILY_SENT["strong_stocks"]:
                     strong = scan_strong_stocks(raw_data)
                     if strong:
-                        telegram_send("📌 GÜÇLÜ HİSSELER\n\n" + "\n".join(strong))
+                        telegram_send(
+                            "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
+                            "\n".join(strong)
+                        )
                     DAILY_SENT["strong_stocks"] = True
 
                 if not DAILY_SENT["summary"]:
-                    summary = daily_success_summary(include_details=True)
+                    summary = daily_success_summary(include_details=True, max_failures=0)
                     if summary:
-                        telegram_send(
-                            f"📊 GÜN SONU\nBaşarı: {summary['hit']}/{summary['total']} "
-                            f"(%{summary['success_rate']:.2f})"
-                        )
+                        lines = [
+                            "📊 GÜN SONU BAŞARI ÖZETİ",
+                            f"Tarih: {summary['date']}",
+                            f"Toplam Başarılı: {summary['hit']} / {summary['total']}",
+                            f"Başarı Oranı: %{summary['success_rate']:.2f}",
+                            "",
+                            "Başarılı Sinyaller:"
+                        ]
+                        for s in summary.get("success_signals", []):
+                            lines.append(
+                                f"• {s['symbol']} | {s['algorithm']} | {s['time']} | {s['price']}"
+                            )
+                        telegram_send("\n".join(lines))
                     DAILY_SENT["summary"] = True
 
-                if fallback_daily_update_if_needed(raw_data):
+                updated = fallback_daily_update_if_needed(raw_data)
+                if updated:
                     msg = fallback_daily_report_message()
                     if msg:
                         telegram_send(msg)
@@ -219,31 +173,30 @@ def background_loop():
 
         time.sleep(60)
 
-# ==================================================
-# THREAD
-# ==================================================
-threading.Thread(target=background_loop, daemon=True).start()
 
-# ==================================================
-# API
-# ==================================================
+def start_background():
+    t = threading.Thread(target=background_loop, daemon=True)
+    t.start()
+
+
+start_background()
+
+
 @app.route("/api")
 def api():
     with data_lock:
         return jsonify(make_json_safe({
             "system_active": int(SYSTEM_STARTED),
             "market_open": int(market_open()),
-            "telegram_status": "active" if TELEGRAM_ENABLED else "offline",
             "last_scan": LAST_SCAN_TS,
             "signals": LATEST_SIGNALS
         }))
+
 
 @app.route("/")
 def dashboard():
     return send_from_directory("static", "dashboard.html")
 
-# ==================================================
-# RUN
-# ==================================================
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0
