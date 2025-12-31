@@ -1,14 +1,9 @@
-# utils.py
-
 import math
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import pandas as pd
 import numpy as np
 
-# ==================================================
-# FALLBACK SYMBOLS
-# ==================================================
 FALLBACK_SYMBOLS = [
     "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
     "AKGRT.IS","AKSA.IS","AKSEN.IS","ALARK.IS","ALCTL.IS","ALFAS.IS","ALGN.IS","ALKIM.IS","ALMAD.IS",
@@ -38,15 +33,9 @@ FALLBACK_SYMBOLS = [
     "VESPA.IS","VESTL.IS","YEOTK.IS","YGGYO.IS","YKBNK.IS","YONGA.IS","YUNSA.IS","YYAPI.IS","ZEDUR.IS","ZOREN.IS"
 ]
 
-# ==================================================
-# EMA
-# ==================================================
 def calculate_ema(series, period=20):
     return series.ewm(span=period, adjust=False).mean()
 
-# ==================================================
-# RSI
-# ==================================================
 def calculate_rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
@@ -56,9 +45,6 @@ def calculate_rsi(series, period=14):
     rs = avg_gain / avg_loss
     return (100 - (100 / (1 + rs))).fillna(50)
 
-# ==================================================
-# SUPPORT / RESISTANCE BREAK
-# ==================================================
 def detect_support_resistance_break(df, lookback=20):
     if df is None or df.empty or len(df) < lookback + 2:
         return False, False
@@ -67,53 +53,32 @@ def detect_support_resistance_break(df, lookback=20):
     close = df["Close"].iloc[-1]
     return close < prev_low, close > prev_high
 
-# ==================================================
-# NEAREST SUPPORT / RESISTANCE
-# ==================================================
 def nearest_support_resistance_from_history(df, lookback=100):
     if df is None or df.empty or len(df) < 5:
         return None, None
-
     highs = df["High"].rolling(3, center=True).max()
     lows = df["Low"].rolling(3, center=True).min()
     ph = df["High"][df["High"] == highs]
     pl = df["Low"][df["Low"] == lows]
-
     price = df["Close"].iloc[-1]
-
     resistances = [float(v) for v in ph if v > price]
     supports = [float(v) for v in pl if v < price]
+    return (max(supports) if supports else None,
+            min(resistances) if resistances else None)
 
-    nearest_support = max(supports) if supports else None
-    nearest_resistance = min(resistances) if resistances else None
-
-    return nearest_support, nearest_resistance
-
-# ==================================================
-# THREE PEAKS (ÜÇLÜ TEPE KIRILIMI)
-# ==================================================
 def detect_three_peaks(close_series):
     if close_series is None or close_series.empty or len(close_series) < 5:
         return False
-
     peaks = (
         (close_series.shift(1) < close_series) &
         (close_series.shift(-1) < close_series)
     )
-
     peak_prices = close_series[peaks]
     if len(peak_prices) < 3:
         return False
-
     last_three = peak_prices.iloc[-3:]
-    max_peak = last_three.max()
-    current_price = close_series.iloc[-1]
+    return close_series.iloc[-1] > last_three.max()
 
-    return current_price > max_peak
-
-# ==================================================
-# TIMEZONE
-# ==================================================
 def to_tr_timezone(dt):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
