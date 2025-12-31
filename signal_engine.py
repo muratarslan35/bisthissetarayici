@@ -64,6 +64,7 @@ def enrich_meta(item, tf, base):
     ema200 = tf.get("ema200")
     ema_trend = trend_direction(ema20, ema50, ema200)
     rsi = tf.get("rsi")
+
     base.update({
         "symbol": item["symbol"],
         "current_price": fmt(item.get("current_price")),
@@ -77,7 +78,7 @@ def enrich_meta(item, tf, base):
         "time": now_tr().strftime("%H:%M:%S"),
         "action": decide_action(base["strength"], rsi, ema_trend)
     })
-    # Kaydı başarı tracker'a ekle
+
     today = now_tr().date()
     success_tracker.setdefault(today, {})
     success_tracker[today][item["symbol"]] = {
@@ -89,165 +90,111 @@ def enrich_meta(item, tf, base):
     }
     return base
 
-# ---------------- MULTI-TIMEFRAME CONTROL ----------------
 def trend_consistency_15m_1h_4h(tf_15m, tf_1h, tf_4h):
-    """
-    15m'de sinyal tetiklenirse, 1h ve 4h trendleri ile uyumlu mu kontrol et.
-    Yukarı trend: EMA20 > EMA50 > EMA200
-    Aşağı trend: EMA20 < EMA50 < EMA200
-    """
     def trend(ema20, ema50, ema200):
         if ema20 and ema50 and ema200:
             if ema20 > ema50 > ema200: return "UP"
             if ema20 < ema50 < ema200: return "DOWN"
         return "NEUTRAL"
 
-    trend_15 = trend(tf_15m.get("ema20"), tf_15m.get("ema50"), tf_15m.get("ema200"))
-    trend_1h = trend(tf_1h.get("ema20"), tf_1h.get("ema50"), tf_1h.get("ema200"))
-    trend_4h = trend(tf_4h.get("ema20"), tf_4h.get("ema50"), tf_4h.get("ema200"))
+    t15 = trend(tf_15m.get("ema20"), tf_15m.get("ema50"), tf_15m.get("ema200"))
+    t1h = trend(tf_1h.get("ema20"), tf_1h.get("ema50"), tf_1h.get("ema200"))
+    t4h = trend(tf_4h.get("ema20"), tf_4h.get("ema50"), tf_4h.get("ema200"))
 
-    if trend_15 == "UP":
-        return trend_1h == "UP" and trend_4h == "UP"
-    if trend_15 == "DOWN":
-        return trend_1h == "DOWN" and trend_4h == "DOWN"
+    if t15 == "UP":
+        return t1h == "UP" and t4h == "UP"
+    if t15 == "DOWN":
+        return t1h == "DOWN" and t4h == "DOWN"
     return False
 
-# ---------------- SIGNAL FUNCTIONS ----------------
 def combined_signal(item):
-    tf_15 = item.get("tf", {}).get("15m", {})
-    tf_1h = item.get("tf", {}).get("1h", {})
-    tf_4h = item.get("tf", {}).get("4h", {})
-
-    if not trend_consistency_15m_1h_4h(tf_15, tf_1h, tf_4h):
-        return None
-
-    if tf_15.get("rsi") and tf_15["rsi"] < 30 and not in_repeat_block(item["symbol"], "kombine"):
+    tf15 = item["tf"].get("15m")
+    tf1h = item["tf"].get("1h")
+    tf4h = item["tf"].get("4h")
+    if not tf15 or not tf1h or not tf4h: return None
+    if not trend_consistency_15m_1h_4h(tf15, tf1h, tf4h): return None
+    if tf15.get("rsi") and tf15["rsi"] < 30 and not in_repeat_block(item["symbol"], "kombine"):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "kombine")
-        return enrich_meta(item, tf_15, {"type":"kombine","emoji":"🧠","strength":70})
+        return enrich_meta(item, tf15, {"type":"kombine","emoji":"🧠","strength":70})
 
 def super_combined_signal(item):
-    tf_15 = item.get("tf", {}).get("15m", {})
-    tf_1h = item.get("tf", {}).get("1h", {})
-    tf_4h = item.get("tf", {}).get("4h", {})
-
-    if not trend_consistency_15m_1h_4h(tf_15, tf_1h, tf_4h):
-        return None
-
-    if tf_15.get("rsi") and tf_15["rsi"] < 25 and not in_repeat_block(item["symbol"], "super_kombine"):
+    tf15 = item["tf"].get("15m")
+    tf1h = item["tf"].get("1h")
+    tf4h = item["tf"].get("4h")
+    if not tf15 or not tf1h or not tf4h: return None
+    if not trend_consistency_15m_1h_4h(tf15, tf1h, tf4h): return None
+    if tf15.get("rsi") and tf15["rsi"] < 25 and not in_repeat_block(item["symbol"], "super_kombine"):
         register_signal(item["symbol"], item["current_price"])
         mark_sent(item["symbol"], "super_kombine")
-        return enrich_meta(item, tf_15, {"type":"super_kombine","emoji":"🚀","strength":90})
+        return enrich_meta(item, tf15, {"type":"super_kombine","emoji":"🚀","strength":90})
 
 def pullback_signal(item):
-    tf_15 = item.get("tf", {}).get("15m", {})
-    tf_1h = item.get("tf", {}).get("1h", {})
-    tf_4h = item.get("tf", {}).get("4h", {})
-
-    if not trend_consistency_15m_1h_4h(tf_15, tf_1h, tf_4h):
-        return None
-
-    if tf_15.get("rsi") and tf_15.get("ema20") and tf_15.get("ema50"):
-        if tf_15["rsi"] < 40 and tf_15["ema20"] > tf_15["ema50"] and not in_repeat_block(item["symbol"], "pullback"):
+    tf15 = item["tf"].get("15m")
+    tf1h = item["tf"].get("1h")
+    tf4h = item["tf"].get("4h")
+    if not tf15 or not tf1h or not tf4h: return None
+    if not trend_consistency_15m_1h_4h(tf15, tf1h, tf4h): return None
+    if tf15.get("rsi") and tf15.get("ema20") and tf15.get("ema50"):
+        if tf15["rsi"] < 40 and tf15["ema20"] > tf15["ema50"] and not in_repeat_block(item["symbol"], "pullback"):
             mark_sent(item["symbol"], "pullback")
-            return enrich_meta(item, tf_15, {"type":"pullback","emoji":"🔄","strength":60})
+            return enrich_meta(item, tf15, {"type":"pullback","emoji":"🔄","strength":60})
 
 def strong_pullback_signal(item):
-    tf_15 = item.get("tf", {}).get("15m", {})
-    tf_1h = item.get("tf", {}).get("1h", {})
-    tf_4h = item.get("tf", {}).get("4h", {})
-
-    if not trend_consistency_15m_1h_4h(tf_15, tf_1h, tf_4h):
-        return None
-
-    if tf_15.get("rsi") and tf_15["rsi"] < 25 and not in_repeat_block(item["symbol"], "strong_pullback"):
+    tf15 = item["tf"].get("15m")
+    tf1h = item["tf"].get("1h")
+    tf4h = item["tf"].get("4h")
+    if not tf15 or not tf1h or not tf4h: return None
+    if not trend_consistency_15m_1h_4h(tf15, tf1h, tf4h): return None
+    if tf15.get("rsi") and tf15["rsi"] < 25 and not in_repeat_block(item["symbol"], "strong_pullback"):
         mark_sent(item["symbol"], "strong_pullback")
-        return enrich_meta(item, tf_15, {"type":"GÜÇLÜ PULLBACK","emoji":"💪","strength":85})
+        return enrich_meta(item, tf15, {"type":"GÜÇLÜ PULLBACK","emoji":"💪","strength":85})
 
 def three_peak_signal(item):
-    tf_15 = item.get("tf", {}).get("15m", {})
-    tf_1h = item.get("tf", {}).get("1h", {})
-    tf_4h = item.get("tf", {}).get("4h", {})
-
-    if not trend_consistency_15m_1h_4h(tf_15, tf_1h, tf_4h):
-        return None
-
-    df = tf_15.get("df")
-    if df is not None and detect_three_peaks(df["Close"]):
-        if not in_repeat_block(item["symbol"], "three_peak"):
-            mark_sent(item["symbol"], "three_peak")
-            return enrich_meta(item, tf_15, {"type":"three_peak","emoji":"📉➡️📈","strength":80})
+    tf15 = item["tf"].get("15m")
+    if not tf15 or not tf15.get("df"): return None
+    if detect_three_peaks(tf15["df"]["Close"]) and not in_repeat_block(item["symbol"], "three_peak"):
+        mark_sent(item["symbol"], "three_peak")
+        return enrich_meta(item, tf15, {"type":"three_peak","emoji":"📉➡️📈","strength":80})
 
 def support_resistance_break_signal(item):
-    tf_15 = item.get("tf", {}).get("15m", {})
-    tf_1h = item.get("tf", {}).get("1h", {})
-    tf_4h = item.get("tf", {}).get("4h", {})
-
-    if not trend_consistency_15m_1h_4h(tf_15, tf_1h, tf_4h):
-        return None
-
-    df = tf_15.get("df")
-    if df is None: return None
-    _, r_break = detect_support_resistance_break(df)
-    sup, res = nearest_support_resistance_from_history(df)
+    tf15 = item["tf"].get("15m")
+    if not tf15 or not tf15.get("df"): return None
+    _, r_break = detect_support_resistance_break(tf15["df"])
+    sup, res = nearest_support_resistance_from_history(tf15["df"])
     if r_break and not in_repeat_block(item["symbol"], "resistance_break"):
         mark_sent(item["symbol"], "resistance_break")
-        return enrich_meta(item, tf_15, {"type":"resistance_break","emoji":"🚧","strength":75,"support":fmt(sup),"resistance":fmt(res)})
+        return enrich_meta(item, tf15, {"type":"resistance_break","emoji":"🚧","strength":75,"support":fmt(sup),"resistance":fmt(res)})
 
-# ---------------- L2-L3-L4 Sinyalleri (5m) ----------------
-def l2_signal(item):
-    tf = item.get("tf", {}).get("5m", {})
-    if tf.get("rsi",50) > 55 and not in_repeat_block(item["symbol"], "l2"):
-        mark_sent(item["symbol"], "l2")
-        return enrich_meta(item, tf, {"type":"l2","emoji":"📈","strength":55})
-
-def l3_signal(item):
-    tf = item.get("tf", {}).get("5m", {})
-    if tf.get("rsi",50) > 60 and not in_repeat_block(item["symbol"], "l3"):
-        mark_sent(item["symbol"], "l3")
-        return enrich_meta(item, tf, {"type":"l3","emoji":"🔥","strength":65})
-
-def l4_signal(item):
-    tf = item.get("tf", {}).get("15m", {})
-    if tf.get("rsi",50) > 65 and not in_repeat_block(item["symbol"], "l4"):
-        mark_sent(item["symbol"], "l4")
-        return enrich_meta(item, tf, {"type":"l4","emoji":"💎","strength":75})
-
-# ---------------- PROCESS SIGNALS WITH GROUPING ----------------
 def process_signals(item, market_open=True):
-    signals = []
+    signals=[]
     for fn in [
         combined_signal, super_combined_signal, pullback_signal,
-        strong_pullback_signal, three_peak_signal,
-        support_resistance_break_signal, l2_signal, l3_signal, l4_signal
+        strong_pullback_signal, three_peak_signal, support_resistance_break_signal
     ]:
-        r = fn(item)
-        if r:
-            signals.append(r)
+        r=fn(item)
+        if r: signals.append(r)
 
     if signals:
-        combined = signals[0].copy()
-        combined["combined_algorithms"] = [
-            {
-                "type": s["type"],
-                "emoji": s.get("emoji","⚡"),
-                "strength": s.get("strength"),
-                "action": s.get("action"),
-                "support": s.get("support"),
-                "resistance": s.get("resistance"),
-                "time": s.get("time")
-            } for s in signals
-        ]
-        return [combined]
+        c=signals[0].copy()
+        c["combined_algorithms"]=[{
+            "type":s["type"],
+            "emoji":s["emoji"],
+            "strength":s["strength"],
+            "action":s["action"],
+            "support":s.get("support"),
+            "resistance":s.get("resistance"),
+            "time":s["time"]
+        } for s in signals]
+        return [c]
     return []
 
 def safe_process_bist_data(data_list, market_open=True):
     res=[]
     for item in data_list:
         try:
-            processed = process_signals(item, market_open)
-            if processed:
-                res.extend(processed)
+            r=process_signals(item, market_open)
+            if r: res.extend(r)
             update_success(item["symbol"], item["current_price"])
         except Exception:
             continue
@@ -257,7 +204,7 @@ def scan_strong_stocks(data):
     out=[]
     for i in data:
         tf=i.get("tf",{}).get("1d",{})
-        if tf.get("ema50") and tf.get("ema200") and tf["ema50"]>tf["ema200"]:
+        if tf and tf.get("ema50") and tf.get("ema200") and tf["ema50"]>tf["ema200"]:
             out.append(f"• {i['symbol']}")
     return out[:10]
 
@@ -267,41 +214,34 @@ def daily_success_summary(include_details=False, max_failures=0):
     if not d: return None
     total=len(d)
     hit=sum(1 for x in d.values() if x.get("hit"))
-    fail=total-hit
-    result = {
-        "date": str(today),
-        "total": total,
-        "hit": hit,
-        "fail": fail,
-        "success_rate": round((hit/total)*100,2) if total else 0
+    result={
+        "date":str(today),
+        "total":total,
+        "hit":hit,
+        "fail":total-hit,
+        "success_rate":round((hit/total)*100,2) if total else 0
     }
-
     if include_details:
-        success_signals = []
-        for sym, meta in d.items():
-            if meta.get("hit"):
-                success_signals.append({
-                    "symbol": sym,
-                    "algorithm": meta.get("algorithm","-"),
-                    "time": meta.get("time","-"),
-                    "price": fmt(meta.get("entry"))
-                })
-        result["success_signals"] = success_signals
+        result["success_signals"]=[{
+            "symbol":s,
+            "algorithm":m.get("algorithm"),
+            "time":m.get("time"),
+            "price":fmt(m.get("entry"))
+        } for s,m in d.items() if m.get("hit")]
     return result
 
 def format_signal_message(symbol, signals):
     if not signals: return None
-    s0 = signals[0]
+    s=signals[0]
     lines=[
         f"📈 {symbol}",
-        f"💰 Fiyat: {s0.get('current_price','-')}",
-        f"📊 RSI: {s0.get('rsi','-')}",
-        f"📐 EMA20 / EMA50 / EMA200: {s0.get('ema20','-')} / {s0.get('ema50','-')} / {s0.get('ema200','-')}",
-        f"📉 EMA Trend: {s0.get('ema_trend','-')}",
-        f"⏱ Saat: {s0.get('time','-')}", ""
+        f"💰 Fiyat: {s.get('current_price')}",
+        f"📊 RSI: {s.get('rsi')}",
+        f"📐 EMA20 / EMA50 / EMA200: {s.get('ema20')} / {s.get('ema50')} / {s.get('ema200')}",
+        f"📉 EMA Trend: {s.get('ema_trend')}",
+        f"⏱ Saat: {s.get('time')}",
+        ""
     ]
-    for s in s0.get("combined_algorithms", []):
-        lines.append(f"{s.get('emoji','⚡')} {s['type']} | Güç: %{s['strength']} | {s.get('action','')}")
-        if s.get("support"): lines.append(f"🟢 Destek: {s['support']}")
-        if s.get("resistance"): lines.append(f"🔴 Direnç: {s['resistance']}")
+    for a in s.get("combined_algorithms",[]):
+        lines.append(f"{a['emoji']} {a['type']} | Güç: %{a['strength']} | {a['action']}")
     return "\n".join(lines)
