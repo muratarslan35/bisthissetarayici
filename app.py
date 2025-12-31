@@ -112,7 +112,6 @@ def background_loop():
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
-            # ================= MARKET AÇIK =================
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
 
@@ -123,8 +122,7 @@ def background_loop():
                         grouped[sym].append(meta)
 
                 for symbol, alg_list in grouped.items():
-                    msg = format_signal_message(symbol, alg_list)
-                    telegram_send(msg)
+                    telegram_send(format_signal_message(symbol, alg_list))
 
                 dashboard_signals = []
                 seen = set()
@@ -153,7 +151,6 @@ def background_loop():
                 with data_lock:
                     LATEST_SIGNALS = dashboard_signals
 
-            # ================= MARKET KAPALI =================
             else:
                 if not DAILY_SENT["strong_stocks"]:
                     strong = scan_strong_stocks(raw_data)
@@ -182,8 +179,7 @@ def background_loop():
                         telegram_send("\n".join(lines))
                     DAILY_SENT["summary"] = True
 
-                updated = fallback_daily_update_if_needed(raw_data)
-                if updated:
+                if fallback_daily_update_if_needed(raw_data):
                     msg = fallback_daily_report_message()
                     if msg:
                         telegram_send(msg)
@@ -194,33 +190,13 @@ def background_loop():
         time.sleep(60)
 
 # ==================================================
-# THREAD (ÖNEMLİ DÜZELTME)
-# ==================================================
-def start_background():
-    t = threading.Thread(target=background_loop, daemon=True)
-    t.start()
-
-start_background()
-
-# ==================================================
-# API
-# ==================================================
-@app.route("/api")
-def api():
-    with data_lock:
-        return jsonify(make_json_safe({
-            "system_active": int(SYSTEM_STARTED),
-            "market_open": int(market_open()),
-            "last_scan": LAST_SCAN_TS,
-            "signals": LATEST_SIGNALS
-        }))
-
-@app.route("/")
-def dashboard():
-    return send_from_directory("static", "dashboard.html")
-
-# ==================================================
-# RUN
+# RUN (KRİTİK FIX)
 # ==================================================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    threading.Thread(target=background_loop, daemon=True).start()
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False,
+        use_reloader=False
+                )
