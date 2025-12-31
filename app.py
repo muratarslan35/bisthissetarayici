@@ -74,8 +74,8 @@ def telegram_send(msg):
                 json={"chat_id": cid, "text": msg},
                 timeout=5
             )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Telegram gönderilemedi {cid}: {e}")
 
 # ==================================================
 # MARKET HOURS
@@ -95,15 +95,10 @@ def background_loop():
     global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY
 
     SYSTEM_STARTED = True
-    try:
-        telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
-    except Exception as e:
-        print("Başlangıç mesajı gönderilemedi:", e)
 
     while True:
         try:
             raw_data = fetch_bist_data()
-            print(f"İlk veri çekildi: {len(raw_data)} hisse")  # log
 
             now = to_tr_timezone(datetime.now(timezone.utc))
             today = now.date()
@@ -116,6 +111,7 @@ def background_loop():
                 LATEST_DATA = raw_data
                 LAST_SCAN_TS = int(time.time())
 
+            # ================= MARKET AÇIK =================
             if market_open():
                 signals = safe_process_bist_data(raw_data, market_open=True)
 
@@ -155,6 +151,7 @@ def background_loop():
                 with data_lock:
                     LATEST_SIGNALS = dashboard_signals
 
+            # ================= MARKET KAPALI =================
             else:
                 if not DAILY_SENT["strong_stocks"]:
                     strong = scan_strong_stocks(raw_data)
@@ -194,9 +191,24 @@ def background_loop():
         time.sleep(60)
 
 # ==================================================
-# THREAD BAŞLAT
+# RUN
 # ==================================================
-threading.Thread(target=background_loop, daemon=True).start()
+if __name__ == "__main__":
+    # Başlangıç mesajını thread başlamadan önce gönder
+    try:
+        telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
+    except Exception as e:
+        print("Başlangıç mesajı gönderilemedi:", e)
+
+    # Background loop thread
+    threading.Thread(target=background_loop, daemon=True).start()
+
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False,
+        use_reloader=False
+    )
 
 # ==================================================
 # API
@@ -214,9 +226,3 @@ def api():
 @app.route("/")
 def dashboard():
     return send_from_directory("static", "dashboard.html")
-
-# ==================================================
-# RUN
-# ==================================================
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
