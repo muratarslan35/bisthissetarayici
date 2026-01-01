@@ -1,11 +1,8 @@
-import math
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-import pandas as pd
+import requests
 import numpy as np
 
 # =========================================================
-# FALLBACK SYMBOL LIST (AKTİF KULLANILACAK)
+# FALLBACK SYMBOL LIST (TAM VE EKSİKSİZ)
 # =========================================================
 
 FALLBACK_SYMBOLS = [
@@ -38,72 +35,92 @@ FALLBACK_SYMBOLS = [
 ]
 
 # =========================================================
-# 🔥 EN KRİTİK EKLEME — FALLBACK AKTİF EDİCİ
+# FALLBACK SYMBOL RESOLVER
 # =========================================================
 
-def resolve_symbols(data: dict | None):
+def resolve_symbols(data):
     """
-    fetch_bist / yfinance boş veya eksik dönerse
-    sistem FALLBACK_SYMBOLS ile taramaya devam eder
+    fetch_bist veya ana veri kaynağı boş dönerse
+    sistem fallback sembol listesi ile çalışmaya devam eder
     """
-    if not data or not isinstance(data, dict) or len(data) == 0:
+    if not data or not isinstance(data, dict):
         return FALLBACK_SYMBOLS
-    return list(data.keys())
 
+    symbols = list(data.keys())
+    return symbols if symbols else FALLBACK_SYMBOLS
 
 # =========================================================
-# TEKNİK GÖSTERGELER (AYNI)
+# TRADINGVIEW PRICE FETCH
 # =========================================================
 
-def calculate_ema(series, period=20):
-    return series.ewm(span=period, adjust=False).mean()
+def fetch_tradingview_price(symbol):
+    try:
+        url = "https://scanner.tradingview.com/turkey/scan"
+        payload = {
+            "symbols": {
+                "tickers": [f"BIST:{symbol.replace('.IS','')}"],
+                "query": {"types": []}
+            },
+            "columns": ["close"]
+        }
 
-def calculate_rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(period, min_periods=1).mean()
-    avg_loss = loss.rolling(period, min_periods=1).mean().replace(0, np.nan)
-    rs = avg_gain / avg_loss
-    return (100 - (100 / (1 + rs))).fillna(50)
+        r = requests.post(url, json=payload, timeout=5)
+        data = r.json()
+        return float(data["data"][0]["d"][0])
+    except Exception:
+        return None
 
-def detect_support_resistance_break(df, lookback=20):
-    if df is None or df.empty or len(df) < lookback + 2:
-        return False, False
-    prev_low = df["Low"].iloc[:-1].rolling(lookback, min_periods=1).min().iloc[-1]
-    prev_high = df["High"].iloc[:-1].rolling(lookback, min_periods=1).max().iloc[-1]
-    close = df["Close"].iloc[-1]
-    return close < prev_low, close > prev_high
+# =========================================================
+# SUPPORT / RESISTANCE (HISTORY BASED)
+# =========================================================
 
-def nearest_support_resistance_from_history(df, lookback=100):
-    if df is None or df.empty or len(df) < 5:
-        return None, None
-    highs = df["High"].rolling(3, center=True).max()
-    lows = df["Low"].rolling(3, center=True).min()
-    ph = df["High"][df["High"] == highs]
-    pl = df["Low"][df["Low"] == lows]
-    price = df["Close"].iloc[-1]
-    resistances = [float(v) for v in ph if v > price]
-    supports = [float(v) for v in pl if v < price]
-    return (
-        max(supports) if supports else None,
-        min(resistances) if resistances else None
-    )
+def nearest_support_resistance_from_history(df, window=50):
+    if df is None or len(df) < window:
+        return []
 
-def detect_three_peaks(close_series):
-    if close_series is None or close_series.empty or len(close_series) < 5:
+    closes = df["Close"].tail(window).values
+    levels = []
+
+    for i in range(2, len(closes) - 2):
+        if closes[i] > closes[i-1] and closes[i] > closes[i+1]:
+            levels.append({"level": closes[i], "strength": 3})
+        elif closes[i] < closes[i-1] and closes[i] < closes[i+1]:
+            levels.append({"level": closes[i], "strength": 3})
+
+    return levels
+
+# =========================================================
+# SUPPORT / RESISTANCE BREAK DETECTION
+# =========================================================
+
+def detect_support_resistance_break(df):
+    if df is None or len(df) < 20:
+        return None
+
+    last = df.iloc[-1]
+    prev = df.iloc[-20:-1]
+
+    if last["Close"] > prev["High"].max():
+        return {"type": "RESISTANCE_BREAK"}
+
+    if last["Close"] < prev["Low"].min():
+        return {"type": "SUPPORT_BREAK"}
+
+    return None
+
+# =========================================================
+# THREE PEAKS DETECTION
+# =========================================================
+
+def detect_three_peaks(series):
+    if series is None or len(series) < 30:
         return False
-    peaks = (
-        (close_series.shift(1) < close_series) &
-        (close_series.shift(-1) < close_series)
-    )
-    peak_prices = close_series[peaks]
-    if len(peak_prices) < 3:
-        return False
-    last_three = peak_prices.iloc[-3:]
-    return close_series.iloc[-1] > last_three.max()
 
-def to_tr_timezone(dt):
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(ZoneInfo("Europe/Istanbul"))
+    peaks = []
+    values = series.values if hasattr(series, "values") else series
+
+    for i in range(2, len(values) - 2):
+        if values[i] > values[i-1] and values[i] > values[i+1]:
+            peaks.append(values[i])
+
+    return len(peaks) >= 3
