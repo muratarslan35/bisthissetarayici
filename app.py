@@ -72,13 +72,14 @@ def is_market_open(now=None):
 
 def send_telegram_message(text: str):
     if not TELEGRAM_ENABLED:
+        print("⚠ Telegram kapalı veya token/chat ID eksik")
         return
 
     import requests
 
     for chat_id in CHAT_IDS:
         try:
-            requests.post(
+            res = requests.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
                 json={
                     "chat_id": chat_id,
@@ -88,8 +89,12 @@ def send_telegram_message(text: str):
                 },
                 timeout=5
             )
+            if res.status_code == 200:
+                print(f"✅ Telegram mesaj gönderildi: {text[:30]}...")
+            else:
+                print(f"⚠ Telegram gönderim hatası ({res.status_code}): {text[:30]}...")
         except Exception as e:
-            print("Telegram gönderim hatası:", e)
+            print("⚠ Telegram gönderim exception:", e)
 
 # ======================================================
 # BAŞLANGIÇ MESAJI
@@ -102,6 +107,7 @@ def send_startup_message():
         f"📅 Tarih: {now_tr().strftime('%d.%m.%Y')}\n\n"
         "📡 Tarama aktif."
     )
+    print("📡 Startup mesajı gönderiliyor...")
     send_telegram_message(msg)
 
 # ======================================================
@@ -136,24 +142,23 @@ def scanner_loop():
     while True:
         try:
             now = now_tr()
+            print(f"⏱ Döngü zamanı: {now.strftime('%H:%M:%S')}")
 
             if not is_market_open(now):
+                print("⏹ Piyasa kapalı, bekleniyor...")
                 if last_report_day != now.date() and now.time() > BIST_CLOSE:
+                    print("📊 Gün sonu raporu gönderiliyor...")
                     send_daily_success_report()
                     last_report_day = now.date()
                 time.sleep(30)
                 continue
 
             market_data = fetch_bist_data()
+            print(f"📈 {len(market_data)} hisse tarandı")
 
             for item in market_data:
                 signals = process_symbol_signals(item)
-
-                # Başarı hedefi güncelle
-                successes = update_success_targets(
-                    item["symbol"],
-                    item["current_price"]
-                )
+                successes = update_success_targets(item["symbol"], item["current_price"])
 
                 for s in successes:
                     push_success_signal({
@@ -163,15 +168,12 @@ def scanner_loop():
                     })
 
                 for signal in signals:
-                    # Dashboard
                     push_signal(signal)
-
-                    # Telegram
                     msg = format_signal_message(signal)
                     send_telegram_message(msg)
 
         except Exception as e:
-            print("Tarama hatası:", e)
+            print("⚠ Tarama hatası:", e)
 
         time.sleep(SCAN_INTERVAL)
 
@@ -204,4 +206,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-                )
+        )
