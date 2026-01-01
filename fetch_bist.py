@@ -4,7 +4,6 @@ import yfinance as yf
 import pandas as pd
 
 from utils import (
-    BIST_SYMBOLS,
     resolve_symbols,
     fetch_tradingview_price,
     nearest_support_resistance_from_history
