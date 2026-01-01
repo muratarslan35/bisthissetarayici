@@ -4,7 +4,7 @@ import threading
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 
 from fetch_bist import fetch_bist_data
 from signal_engine import (
@@ -48,6 +48,11 @@ TELEGRAM_ENABLED = bool(TELEGRAM_TOKEN and CHAT_IDS)
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
 
+# ROOT YÖNLENDİRME → Dashboard'a
+@app.route("/")
+def index():
+    return render_template("dashboard.html")
+
 # ======================================================
 # ZAMAN YARDIMCILARI
 # ======================================================
@@ -57,8 +62,7 @@ def now_tr():
 
 def is_market_open(now=None):
     now = now or now_tr()
-    # Hafta sonu kapalı
-    if now.weekday() >= 5:  # Cumartesi=5, Pazar=6
+    if now.weekday() >= 5:  # Cumartesi & Pazar kapalı
         return False
     return BIST_OPEN <= now.time() <= BIST_CLOSE
 
@@ -105,9 +109,6 @@ def send_startup_message():
 # ======================================================
 
 def daily_success_summary():
-    """
-    Bugünkü tüm hedefleri özetler.
-    """
     today = tr_now().date()
     hits = SUCCESS_TRACKER.get(today, {})
     lines = []
@@ -136,13 +137,10 @@ def scanner_loop():
         try:
             now = now_tr()
 
-            # Market kapalıysa
             if not is_market_open(now):
-                # Gün sonu raporu (1 kez)
                 if last_report_day != now.date() and now.time() > BIST_CLOSE:
                     send_daily_success_report()
                     last_report_day = now.date()
-
                 time.sleep(30)
                 continue
 
@@ -151,7 +149,7 @@ def scanner_loop():
             for item in market_data:
                 signals = process_symbol_signals(item)
 
-                # fiyatla başarı hedefi güncelle
+                # Başarı hedefi güncelle
                 successes = update_success_targets(
                     item["symbol"],
                     item["current_price"]
@@ -193,6 +191,7 @@ def health():
 # ======================================================
 
 if __name__ == "__main__":
+    # Tarama thread
     threading.Thread(
         target=scanner_loop,
         daemon=True
@@ -200,8 +199,9 @@ if __name__ == "__main__":
 
     send_startup_message()
 
+    # Flask başlat
     app.run(
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-    )
+                )
