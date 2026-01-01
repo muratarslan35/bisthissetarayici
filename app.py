@@ -1,202 +1,207 @@
 import os
 import time
 import threading
-import requests
-from datetime import datetime, timezone
-from collections import defaultdict
+from datetime import datetime, time as dtime
+from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, send_from_directory
-from dotenv import load_dotenv
+from flask import Flask, jsonify
 
 from fetch_bist import fetch_bist_data
 from signal_engine import (
-    safe_process_bist_data,
-    scan_strong_stocks,
-    daily_success_summary,
-    format_signal_message
-)
-from utils import to_tr_timezone
-from fallback_manager import (
-    fallback_daily_update_if_needed,
-    fallback_daily_report_message
+    process_symbol_signals,
+    format_signal_message,
+    update_success_targets,
+    SUCCESS_TRACKER,
+    tr_now
 )
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(BASE_DIR, ".env"))
+from dashboard import (
+    dashboard_bp,
+    push_signal,
+    push_success_signal
+)
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_IDS = [int(x) for x in os.getenv("CHAT_IDS", "").split(",") if x]
+# ======================================================
+# ZAMAN & SABİTLER
+# ======================================================
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
+
+BIST_OPEN = dtime(9, 40)
+BIST_CLOSE = dtime(18, 10)
+
+SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
+
+# ======================================================
+# TELEGRAM AYARLARI
+# ======================================================
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_IDS = [v for k, v in os.environ.items() if k.startswith("TELEGRAM_CHAT_ID")]
+
+TELEGRAM_ENABLED = bool(TELEGRAM_TOKEN and CHAT_IDS)
+
+# ======================================================
+# FLASK APP
+# ======================================================
 
 app = Flask(__name__)
+app.register_blueprint(dashboard_bp)
 
-LATEST_DATA = []
-LATEST_SIGNALS = []
-LAST_SCAN_TS = 0
-SYSTEM_STARTED = False
+# ======================================================
+# ZAMAN YARDIMCILARI
+# ======================================================
 
-data_lock = threading.Lock()
+def now_tr():
+    return datetime.now(TR_TZ)
 
-DAILY_SENT = {"strong_stocks": False, "summary": False}
-LAST_DAY = None
+def is_market_open(now=None):
+    now = now or now_tr()
+    # Hafta sonu kapalı
+    if now.weekday() >= 5:  # Cumartesi=5, Pazar=6
+        return False
+    return BIST_OPEN <= now.time() <= BIST_CLOSE
 
+# ======================================================
+# TELEGRAM GÖNDERİMİ
+# ======================================================
 
-def make_json_safe(obj):
-    if isinstance(obj, dict):
-        return {k: make_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [make_json_safe(i) for i in obj]
-    if hasattr(obj, "item"):
-        return obj.item()
-    return obj
-
-
-def telegram_send(msg):
-    if not TELEGRAM_TOKEN or not CHAT_IDS or not msg:
+def send_telegram_message(text: str):
+    if not TELEGRAM_ENABLED:
         return
-    for cid in CHAT_IDS:
+
+    import requests
+
+    for chat_id in CHAT_IDS:
         try:
             requests.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={"chat_id": cid, "text": msg},
+                json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True
+                },
                 timeout=5
             )
         except Exception as e:
-            print(f"Telegram gönderilemedi {cid}: {e}")
+            print("Telegram gönderim hatası:", e)
 
+# ======================================================
+# BAŞLANGIÇ MESAJI
+# ======================================================
 
-def market_open():
-    now = to_tr_timezone(datetime.now(timezone.utc))
-    return (
-        now.weekday() < 5 and
-        ((now.hour > 9) or (now.hour == 9 and now.minute >= 55)) and
-        now.hour < 18
+def send_startup_message():
+    msg = (
+        "🟢 <b>BIST TARAMA SİSTEMİ BAŞLATILDI</b>\n\n"
+        f"🕒 Saat: {now_tr().strftime('%H:%M:%S')}\n"
+        f"📅 Tarih: {now_tr().strftime('%d.%m.%Y')}\n\n"
+        "📡 Tarama aktif."
     )
+    send_telegram_message(msg)
 
+# ======================================================
+# GÜN SONU BAŞARI RAPORU
+# ======================================================
 
-def background_loop():
-    global LATEST_DATA, LAST_SCAN_TS, SYSTEM_STARTED, LATEST_SIGNALS, DAILY_SENT, LAST_DAY
+def daily_success_summary():
+    """
+    Bugünkü tüm hedefleri özetler.
+    """
+    today = tr_now().date()
+    hits = SUCCESS_TRACKER.get(today, {})
+    lines = []
+    for (symbol, algo), d in hits.items():
+        if d.get("hit"):
+            lines.append(f"{symbol} – {algo} → 🎯 Hedefe ulaştı")
+    if not lines:
+        return None
+    return "📊 Günlük Başarı Raporu:\n" + "\n".join(lines)
 
-    SYSTEM_STARTED = True
-    telegram_send("🤖 BIST SİNYAL BOTU AKTİF")
+def send_daily_success_report():
+    report = daily_success_summary()
+    if report:
+        send_telegram_message(report)
+
+# ======================================================
+# ANA TARAMA DÖNGÜSÜ
+# ======================================================
+
+def scanner_loop():
+    print("📡 Tarama döngüsü başladı")
+
+    last_report_day = None
 
     while True:
         try:
-            raw_data = fetch_bist_data()
+            now = now_tr()
 
-            now = to_tr_timezone(datetime.now(timezone.utc))
-            today = now.date()
+            # Market kapalıysa
+            if not is_market_open(now):
+                # Gün sonu raporu (1 kez)
+                if last_report_day != now.date() and now.time() > BIST_CLOSE:
+                    send_daily_success_report()
+                    last_report_day = now.date()
 
-            if LAST_DAY != today:
-                DAILY_SENT = {"strong_stocks": False, "summary": False}
-                LAST_DAY = today
+                time.sleep(30)
+                continue
 
-            with data_lock:
-                LATEST_DATA = raw_data
-                LAST_SCAN_TS = int(time.time())
+            market_data = fetch_bist_data()
 
-            if market_open():
-                signals = safe_process_bist_data(raw_data, market_open=True)
+            for item in market_data:
+                signals = process_symbol_signals(item)
 
-                grouped = defaultdict(list)
-                for meta in signals:
-                    sym = meta.get("symbol")
-                    if sym:
-                        grouped[sym].append(meta)
+                # fiyatla başarı hedefi güncelle
+                successes = update_success_targets(
+                    item["symbol"],
+                    item["current_price"]
+                )
 
-                for symbol, alg_list in grouped.items():
-                    msg = format_signal_message(symbol, alg_list)
-                    telegram_send(msg)
-
-                dashboard_signals = []
-                seen = set()
-
-                for meta in signals:
-                    sym = meta.get("symbol")
-                    if not sym or sym in seen:
-                        continue
-                    seen.add(sym)
-
-                    dashboard_signals.append({
-                        "symbol": sym,
-                        "price": meta.get("price") or meta.get("current_price"),
-                        "type": meta.get("type"),
-                        "title": meta.get("title", meta.get("type")),
-                        "direction": meta.get("direction", "up"),
-                        "trend_strength": meta.get("trend_strength", meta.get("strength", 50)),
-                        "support": meta.get("support"),
-                        "resistance": meta.get("resistance"),
-                        "rsi": meta.get("rsi"),
-                        "time": now.strftime("%H:%M:%S"),
-                        "details": meta,
-                        "combined_algorithms": meta.get("combined_algorithms", [])
+                for s in successes:
+                    push_success_signal({
+                        "symbol": item["symbol"],
+                        "algorithm": s["algorithm"],
+                        "time": now.strftime("%H:%M:%S")
                     })
 
-                with data_lock:
-                    LATEST_SIGNALS = dashboard_signals
+                for signal in signals:
+                    # Dashboard
+                    push_signal(signal)
 
-            else:
-                if not DAILY_SENT["strong_stocks"]:
-                    strong = scan_strong_stocks(raw_data)
-                    if strong:
-                        telegram_send(
-                            "📌 PİYASA KAPALI – GÜÇLÜ HİSSELER\n\n" +
-                            "\n".join(strong)
-                        )
-                    DAILY_SENT["strong_stocks"] = True
-
-                if not DAILY_SENT["summary"]:
-                    summary = daily_success_summary(include_details=True, max_failures=0)
-                    if summary:
-                        lines = [
-                            "📊 GÜN SONU BAŞARI ÖZETİ",
-                            f"Tarih: {summary['date']}",
-                            f"Toplam Başarılı: {summary['hit']} / {summary['total']}",
-                            f"Başarı Oranı: %{summary['success_rate']:.2f}",
-                            "",
-                            "Başarılı Sinyaller:"
-                        ]
-                        for s in summary.get("success_signals", []):
-                            lines.append(
-                                f"• {s['symbol']} | {s['algorithm']} | {s['time']} | {s['price']}"
-                            )
-                        telegram_send("\n".join(lines))
-                    DAILY_SENT["summary"] = True
-
-                updated = fallback_daily_update_if_needed(raw_data)
-                if updated:
-                    msg = fallback_daily_report_message()
-                    if msg:
-                        telegram_send(msg)
+                    # Telegram
+                    msg = format_signal_message(signal)
+                    send_telegram_message(msg)
 
         except Exception as e:
-            print("SCAN ERROR:", e)
+            print("Tarama hatası:", e)
 
-        time.sleep(60)
+        time.sleep(SCAN_INTERVAL)
 
+# ======================================================
+# SAĞLIK KONTROLÜ
+# ======================================================
 
-def start_background():
-    t = threading.Thread(target=background_loop, daemon=True)
-    t.start()
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "time": now_tr().isoformat()
+    })
 
-
-start_background()
-
-
-@app.route("/api")
-def api():
-    with data_lock:
-        return jsonify(make_json_safe({
-            "system_active": int(SYSTEM_STARTED),
-            "market_open": int(market_open()),
-            "last_scan": LAST_SCAN_TS,
-            "signals": LATEST_SIGNALS
-        }))
-
-
-@app.route("/")
-def dashboard():
-    return send_from_directory("static", "dashboard.html")
-
+# ======================================================
+# APP START
+# ======================================================
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    threading.Thread(
+        target=scanner_loop,
+        daemon=True
+    ).start()
+
+    send_startup_message()
+
+    app.run(
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "5000")),
+        debug=False
+    )
