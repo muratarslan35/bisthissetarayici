@@ -137,6 +137,9 @@ def send_daily_success_report():
 def scanner_loop():
     print("📡 Tarama döngüsü başladı")
 
+    # Başlangıç mesajını buradan gönder, log ile birlikte
+    send_startup_message()
+
     last_report_day = None
 
     while True:
@@ -199,11 +202,9 @@ if __name__ == "__main__":
         daemon=True
     ).start()
 
-    send_startup_message()
-
     # Flask başlat
     app.run(
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-        )
+    )
