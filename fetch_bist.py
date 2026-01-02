@@ -1,8 +1,8 @@
+
 import time
 from datetime import datetime, timezone
 import yfinance as yf
 import pandas as pd
-import requests
 
 from utils import (
     resolve_symbols,
@@ -13,13 +13,11 @@ from utils import (
 MAX_LOOKBACK = {
     "15m": "5d",
     "30m": "5d",
-    "1h": "10d",
-    "1d": "6mo"
 }
 
-# ======================================================
+# =========================
 # INDICATORS
-# ======================================================
+# =========================
 
 def compute_ema(series, period):
     return series.ewm(span=period, adjust=False).mean()
@@ -33,12 +31,14 @@ def compute_rsi(series, period=14):
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-# ======================================================
-# RESAMPLE
-# ======================================================
+# =========================
+# RESAMPLE (SAFE)
+# =========================
 
 def resample_df(df, rule):
-    return (
+    if df is None or df.empty:
+        return None
+    d = (
         df.resample(rule)
         .agg({
             "Open": "first",
@@ -49,14 +49,15 @@ def resample_df(df, rule):
         })
         .dropna()
     )
+    return d if not d.empty else None
 
-# ======================================================
+# =========================
 # YFINANCE FETCH
-# ======================================================
+# =========================
 
 def fetch_yf(symbol, interval):
     try:
-        if not symbol.upper().endswith(".IS"):
+        if not symbol.endswith(".IS"):
             symbol = f"{symbol}.IS"
 
         df = yf.download(
@@ -69,7 +70,6 @@ def fetch_yf(symbol, interval):
         )
 
         if df.empty:
-            print(f"⚠ YF boş veri → {symbol} [{interval}]")
             return None
 
         df = df.rename_axis("Datetime").reset_index()
@@ -77,13 +77,12 @@ def fetch_yf(symbol, interval):
         df.set_index("Datetime", inplace=True)
         return df
 
-    except Exception as e:
-        print(f"❌ YF hata → {symbol} [{interval}] | {e}")
+    except Exception:
         return None
 
-# ======================================================
-# TIMEFRAME BUILD
-# ======================================================
+# =========================
+# TF BUILD (BIST SAFE)
+# =========================
 
 def build_tf_data(symbol):
     base_df = fetch_yf(symbol, "15m") or fetch_yf(symbol, "30m")
@@ -109,26 +108,33 @@ def build_tf_data(symbol):
         }
     }
 
-    for key, rule in [("1h", "1H"), ("4h", "4H")]:
-        d = resample_df(base_df, rule)
-        if d.empty:
-            print(f"⚠ Resample boş → {symbol} [{key}]")
-            return None
+    # OPSİYONEL 1H
+    d1h = resample_df(base_df, "1H")
+    if d1h is not None:
+        d1h["ema20"] = compute_ema(d1h["Close"], 20)
+        d1h["ema50"] = compute_ema(d1h["Close"], 50)
+        tf["1h"] = {
+            "ema20": float(d1h["ema20"].iloc[-1]),
+            "ema50": float(d1h["ema50"].iloc[-1]),
+            "df": d1h
+        }
 
-        d["ema20"] = compute_ema(d["Close"], 20)
-        d["ema50"] = compute_ema(d["Close"], 50)
-
-        tf[key] = {
-            "ema20": float(d["ema20"].iloc[-1]),
-            "ema50": float(d["ema50"].iloc[-1]),
-            "df": d
+    # OPSİYONEL 4H
+    d4h = resample_df(base_df, "4H")
+    if d4h is not None:
+        d4h["ema20"] = compute_ema(d4h["Close"], 20)
+        d4h["ema50"] = compute_ema(d4h["Close"], 50)
+        tf["4h"] = {
+            "ema20": float(d4h["ema20"].iloc[-1]),
+            "ema50": float(d4h["ema50"].iloc[-1]),
+            "df": d4h
         }
 
     return tf
 
-# ======================================================
-# MAIN FETCH (LOG'LU)
-# ======================================================
+# =========================
+# MAIN FETCH (LOG’LU)
+# =========================
 
 def fetch_bist_data(symbol_data=None):
     results = []
@@ -137,23 +143,23 @@ def fetch_bist_data(symbol_data=None):
     symbols = resolve_symbols(symbol_data)
     all_symbols = symbols + FALLBACK_SYMBOLS
 
-    print(f"\n🔍 TARAMA BAŞLADI | TOPLAM SEMBOL: {len(all_symbols)}")
+    print(f"\n🔍 TARAMA BAŞLADI | TOPLAM: {len(all_symbols)}")
 
     for symbol in all_symbols:
         if symbol in tried:
             continue
         tried.add(symbol)
 
-        print(f"➡ Taranıyor: {symbol}")
+        print(f"➡ {symbol}")
 
         price = fetch_tradingview_price(symbol)
         if not price:
-            print(f"⚠ TV fiyat yok → {symbol}")
+            print(f"⚠ TV fiyat yok")
             continue
 
         tf = build_tf_data(symbol)
         if not tf:
-            print(f"⚠ TF eksik → {symbol}")
+            print(f"⚠ TF yok")
             continue
 
         results.append({
@@ -163,8 +169,8 @@ def fetch_bist_data(symbol_data=None):
             "fetched_at": datetime.now(timezone.utc)
         })
 
-        print(f"✅ OK → {symbol}")
+        print(f"✅ OK")
         time.sleep(0.12)
 
-    print(f"✅ TARAMA BİTTİ | GEÇERLİ HİSSE: {len(results)}\n")
+    print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n")
     return results
