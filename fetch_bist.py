@@ -15,7 +15,29 @@ MAX_LOOKBACK = {
 }
 
 # ======================================================
-# INDICATORS (SERIES SAFE)
+# HELPERS
+# ======================================================
+
+def normalize_ohlc(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Yahoo Finance bazen MultiIndex kolon döndürür.
+    Bu fonksiyon OHLCV kolonlarını garanti altına alır.
+    """
+    if df is None or df.empty:
+        return None
+
+    # MultiIndex ise flatten et
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    required = {"Open", "High", "Low", "Close", "Volume"}
+    if not required.issubset(df.columns):
+        return None
+
+    return df[["Open", "High", "Low", "Close", "Volume"]].copy()
+
+# ======================================================
+# INDICATORS
 # ======================================================
 
 def compute_ema(series: pd.Series, period: int) -> pd.Series:
@@ -23,8 +45,8 @@ def compute_ema(series: pd.Series, period: int) -> pd.Series:
 
 def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
 
     avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
@@ -33,10 +55,10 @@ def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 # ======================================================
-# RESAMPLE (BOOLEAN SAFE)
+# RESAMPLE (SAFE)
 # ======================================================
 
-def resample_df(df: pd.DataFrame, rule: str):
+def resample_df(df: pd.DataFrame, rule: str) -> pd.DataFrame | None:
     if df is None or df.empty:
         return None
 
@@ -52,16 +74,13 @@ def resample_df(df: pd.DataFrame, rule: str):
         .dropna()
     )
 
-    if d.empty:
-        return None
-
-    return d
+    return d if not d.empty else None
 
 # ======================================================
-# YFINANCE FETCH (NET)
+# YFINANCE FETCH (SAFE)
 # ======================================================
 
-def fetch_yf(symbol: str, interval: str):
+def fetch_yf(symbol: str, interval: str) -> pd.DataFrame | None:
     try:
         if not symbol.endswith(".IS"):
             symbol = f"{symbol}.IS"
@@ -78,10 +97,11 @@ def fetch_yf(symbol: str, interval: str):
         if df is None or df.empty:
             return None
 
-        df = df.rename_axis("Datetime").reset_index()
-        df["Datetime"] = pd.to_datetime(df["Datetime"], utc=True)
-        df.set_index("Datetime", inplace=True)
+        df = normalize_ohlc(df)
+        if df is None:
+            return None
 
+        df.index = pd.to_datetime(df.index, utc=True)
         return df
 
     except Exception as e:
@@ -89,15 +109,11 @@ def fetch_yf(symbol: str, interval: str):
         return None
 
 # ======================================================
-# TIMEFRAME BUILD (NO AMBIGUITY)
+# TIMEFRAME BUILD (STABLE)
 # ======================================================
 
-def build_tf_data(symbol: str):
-    base_df = fetch_yf(symbol, "15m")
-
-    if base_df is None:
-        base_df = fetch_yf(symbol, "30m")
-
+def build_tf_data(symbol: str) -> dict | None:
+    base_df = fetch_yf(symbol, "15m") or fetch_yf(symbol, "30m")
     if base_df is None or base_df.empty:
         return None
 
@@ -110,9 +126,7 @@ def build_tf_data(symbol: str):
     base_df["rsi"] = compute_rsi(close)
 
     volume_ma = volume.rolling(20).mean()
-
-    # 🔥 ALIGNMENT SAFE
-    base_df["volume_ok"] = volume.values > (volume_ma.values * 1.5)
+    base_df["volume_ok"] = volume > (volume_ma * 1.5)
 
     tf = {
         "15m": {
@@ -127,33 +141,27 @@ def build_tf_data(symbol: str):
 
     d1h = resample_df(base_df, "1h")
     if d1h is not None:
-        d1h["ema20"] = compute_ema(d1h["Close"], 20)
-        d1h["ema50"] = compute_ema(d1h["Close"], 50)
-
         tf["1h"] = {
-            "ema20": float(d1h["ema20"].iloc[-1]),
-            "ema50": float(d1h["ema50"].iloc[-1]),
+            "ema20": float(compute_ema(d1h["Close"], 20).iloc[-1]),
+            "ema50": float(compute_ema(d1h["Close"], 50).iloc[-1]),
             "df": d1h
         }
 
     d4h = resample_df(base_df, "4h")
     if d4h is not None:
-        d4h["ema20"] = compute_ema(d4h["Close"], 20)
-        d4h["ema50"] = compute_ema(d4h["Close"], 50)
-
         tf["4h"] = {
-            "ema20": float(d4h["ema20"].iloc[-1]),
-            "ema50": float(d4h["ema50"].iloc[-1]),
+            "ema20": float(compute_ema(d4h["Close"], 20).iloc[-1]),
+            "ema50": float(compute_ema(d4h["Close"], 50).iloc[-1]),
             "df": d4h
         }
 
     return tf
 
 # ======================================================
-# MAIN FETCH (LOG + SAFE)
+# MAIN FETCH
 # ======================================================
 
-def fetch_bist_data(symbol_data=None):
+def fetch_bist_data(symbol_data=None) -> list:
     results = []
     tried = set()
 
@@ -192,7 +200,6 @@ def fetch_bist_data(symbol_data=None):
 
         except Exception as e:
             print(f"🔥 fetch_bist_data hata → {symbol} | {e}", flush=True)
-            continue
 
     print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n", flush=True)
     return results
