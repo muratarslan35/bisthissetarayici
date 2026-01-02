@@ -1,10 +1,6 @@
 import requests
 import numpy as np
 
-# =========================================================
-# FALLBACK SYMBOL LIST (TAM VE EKSİKSİZ)
-# =========================================================
-
 FALLBACK_SYMBOLS = [
     "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
     "AKGRT.IS","AKSA.IS","AKSEN.IS","ALARK.IS","ALCTL.IS","ALFAS.IS","ALGN.IS","ALKIM.IS","ALMAD.IS",
@@ -34,24 +30,11 @@ FALLBACK_SYMBOLS = [
     "VESPA.IS","VESTL.IS","YEOTK.IS","YGGYO.IS","YKBNK.IS","YONGA.IS","YUNSA.IS","YYAPI.IS","ZEDUR.IS","ZOREN.IS"
 ]
 
-# =========================================================
-# FALLBACK SYMBOL RESOLVER
-# =========================================================
-
 def resolve_symbols(data):
-    """
-    fetch_bist veya ana veri kaynağı boş dönerse
-    sistem fallback sembol listesi ile çalışmaya devam eder
-    """
     if not data or not isinstance(data, dict):
         return FALLBACK_SYMBOLS
-
     symbols = list(data.keys())
     return symbols if symbols else FALLBACK_SYMBOLS
-
-# =========================================================
-# TRADINGVIEW PRICE FETCH
-# =========================================================
 
 def fetch_tradingview_price(symbol):
     try:
@@ -63,64 +46,41 @@ def fetch_tradingview_price(symbol):
             },
             "columns": ["close"]
         }
-
         r = requests.post(url, json=payload, timeout=5)
         data = r.json()
         return float(data["data"][0]["d"][0])
     except Exception:
         return None
 
-# =========================================================
-# SUPPORT / RESISTANCE (HISTORY BASED)
-# =========================================================
-
 def nearest_support_resistance_from_history(df, window=50):
     if df is None or len(df) < window:
         return []
-
     closes = df["Close"].tail(window).values
     levels = []
-
     for i in range(2, len(closes) - 2):
         if closes[i] > closes[i-1] and closes[i] > closes[i+1]:
             levels.append({"level": closes[i], "strength": 3})
         elif closes[i] < closes[i-1] and closes[i] < closes[i+1]:
             levels.append({"level": closes[i], "strength": 3})
-
     return levels
-
-# =========================================================
-# SUPPORT / RESISTANCE BREAK DETECTION
-# =========================================================
 
 def detect_support_resistance_break(df):
     if df is None or len(df) < 20:
         return None
-
     last = df.iloc[-1]
     prev = df.iloc[-20:-1]
-
     if last["Close"] > prev["High"].max():
         return {"type": "RESISTANCE_BREAK"}
-
     if last["Close"] < prev["Low"].min():
         return {"type": "SUPPORT_BREAK"}
-
     return None
-
-# =========================================================
-# THREE PEAKS DETECTION
-# =========================================================
 
 def detect_three_peaks(series):
     if series is None or len(series) < 30:
         return False
-
     peaks = []
     values = series.values if hasattr(series, "values") else series
-
     for i in range(2, len(values) - 2):
         if values[i] > values[i-1] and values[i] > values[i+1]:
             peaks.append(values[i])
-
     return len(peaks) >= 3
