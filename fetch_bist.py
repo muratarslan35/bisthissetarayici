@@ -101,7 +101,7 @@ def build_tf_data(symbol):
 
     base_df["volume_ma"] = base_df["Volume"].rolling(20).mean()
 
-    # 🔥 KRİTİK DÜZELTME (alignment hatası fix)
+    # 🔥 ALIGNMENT FIX (ASIL KRİTİK NOKTA)
     base_df["volume_ok"] = (
         base_df["Volume"].to_numpy()
         > (base_df["volume_ma"].to_numpy() * 1.5)
@@ -141,7 +141,7 @@ def build_tf_data(symbol):
     return tf
 
 # =========================
-# MAIN FETCH (NOHUP LOG’LU)
+# MAIN FETCH (NOHUP SAFE)
 # =========================
 
 def fetch_bist_data(symbol_data=None):
