@@ -28,13 +28,13 @@ from dashboard import (
 load_dotenv()
 
 # ======================================================
-# TIME / BIST HOURS
+# TIME / BIST HOURS (TEK KAYNAK)
 # ======================================================
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
-# BIST Sürekli İşlem Saatleri
-BIST_OPEN = dtime(9, 55)
-BIST_CLOSE = dtime(18, 0)
+# BIST SÜREKLİ İŞLEM
+BIST_OPEN = dtime(9, 40)
+BIST_CLOSE = dtime(18, 5)
 
 SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
 
@@ -68,7 +68,7 @@ def is_market_open(now=None):
     return BIST_OPEN <= now.time() <= BIST_CLOSE
 
 # ======================================================
-# TELEGRAM SEND
+# TELEGRAM
 # ======================================================
 def send_telegram_message(text: str):
     if not TELEGRAM_ENABLED:
@@ -124,7 +124,7 @@ def send_daily_success_report():
         send_telegram_message(report)
 
 # ======================================================
-# SCANNER LOOP (KRİTİK)
+# SCANNER LOOP (ANA MOTOR)
 # ======================================================
 def scanner_loop():
     print("📡 Scanner thread BAŞLADI")
@@ -138,7 +138,7 @@ def scanner_loop():
 
         try:
             if not is_market_open(now):
-                print("⏹ Market kapalı (beklemede)")
+                print("⏹ Market kapalı – beklemede")
                 if last_report_day != now.date() and now.time() > BIST_CLOSE:
                     send_daily_success_report()
                     last_report_day = now.date()
@@ -148,12 +148,12 @@ def scanner_loop():
             print("✅ MARKET AÇIK → TARAMA BAŞLIYOR")
 
             market_data = fetch_bist_data()
-            print(f"📈 Taranan hisse sayısı: {len(market_data)}")
+            print(f"📈 Taranan hisse: {len(market_data)}")
 
             for item in market_data:
-                try:
-                    symbol = item["symbol"]
+                symbol = item["symbol"]
 
+                try:
                     signals = process_symbol_signals(item)
                     successes = update_success_targets(
                         symbol, item["current_price"]
@@ -173,7 +173,7 @@ def scanner_loop():
                         )
 
                 except Exception as e:
-                    print(f"⚠ {item.get('symbol')} işlenirken hata:", e)
+                    print(f"⚠ {symbol} işlenirken hata:", e)
 
         except Exception as e:
             print("🔥 Scanner genel hata:", e)
@@ -187,7 +187,8 @@ def scanner_loop():
 def health():
     return jsonify({
         "status": "ok",
-        "time": now_tr().isoformat()
+        "time": now_tr().isoformat(),
+        "market_open": is_market_open()
     })
 
 # ======================================================
@@ -203,4 +204,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-    )
+        )
