@@ -52,18 +52,18 @@ def fetch_yf(symbol, interval):
             auto_adjust=False
         )
         if df.empty:
+            print(f"⚠ YF boş veri: {symbol} ({interval})")
             return None
 
         df = df.rename_axis("Datetime").reset_index()
         df["Datetime"] = pd.to_datetime(df["Datetime"], utc=True)
         df.set_index("Datetime", inplace=True)
         return df
-    except Exception:
+    except Exception as e:
+        print(f"❌ YF hata: {symbol} → {e}")
         return None
 
 def build_tf_data(symbol):
-    tf = {}
-
     base_df = fetch_yf(symbol, "15m") or fetch_yf(symbol, "30m")
     if base_df is None:
         return None
@@ -76,65 +76,66 @@ def build_tf_data(symbol):
     base_df["volume_ma"] = base_df["Volume"].rolling(20).mean()
     base_df["volume_ok"] = base_df["Volume"] > base_df["volume_ma"] * 1.5
 
-    tf["15m"] = {
-        "ema20": float(base_df["ema20"].iloc[-1]),
-        "ema50": float(base_df["ema50"].iloc[-1]),
-        "ema200": float(base_df["ema200"].iloc[-1]),
-        "rsi": float(base_df["rsi"].iloc[-1]),
-        "volume_ok": bool(base_df["volume_ok"].iloc[-1]),
-        "df": base_df
+    tf = {
+        "15m": {
+            "ema20": float(base_df["ema20"].iloc[-1]),
+            "ema50": float(base_df["ema50"].iloc[-1]),
+            "ema200": float(base_df["ema200"].iloc[-1]),
+            "rsi": float(base_df["rsi"].iloc[-1]),
+            "volume_ok": bool(base_df["volume_ok"].iloc[-1]),
+            "df": base_df
+        }
     }
 
     for k, rule in [("1h", "1H"), ("4h", "4H")]:
         d = resample_df(base_df, rule)
-        if not d.empty:
-            d["ema20"] = compute_ema(d["Close"], 20)
-            d["ema50"] = compute_ema(d["Close"], 50)
-            tf[k] = {
-                "ema20": float(d["ema20"].iloc[-1]),
-                "ema50": float(d["ema50"].iloc[-1]),
-                "df": d
-            }
-
-    df1d = fetch_yf(symbol, "1d")
-    if df1d is not None:
-        df1d["ema50"] = compute_ema(df1d["Close"], 50)
-        df1d["ema200"] = compute_ema(df1d["Close"], 200)
-        tf["1d"] = {
-            "ema50": float(df1d["ema50"].iloc[-1]),
-            "ema200": float(df1d["ema200"].iloc[-1])
+        if d.empty:
+            return None
+        d["ema20"] = compute_ema(d["Close"], 20)
+        d["ema50"] = compute_ema(d["Close"], 50)
+        tf[k] = {
+            "ema20": float(d["ema20"].iloc[-1]),
+            "ema50": float(d["ema50"].iloc[-1]),
+            "df": d
         }
 
     return tf
 
 def fetch_bist_data(symbol_data=None):
     results = []
-    tried_symbols = set()
+    tried = set()
+
     symbols = resolve_symbols(symbol_data)
+    all_symbols = symbols + FALLBACK_SYMBOLS
 
-    # Önce ana semboller + fallback
-    for symbol in symbols + FALLBACK_SYMBOLS:
-        if symbol in tried_symbols:
+    print(f"🔍 Tarama başlıyor | Toplam sembol: {len(all_symbols)}")
+
+    for symbol in all_symbols:
+        if symbol in tried:
             continue
-        tried_symbols.add(symbol)
-        try:
-            price = fetch_tradingview_price(symbol)
-            if not price:
-                continue
+        tried.add(symbol)
 
-            tf = build_tf_data(symbol)
-            if not tf or "15m" not in tf or "1h" not in tf or "4h" not in tf:
-                continue
+        print(f"➡ {symbol} taranıyor")
 
-            results.append({
-                "symbol": symbol,
-                "current_price": price,
-                "tf": tf,
-                "fetched_at": datetime.now(timezone.utc)
-            })
-
-            time.sleep(0.1)
-        except Exception:
+        price = fetch_tradingview_price(symbol)
+        if not price:
+            print(f"⚠ Fiyat alınamadı: {symbol}")
             continue
 
+        tf = build_tf_data(symbol)
+        if not tf:
+            print(f"⚠ TF eksik: {symbol}")
+            continue
+
+        results.append({
+            "symbol": symbol,
+            "current_price": price,
+            "tf": tf,
+            "fetched_at": datetime.now(timezone.utc)
+        })
+
+        print(f"✅ OK: {symbol}")
+        time.sleep(0.12)
+
+    print(f"✅ Tarama bitti | Geçerli hisse: {len(results)}")
     return results
