@@ -70,6 +70,7 @@ def fetch_yf(symbol, interval):
         )
 
         if df.empty:
+            print(f"⚠ YF boş → {symbol} [{interval}]", flush=True)
             return None
 
         df = df.rename_axis("Datetime").reset_index()
@@ -82,7 +83,7 @@ def fetch_yf(symbol, interval):
         return None
 
 # =========================
-# TF BUILD (CRASH-SAFE)
+# TF BUILD (ALIGNMENT SAFE)
 # =========================
 
 def build_tf_data(symbol):
@@ -99,7 +100,12 @@ def build_tf_data(symbol):
     base_df["rsi"] = compute_rsi(base_df["Close"])
 
     base_df["volume_ma"] = base_df["Volume"].rolling(20).mean()
-    base_df["volume_ok"] = base_df["Volume"] > base_df["volume_ma"] * 1.5
+
+    # 🔥 KRİTİK DÜZELTME (alignment hatası fix)
+    base_df["volume_ok"] = (
+        base_df["Volume"].to_numpy()
+        > (base_df["volume_ma"].to_numpy() * 1.5)
+    )
 
     tf = {
         "15m": {
@@ -156,12 +162,12 @@ def fetch_bist_data(symbol_data=None):
 
         price = fetch_tradingview_price(symbol)
         if not price:
-            print(f"⚠ TV fiyat yok", flush=True)
+            print("⚠ TV fiyat yok", flush=True)
             continue
 
         tf = build_tf_data(symbol)
         if tf is None:
-            print(f"⚠ TF yok", flush=True)
+            print("⚠ TF yok", flush=True)
             continue
 
         results.append({
@@ -171,7 +177,7 @@ def fetch_bist_data(symbol_data=None):
             "fetched_at": datetime.now(timezone.utc)
         })
 
-        print(f"✅ OK", flush=True)
+        print("✅ OK", flush=True)
         time.sleep(0.12)
 
     print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n", flush=True)
