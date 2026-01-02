@@ -38,9 +38,16 @@ def resample_df(df, rule):
     }).dropna()
 
 def fetch_yf(symbol, interval):
+    """
+    Yahoo Finance'ten veri çeker. .IS sembolleri korunur.
+    """
     try:
+        # Eğer sembol .IS ile bitmiyorsa ekle
+        if not symbol.upper().endswith(".IS"):
+            symbol = f"{symbol}.IS"
+
         df = yf.download(
-            symbol.replace(".IS", ""),
+            symbol,
             interval=interval,
             period=MAX_LOOKBACK.get(interval, "5d"),
             progress=False,
