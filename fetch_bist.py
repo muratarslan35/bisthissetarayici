@@ -49,11 +49,10 @@ def resample_df(df, rule):
         })
         .dropna()
     )
-
     return d if not d.empty else None
 
 # =========================
-# YFINANCE FETCH (SAFE)
+# YFINANCE FETCH
 # =========================
 
 def fetch_yf(symbol, interval):
@@ -78,11 +77,12 @@ def fetch_yf(symbol, interval):
         df.set_index("Datetime", inplace=True)
         return df
 
-    except Exception:
+    except Exception as e:
+        print(f"❌ YF hata → {symbol} [{interval}] | {e}", flush=True)
         return None
 
 # =========================
-# TF BUILD (BOOLEAN BUG FIXED)
+# TF BUILD (CRASH-SAFE)
 # =========================
 
 def build_tf_data(symbol):
@@ -90,7 +90,7 @@ def build_tf_data(symbol):
     if base_df is None:
         base_df = fetch_yf(symbol, "30m")
 
-    if base_df is None:
+    if base_df is None or base_df.empty:
         return None
 
     base_df["ema20"] = compute_ema(base_df["Close"], 20)
@@ -135,7 +135,7 @@ def build_tf_data(symbol):
     return tf
 
 # =========================
-# MAIN FETCH (LOG’LU & KESİNTİSİZ)
+# MAIN FETCH (NOHUP LOG’LU)
 # =========================
 
 def fetch_bist_data(symbol_data=None):
@@ -145,23 +145,23 @@ def fetch_bist_data(symbol_data=None):
     symbols = resolve_symbols(symbol_data)
     all_symbols = symbols + FALLBACK_SYMBOLS
 
-    print(f"\n🔍 TARAMA BAŞLADI | TOPLAM: {len(all_symbols)}")
+    print(f"\n🔍 TARAMA BAŞLADI | TOPLAM: {len(all_symbols)}", flush=True)
 
     for symbol in all_symbols:
         if symbol in tried:
             continue
         tried.add(symbol)
 
-        print(f"➡ {symbol}")
+        print(f"➡ {symbol}", flush=True)
 
         price = fetch_tradingview_price(symbol)
         if not price:
-            print("⚠ TV fiyat yok")
+            print(f"⚠ TV fiyat yok", flush=True)
             continue
 
         tf = build_tf_data(symbol)
-        if not tf:
-            print("⚠ TF yok")
+        if tf is None:
+            print(f"⚠ TF yok", flush=True)
             continue
 
         results.append({
@@ -171,8 +171,8 @@ def fetch_bist_data(symbol_data=None):
             "fetched_at": datetime.now(timezone.utc)
         })
 
-        print("✅ OK")
+        print(f"✅ OK", flush=True)
         time.sleep(0.12)
 
-    print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n")
+    print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n", flush=True)
     return results
