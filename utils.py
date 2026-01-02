@@ -1,9 +1,6 @@
 import requests
 import numpy as np
 
-# =========================================================
-# FALLBACK SYMBOL LIST (TAM VE EKSİKSİZ)
-# =========================================================
 FALLBACK_SYMBOLS = [
     "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
     "AKGRT.IS","AKSA.IS","AKSEN.IS","ALARK.IS","ALCTL.IS","ALFAS.IS","ALGN.IS","ALKIM.IS","ALMAD.IS",
@@ -33,26 +30,13 @@ FALLBACK_SYMBOLS = [
     "VESPA.IS","VESTL.IS","YEOTK.IS","YGGYO.IS","YKBNK.IS","YONGA.IS","YUNSA.IS","YYAPI.IS","ZEDUR.IS","ZOREN.IS"
 ]
 
-# =========================================================
-# SYMBOL RESOLVER
-# =========================================================
 def resolve_symbols(data):
-    """
-    fetch_bist veya veri kaynağı boş dönerse
-    sistem fallback sembol listesi ile çalışmaya devam eder
-    """
     if not data or not isinstance(data, dict):
         return FALLBACK_SYMBOLS
     symbols = list(data.keys())
     return symbols if symbols else FALLBACK_SYMBOLS
 
-# =========================================================
-# TRADINGVIEW PRICE FETCH
-# =========================================================
 def fetch_tradingview_price(symbol):
-    """
-    TradingView close fiyatını getirir. .IS sembolleri uyumlu.
-    """
     try:
         url = "https://scanner.tradingview.com/turkey/scan"
         payload = {
@@ -68,9 +52,6 @@ def fetch_tradingview_price(symbol):
     except Exception:
         return None
 
-# =========================================================
-# SUPPORT / RESISTANCE (HISTORY BASED)
-# =========================================================
 def nearest_support_resistance_from_history(df, window=50):
     if df is None or len(df) < window:
         return []
@@ -94,9 +75,6 @@ def detect_support_resistance_break(df):
         return {"type": "SUPPORT_BREAK"}
     return None
 
-# =========================================================
-# THREE PEAKS DETECTION
-# =========================================================
 def detect_three_peaks(series):
     if series is None or len(series) < 30:
         return False
