@@ -4,7 +4,6 @@ import time
 import threading
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
-import sys
 
 from flask import Flask, jsonify, render_template
 
@@ -67,16 +66,12 @@ def is_market_open(now=None):
         return False
     return BIST_OPEN <= now.time() <= BIST_CLOSE
 
-def log(msg):
-    print(msg)
-    sys.stdout.flush()   # <<< NOHUP KRİTİK
-
 # ======================================================
 # TELEGRAM
 # ======================================================
 def send_telegram_message(text: str):
     if not TELEGRAM_ENABLED:
-        log("⚠ Telegram kapalı")
+        print("⚠ Telegram kapalı", flush=True)
         return
 
     import requests
@@ -93,7 +88,7 @@ def send_telegram_message(text: str):
                 timeout=5
             )
         except Exception as e:
-            log(f"⚠ Telegram hata: {e}")
+            print("⚠ Telegram hata:", e, flush=True)
 
 # ======================================================
 # STARTUP
@@ -104,7 +99,7 @@ def send_startup_message():
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}\n"
         "📡 Scanner aktif"
     )
-    log("📡 Startup mesajı gönderiliyor")
+    print("📡 Startup mesajı gönderiliyor", flush=True)
     send_telegram_message(msg)
 
 # ======================================================
@@ -131,29 +126,36 @@ def send_daily_success_report():
 # SCANNER LOOP (ANA MOTOR)
 # ======================================================
 def scanner_loop():
-    log("📡 Scanner thread BAŞLADI")
+    print("📡 Scanner thread BAŞLADI", flush=True)
     send_startup_message()
 
     last_report_day = None
-    first_run = True   # <<< KRİTİK
 
     while True:
         now = now_tr()
-        log(f"\n⏱ Döngü tick: {now.strftime('%H:%M:%S')}")
+        print(f"\n⏱ Döngü tick: {now.strftime('%H:%M:%S')}", flush=True)
 
         try:
             if not is_market_open(now):
-                log("⏹ Market kapalı – beklemede")
+                print("⏹ Market kapalı – beklemede", flush=True)
+
                 if last_report_day != now.date() and now.time() > BIST_CLOSE:
                     send_daily_success_report()
                     last_report_day = now.date()
+
                 time.sleep(30)
                 continue
 
-            log("✅ MARKET AÇIK → TARAMA BAŞLIYOR")
+            print("✅ MARKET AÇIK → TARAMA BAŞLIYOR", flush=True)
 
-            market_data = fetch_bist_data() or []
-            log(f"📈 Taranan hisse: {len(market_data)}")
+            try:
+                market_data = fetch_bist_data()
+            except Exception as e:
+                print("🔥 fetch_bist_data çökmesi:", e, flush=True)
+                time.sleep(5)
+                continue
+
+            print(f"📈 Taranan hisse: {len(market_data)}", flush=True)
 
             for item in market_data:
                 symbol = item.get("symbol")
@@ -178,12 +180,11 @@ def scanner_loop():
                         )
 
                 except Exception as e:
-                    log(f"⚠ {symbol} işlenirken hata: {e}")
+                    print(f"⚠ {symbol} işlenirken hata:", e, flush=True)
 
         except Exception as e:
-            log(f"🔥 Scanner genel hata: {e}")
+            print("🔥 Scanner genel hata:", e, flush=True)
 
-        first_run = False
         time.sleep(SCAN_INTERVAL)
 
 # ======================================================
@@ -210,4 +211,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-    )
+                )
