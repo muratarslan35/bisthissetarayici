@@ -1,4 +1,3 @@
-
 import time
 from datetime import datetime, timezone
 import yfinance as yf
@@ -38,6 +37,7 @@ def compute_rsi(series, period=14):
 def resample_df(df, rule):
     if df is None or df.empty:
         return None
+
     d = (
         df.resample(rule)
         .agg({
@@ -49,10 +49,11 @@ def resample_df(df, rule):
         })
         .dropna()
     )
+
     return d if not d.empty else None
 
 # =========================
-# YFINANCE FETCH
+# YFINANCE FETCH (SAFE)
 # =========================
 
 def fetch_yf(symbol, interval):
@@ -81,11 +82,14 @@ def fetch_yf(symbol, interval):
         return None
 
 # =========================
-# TF BUILD (BIST SAFE)
+# TF BUILD (BOOLEAN BUG FIXED)
 # =========================
 
 def build_tf_data(symbol):
-    base_df = fetch_yf(symbol, "15m") or fetch_yf(symbol, "30m")
+    base_df = fetch_yf(symbol, "15m")
+    if base_df is None:
+        base_df = fetch_yf(symbol, "30m")
+
     if base_df is None:
         return None
 
@@ -108,7 +112,6 @@ def build_tf_data(symbol):
         }
     }
 
-    # OPSİYONEL 1H
     d1h = resample_df(base_df, "1H")
     if d1h is not None:
         d1h["ema20"] = compute_ema(d1h["Close"], 20)
@@ -119,7 +122,6 @@ def build_tf_data(symbol):
             "df": d1h
         }
 
-    # OPSİYONEL 4H
     d4h = resample_df(base_df, "4H")
     if d4h is not None:
         d4h["ema20"] = compute_ema(d4h["Close"], 20)
@@ -133,7 +135,7 @@ def build_tf_data(symbol):
     return tf
 
 # =========================
-# MAIN FETCH (LOG’LU)
+# MAIN FETCH (LOG’LU & KESİNTİSİZ)
 # =========================
 
 def fetch_bist_data(symbol_data=None):
@@ -154,12 +156,12 @@ def fetch_bist_data(symbol_data=None):
 
         price = fetch_tradingview_price(symbol)
         if not price:
-            print(f"⚠ TV fiyat yok")
+            print("⚠ TV fiyat yok")
             continue
 
         tf = build_tf_data(symbol)
         if not tf:
-            print(f"⚠ TF yok")
+            print("⚠ TF yok")
             continue
 
         results.append({
@@ -169,7 +171,7 @@ def fetch_bist_data(symbol_data=None):
             "fetched_at": datetime.now(timezone.utc)
         })
 
-        print(f"✅ OK")
+        print("✅ OK")
         time.sleep(0.12)
 
     print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n")
