@@ -2,6 +2,7 @@ import time
 from datetime import datetime, timezone
 import yfinance as yf
 import pandas as pd
+import requests
 
 from utils import (
     resolve_symbols,
@@ -39,9 +40,6 @@ def resample_df(df, rule):
     }).dropna()
 
 def fetch_yf(symbol, interval):
-    """
-    Yahoo Finance'ten veri çeker. .IS sembolleri korunur.
-    """
     try:
         if not symbol.upper().endswith(".IS"):
             symbol = f"{symbol}.IS"
@@ -114,8 +112,8 @@ def fetch_bist_data(symbol_data=None):
     tried_symbols = set()
     symbols = resolve_symbols(symbol_data)
 
-    # Önce ana semboller
-    for symbol in symbols:
+    # Önce ana semboller + fallback
+    for symbol in symbols + FALLBACK_SYMBOLS:
         if symbol in tried_symbols:
             continue
         tried_symbols.add(symbol)
@@ -135,32 +133,7 @@ def fetch_bist_data(symbol_data=None):
                 "fetched_at": datetime.now(timezone.utc)
             })
 
-            time.sleep(0.15)
-        except Exception:
-            continue
-
-    # Başarısız veya eksik semboller için fallback
-    for symbol in FALLBACK_SYMBOLS:
-        if symbol in tried_symbols:
-            continue
-        tried_symbols.add(symbol)
-        try:
-            price = fetch_tradingview_price(symbol)
-            if not price:
-                continue
-
-            tf = build_tf_data(symbol)
-            if not tf or "15m" not in tf or "1h" not in tf or "4h" not in tf:
-                continue
-
-            results.append({
-                "symbol": symbol,
-                "current_price": price,
-                "tf": tf,
-                "fetched_at": datetime.now(timezone.utc)
-            })
-
-            time.sleep(0.15)
+            time.sleep(0.1)
         except Exception:
             continue
 
