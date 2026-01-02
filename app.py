@@ -31,8 +31,11 @@ load_dotenv()
 # ZAMAN & SABİTLER
 # ======================================================
 TR_TZ = ZoneInfo("Europe/Istanbul")
-BIST_OPEN = dtime(9, 40)
-BIST_CLOSE = dtime(18, 10)
+
+# BIST GERÇEK SÜREKLİ İŞLEM SAATLERİ
+BIST_OPEN = dtime(9, 55)
+BIST_CLOSE = dtime(18, 0)
+
 SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
 
 # ======================================================
@@ -59,9 +62,12 @@ def now_tr():
     return datetime.now(TR_TZ)
 
 def is_market_open(now=None):
-    now = now or now_tr()
+    now = now or datetime.now(TR_TZ)
+
+    # Hafta sonu kapalı
     if now.weekday() >= 5:
         return False
+
     return BIST_OPEN <= now.time() <= BIST_CLOSE
 
 # ======================================================
@@ -71,7 +77,9 @@ def send_telegram_message(text: str):
     if not TELEGRAM_ENABLED:
         print("⚠ Telegram kapalı veya token/chat ID eksik")
         return
+
     import requests
+
     for chat_id in CHAT_IDS:
         try:
             res = requests.post(
@@ -85,11 +93,11 @@ def send_telegram_message(text: str):
                 timeout=5
             )
             if res.status_code == 200:
-                print(f"✅ Telegram mesaj gönderildi: {text[:30]}...")
+                print("✅ Telegram mesaj gönderildi")
             else:
-                print(f"⚠ Telegram gönderim hatası ({res.status_code}): {text[:30]}...")
+                print(f"⚠ Telegram hata kodu: {res.status_code}")
         except Exception as e:
-            print("⚠ Telegram gönderim exception:", e)
+            print("⚠ Telegram exception:", e)
 
 # ======================================================
 # BAŞLANGIÇ MESAJI
@@ -129,29 +137,30 @@ def send_daily_success_report():
 def scanner_loop():
     print("📡 Tarama döngüsü başladı")
     send_startup_message()
-    last_report_day = None
 
-    failed_symbols = set()  # <<< Daha önce hata veren sembolleri tekrar denememek için
+    last_report_day = None
+    failed_symbols = set()
 
     while True:
         try:
             now = now_tr()
-            print(f"⏱ Döngü zamanı: {now.strftime('%H:%M:%S')}")
+            print(f"⏱ Döngü: {now.strftime('%H:%M:%S')}")
 
             if not is_market_open(now):
-                print("⏹ Piyasa kapalı, bekleniyor...")
+                print("⏹ Piyasa kapalı")
                 if last_report_day != now.date() and now.time() > BIST_CLOSE:
-                    print("📊 Gün sonu raporu gönderiliyor...")
                     send_daily_success_report()
                     last_report_day = now.date()
                 time.sleep(30)
                 continue
 
+            print("✅ MARKET AÇIK → TARAMA BAŞLADI")
+
             market_data = fetch_bist_data()
-            print(f"📈 {len(market_data)} hisse tarandı")
+            print(f"📈 Tarama sonucu: {len(market_data)} hisse")
 
             for item in market_data:
-                symbol = item.get("symbol")
+                symbol = item["symbol"]
                 if symbol in failed_symbols:
                     continue
 
@@ -168,12 +177,10 @@ def scanner_loop():
 
                     for signal in signals:
                         push_signal(signal)
-                        msg = format_signal_message(signal)
-                        send_telegram_message(msg)
+                        send_telegram_message(format_signal_message(signal))
 
                 except Exception:
                     failed_symbols.add(symbol)
-                    continue
 
         except Exception as e:
             print("⚠ Tarama hatası:", e)
