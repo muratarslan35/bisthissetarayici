@@ -1,5 +1,5 @@
 import os
-from dotenv import load_dotenv  # <<< EKLENDİ
+from dotenv import load_dotenv
 import time
 import threading
 from datetime import datetime, time as dtime
@@ -170,6 +170,7 @@ def scanner_loop():
                         push_signal(signal)
                         msg = format_signal_message(signal)
                         send_telegram_message(msg)
+
                 except Exception:
                     failed_symbols.add(symbol)
                     continue
@@ -202,4 +203,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-                    )
+    )
