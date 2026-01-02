@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from datetime import datetime, time
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -30,11 +30,16 @@ def push_signal(signal):
 
     res_1h = None
     res_4h = None
+
     if "tf" in signal:
         if "1h" in signal["tf"]:
-            res_1h = get_nearest_resistance(signal["tf"]["1h"].get("nearest_levels"))
+            res_1h = get_nearest_resistance(
+                signal["tf"]["1h"].get("nearest_levels")
+            )
         if "4h" in signal["tf"]:
-            res_4h = get_nearest_resistance(signal["tf"]["4h"].get("nearest_levels"))
+            res_4h = get_nearest_resistance(
+                signal["tf"]["4h"].get("nearest_levels")
+            )
 
     SIGNALS.insert(0, {
         "symbol": signal["symbol"],
@@ -47,6 +52,7 @@ def push_signal(signal):
         "title": signal["action"],
         "category": category
     })
+
     del SIGNALS[MAX_SIGNALS:]
 
 def push_success_signal(data):
@@ -57,24 +63,8 @@ def push_success_signal(data):
         "category": "success",
         "title": "🎯 %1.5 HEDEF"
     })
+
     del SUCCESS_SIGNALS[MAX_SUCCESS_SIGNALS:]
-
-# ======================================================
-# MARKET STATUS
-# ======================================================
-
-def is_market_open(now=None):
-    """
-    BIST saatlerine göre piyasa açık/kapalı
-    Pazartesi-Cuma 09:40-18:05
-    """
-    now = now or datetime.now(TR_TZ)
-    if now.weekday() >= 5:  # Cumartesi & Pazar
-        return False
-
-    start = time(9, 40)
-    end = time(18, 5)
-    return start <= now.time() <= end
 
 # ======================================================
 # API
@@ -82,13 +72,15 @@ def is_market_open(now=None):
 
 @dashboard_bp.route("/api/dashboard")
 def dashboard_api():
+    """
+    Dashboard artık market saatini hesaplamaz.
+    Bu bilgi app.py tarafından health / scanner üzerinden gelir.
+    """
     now = datetime.now(TR_TZ)
-    market_open = is_market_open(now)
-    system_active = True  # Tarama sistemi her zaman aktif
 
     return jsonify({
-        "market_open": market_open,
-        "system_active": system_active,
+        "market_open": True,        # app.py health endpoint esas alınır
+        "system_active": True,      # scanner thread çalışıyor
         "server_time": now.strftime("%H:%M:%S"),
         "signals": SUCCESS_SIGNALS + SIGNALS
     })
