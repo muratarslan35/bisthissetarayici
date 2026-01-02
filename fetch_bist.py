@@ -15,34 +15,13 @@ MAX_LOOKBACK = {
 }
 
 # ======================================================
-# SAFE COLUMN EXTRACTORS (KRİTİK)
+# INDICATORS (SERIES SAFE)
 # ======================================================
 
-def col_series(df, name):
-    """
-    Close / Volume gibi kolonları her koşulda 1D Series yapar
-    """
-    if name not in df.columns:
-        return None
-
-    col = df[name]
-
-    if isinstance(col, pd.DataFrame):
-        return col.iloc[:, 0]
-
-    return col
-
-# ======================================================
-# INDICATORS (1D SAFE)
-# ======================================================
-
-def compute_ema(series, period):
-    series = series.astype(float)
+def compute_ema(series: pd.Series, period: int) -> pd.Series:
     return series.ewm(span=period, adjust=False).mean()
 
-def compute_rsi(series, period=14):
-    series = series.astype(float)
-
+def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -54,10 +33,10 @@ def compute_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 # ======================================================
-# RESAMPLE (SAFE & FUTUREPROOF)
+# RESAMPLE (BOOLEAN SAFE)
 # ======================================================
 
-def resample_df(df, rule):
+def resample_df(df: pd.DataFrame, rule: str):
     if df is None or df.empty:
         return None
 
@@ -73,13 +52,16 @@ def resample_df(df, rule):
         .dropna()
     )
 
-    return d if not d.empty else None
+    if d.empty:
+        return None
+
+    return d
 
 # ======================================================
-# YFINANCE FETCH
+# YFINANCE FETCH (NET)
 # ======================================================
 
-def fetch_yf(symbol, interval):
+def fetch_yf(symbol: str, interval: str):
     try:
         if not symbol.endswith(".IS"):
             symbol = f"{symbol}.IS"
@@ -93,8 +75,7 @@ def fetch_yf(symbol, interval):
             threads=False
         )
 
-        if df.empty:
-            print(f"⚠ YF boş → {symbol} [{interval}]", flush=True)
+        if df is None or df.empty:
             return None
 
         df = df.rename_axis("Datetime").reset_index()
@@ -108,27 +89,30 @@ def fetch_yf(symbol, interval):
         return None
 
 # ======================================================
-# TF BUILD (TAM GÜVENLİ)
+# TIMEFRAME BUILD (NO AMBIGUITY)
 # ======================================================
 
-def build_tf_data(symbol):
-    base_df = fetch_yf(symbol, "15m") or fetch_yf(symbol, "30m")
+def build_tf_data(symbol: str):
+    base_df = fetch_yf(symbol, "15m")
+
+    if base_df is None:
+        base_df = fetch_yf(symbol, "30m")
+
     if base_df is None or base_df.empty:
         return None
 
-    close = col_series(base_df, "Close")
-    volume = col_series(base_df, "Volume")
-
-    if close is None or volume is None:
-        return None
+    close = base_df["Close"]
+    volume = base_df["Volume"]
 
     base_df["ema20"] = compute_ema(close, 20)
     base_df["ema50"] = compute_ema(close, 50)
     base_df["ema200"] = compute_ema(close, 200)
     base_df["rsi"] = compute_rsi(close)
 
-    base_df["volume_ma"] = volume.rolling(20).mean()
-    base_df["volume_ok"] = volume.values > (base_df["volume_ma"].values * 1.5)
+    volume_ma = volume.rolling(20).mean()
+
+    # 🔥 ALIGNMENT SAFE
+    base_df["volume_ok"] = volume.values > (volume_ma.values * 1.5)
 
     tf = {
         "15m": {
@@ -141,36 +125,32 @@ def build_tf_data(symbol):
         }
     }
 
-    # ---- 1H ----
     d1h = resample_df(base_df, "1h")
     if d1h is not None:
-        c = col_series(d1h, "Close")
-        if c is not None:
-            d1h["ema20"] = compute_ema(c, 20)
-            d1h["ema50"] = compute_ema(c, 50)
-            tf["1h"] = {
-                "ema20": float(d1h["ema20"].iloc[-1]),
-                "ema50": float(d1h["ema50"].iloc[-1]),
-                "df": d1h
-            }
+        d1h["ema20"] = compute_ema(d1h["Close"], 20)
+        d1h["ema50"] = compute_ema(d1h["Close"], 50)
 
-    # ---- 4H ----
+        tf["1h"] = {
+            "ema20": float(d1h["ema20"].iloc[-1]),
+            "ema50": float(d1h["ema50"].iloc[-1]),
+            "df": d1h
+        }
+
     d4h = resample_df(base_df, "4h")
     if d4h is not None:
-        c = col_series(d4h, "Close")
-        if c is not None:
-            d4h["ema20"] = compute_ema(c, 20)
-            d4h["ema50"] = compute_ema(c, 50)
-            tf["4h"] = {
-                "ema20": float(d4h["ema20"].iloc[-1]),
-                "ema50": float(d4h["ema50"].iloc[-1]),
-                "df": d4h
-            }
+        d4h["ema20"] = compute_ema(d4h["Close"], 20)
+        d4h["ema50"] = compute_ema(d4h["Close"], 50)
+
+        tf["4h"] = {
+            "ema20": float(d4h["ema20"].iloc[-1]),
+            "ema50": float(d4h["ema50"].iloc[-1]),
+            "df": d4h
+        }
 
     return tf
 
 # ======================================================
-# MAIN FETCH (NOHUP UYUMLU)
+# MAIN FETCH (LOG + SAFE)
 # ======================================================
 
 def fetch_bist_data(symbol_data=None):
@@ -212,6 +192,7 @@ def fetch_bist_data(symbol_data=None):
 
         except Exception as e:
             print(f"🔥 fetch_bist_data hata → {symbol} | {e}", flush=True)
+            continue
 
     print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n", flush=True)
     return results
