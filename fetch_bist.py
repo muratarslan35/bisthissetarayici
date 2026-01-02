@@ -6,7 +6,8 @@ import pandas as pd
 from utils import (
     resolve_symbols,
     fetch_tradingview_price,
-    nearest_support_resistance_from_history
+    nearest_support_resistance_from_history,
+    FALLBACK_SYMBOLS
 )
 
 MAX_LOOKBACK = {
@@ -42,7 +43,6 @@ def fetch_yf(symbol, interval):
     Yahoo Finance'ten veri çeker. .IS sembolleri korunur.
     """
     try:
-        # Eğer sembol .IS ile bitmiyorsa ekle
         if not symbol.upper().endswith(".IS"):
             symbol = f"{symbol}.IS"
 
@@ -111,9 +111,39 @@ def build_tf_data(symbol):
 
 def fetch_bist_data(symbol_data=None):
     results = []
+    tried_symbols = set()
     symbols = resolve_symbols(symbol_data)
 
+    # Önce ana semboller
     for symbol in symbols:
+        if symbol in tried_symbols:
+            continue
+        tried_symbols.add(symbol)
+        try:
+            price = fetch_tradingview_price(symbol)
+            if not price:
+                continue
+
+            tf = build_tf_data(symbol)
+            if not tf or "15m" not in tf or "1h" not in tf or "4h" not in tf:
+                continue
+
+            results.append({
+                "symbol": symbol,
+                "current_price": price,
+                "tf": tf,
+                "fetched_at": datetime.now(timezone.utc)
+            })
+
+            time.sleep(0.15)
+        except Exception:
+            continue
+
+    # Başarısız veya eksik semboller için fallback
+    for symbol in FALLBACK_SYMBOLS:
+        if symbol in tried_symbols:
+            continue
+        tried_symbols.add(symbol)
         try:
             price = fetch_tradingview_price(symbol)
             if not price:
