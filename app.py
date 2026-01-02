@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv  # <<< EKLENDİ
 import time
 import threading
 from datetime import datetime, time as dtime
@@ -20,6 +21,11 @@ from dashboard import (
     push_signal,
     push_success_signal
 )
+
+# ======================================================
+# .env DOSYASINI YÜKLE
+# ======================================================
+load_dotenv()  # <<< Burada otomatik olarak .env değerleri okunacak
 
 # ======================================================
 # ZAMAN & SABİTLER
