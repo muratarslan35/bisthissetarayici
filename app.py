@@ -28,7 +28,7 @@ from dashboard import (
 load_dotenv()
 
 # ======================================================
-# TIME / BIST HOURS (TEK KAYNAK)
+# TIME / BIST HOURS
 # ======================================================
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -99,7 +99,6 @@ def send_startup_message():
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}\n"
         "📡 Scanner aktif"
     )
-    print("📡 Startup mesajı gönderiliyor", flush=True)
     send_telegram_message(msg)
 
 # ======================================================
@@ -123,12 +122,33 @@ def send_daily_success_report():
         send_telegram_message(report)
 
 # ======================================================
-# SCANNER LOOP (ANA MOTOR)
+# SIGNAL REPEAT CONTROL (YENİ)
+# ======================================================
+LAST_SENT_SIGNAL = {}
+
+def is_duplicate_signal(signal):
+    key = (
+        signal["symbol"],
+        signal["main_algorithm"],
+        signal["action"]
+    )
+    prev = LAST_SENT_SIGNAL.get(key)
+
+    if prev:
+        if signal["strength"] <= prev["strength"]:
+            return True
+
+    LAST_SENT_SIGNAL[key] = {
+        "strength": signal["strength"],
+        "time": signal["time"]
+    }
+    return False
+
+# ======================================================
+# SCANNER LOOP
 # ======================================================
 def scanner_loop():
-    print("📡 Scanner thread BAŞLADI", flush=True)
     send_startup_message()
-
     last_report_day = None
 
     while True:
@@ -174,6 +194,9 @@ def scanner_loop():
                         })
 
                     for signal in signals:
+                        if is_duplicate_signal(signal):
+                            continue
+
                         push_signal(signal)
                         send_telegram_message(
                             format_signal_message(signal)
@@ -211,4 +234,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-                )
+    )
