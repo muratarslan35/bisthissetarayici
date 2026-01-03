@@ -177,16 +177,32 @@ def kombine_signal(item):
     df4 = tf4h["df"]
     df1 = tf1h["df"]
 
-    if len(dfd) < 3 or len(df4) < 3 or len(df1) < 2:
+    if len(dfd) < 2 or len(df4) < 3 or len(df1) < 1:
         return None
 
-    if not (is_green(dfd, -2) and is_green(df4, -2) and is_green(df1, -1)):
+    # 1D: son tamamlanmış mum yeşil
+    if not is_green(dfd, -2):
+        return None
+
+    # 4H: kırmızı → yeşil dönüş (ilk yeşil mum)
+    if not (
+        df4.iloc[-3]["Close"] < df4.iloc[-3]["Open"] and
+        df4.iloc[-2]["Close"] > df4.iloc[-2]["Open"]
+    ):
+        return None
+
+    # 1H: aktif mum yeşil
+    if not is_green(df1, -1):
         return None
 
     if tf1d["rsi"] >= 50 or tf4h["rsi"] >= 50:
         return None
 
-    e20, e50, e200 = tf15.get("ema20_live"), tf15.get("ema50_live"), tf15.get("ema200_live")
+    e20, e50, e200 = (
+        tf15.get("ema20_live"),
+        tf15.get("ema50_live"),
+        tf15.get("ema200_live"),
+    )
     if not (e20 and e50 and e200 and e20 > e50 > e200):
         return None
 
