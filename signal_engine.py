@@ -16,6 +16,10 @@ LAST_SIGNAL_STATE = {}
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
+# ======================================================
+# HELPER LEVELS
+# ======================================================
+
 HELPER_LEVELS = {
     "ORDER BLOCK": "A",
     "1H YAPISAL KIRILIM": "A",
@@ -46,11 +50,19 @@ HELPER_DESCRIPTIONS = {
     "L2 KIRILIM": "Zayıf kırılım",
 }
 
+# ======================================================
+# TIME
+# ======================================================
+
 def tr_now():
     return datetime.now(TR_TZ)
 
 def fmt(v):
     return round(v, 2) if isinstance(v, (int, float)) else None
+
+# ======================================================
+# REPEAT BLOCK
+# ======================================================
 
 def in_repeat_block(symbol, algo):
     t = LAST_SENT.get((symbol, algo))
@@ -59,12 +71,20 @@ def in_repeat_block(symbol, algo):
 def mark_sent(symbol, algo):
     LAST_SENT[(symbol, algo)] = tr_now() + timedelta(minutes=REPEAT_BLOCK_MINUTES)
 
+# ======================================================
+# TREND
+# ======================================================
+
 def ema_trend(e20, e50, e200):
     if e20 > e50 > e200:
         return "📈 YUKARI"
     if e20 < e50 < e200:
         return "📉 AŞAĞI"
     return "➖ YATAY"
+
+# ======================================================
+# HELPERS
+# ======================================================
 
 def detect_order_block(df):
     if df is None or len(df) < 20:
@@ -114,10 +134,8 @@ def helper_indicators(item):
     if df15 is not None:
         if detect_three_peaks(df15["Close"]):
             helpers.append(("3LÜ TEPE", 8))
-
         if detect_order_block(df15):
             helpers.append(("ORDER BLOCK", 15))
-
         helpers.extend(detect_l2_l3_l4(df15, item["current_price"]))
 
     if tf1h and detect_support_resistance_break(tf1h["df"]):
@@ -139,6 +157,10 @@ def helper_indicators(item):
 
     return helpers
 
+# ======================================================
+# MAIN ALGORITHMS
+# ======================================================
+
 def is_green(df, idx):
     return df.iloc[idx]["Close"] > df.iloc[idx]["Open"]
 
@@ -158,23 +180,14 @@ def kombine_signal(item):
     if len(dfd) < 3 or len(df4) < 3 or len(df1) < 2:
         return None
 
-    if not is_green(dfd, -2):
-        return None
-    if not is_green(df4, -2):
-        return None
-    if not is_green(df1, -1):
+    if not (is_green(dfd, -2) and is_green(df4, -2) and is_green(df1, -1)):
         return None
 
     if tf1d["rsi"] >= 50 or tf4h["rsi"] >= 50:
         return None
 
-    e20 = tf15.get("ema20_live")
-    e50 = tf15.get("ema50_live")
-    e200 = tf15.get("ema200_live")
-
-    if not (e20 and e50 and e200):
-        return None
-    if not (e20 > e50 > e200):
+    e20, e50, e200 = tf15.get("ema20_live"), tf15.get("ema50_live"), tf15.get("ema200_live")
+    if not (e20 and e50 and e200 and e20 > e50 > e200):
         return None
 
     return {"main_type": "KOMBİNE", "base_strength": 55}
@@ -205,16 +218,15 @@ def super_kombine_signal(item):
     if tf1d["rsi"] >= 48 or tf4h["rsi"] >= 48:
         return None
 
-    e20 = tf15.get("ema20_live")
-    e50 = tf15.get("ema50_live")
-    e200 = tf15.get("ema200_live")
-
-    if not (e20 and e50 and e200):
-        return None
-    if not (e20 > e50 > e200):
+    e20, e50, e200 = tf15.get("ema20_live"), tf15.get("ema50_live"), tf15.get("ema200_live")
+    if not (e20 and e50 and e200 and e20 > e50 > e200):
         return None
 
     return {"main_type": "SÜPER KOMBİNE", "base_strength": 75}
+
+# ======================================================
+# PROCESS
+# ======================================================
 
 def process_symbol_signals(item):
     symbol = item["symbol"]
@@ -235,27 +247,16 @@ def process_symbol_signals(item):
             levels[lvl] += 1
 
     if levels["A"] >= 1:
-        action = "GÜÇLÜ AL"
-        category = "strong"
-        title = "🚀 GÜÇLÜ AL – A Seviye Onay"
+        action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye Onay"
     elif levels["B"] >= 1:
-        action = "AL"
-        category = "combo"
-        title = "📈 AL – B Seviye Onay"
+        action, category, title = "AL", "combo", "📈 AL – B Seviye Onay"
     elif levels["C"] >= 1:
-        action = "İZLE"
-        category = "watch"
-        title = "👀 İZLE – Erken Yapı"
+        action, category, title = "İZLE", "watch", "👀 İZLE – Erken Yapı"
     else:
         return []
 
     prev = LAST_SIGNAL_STATE.get(symbol)
-    strengthened = False
-    if prev:
-        if action != prev["action"]:
-            strengthened = True
-        elif in_repeat_block(symbol, algo):
-            return []
+    strengthened = prev and action != prev["action"]
 
     if in_repeat_block(symbol, algo) and not strengthened:
         return []
@@ -267,10 +268,7 @@ def process_symbol_signals(item):
     if strengthened:
         history.append((now_h, f"{prev['action']} → {action}"))
 
-    LAST_SIGNAL_STATE[symbol] = {
-        "action": action,
-        "history": history
-    }
+    LAST_SIGNAL_STATE[symbol] = {"action": action, "history": history}
 
     df15 = item["tf"]["15m"]["df"]
     sr = nearest_support_resistance_from_history(df15)
@@ -292,11 +290,8 @@ def process_symbol_signals(item):
         "volume_ok": bool(item["tf"]["15m"].get("volume_ok")),
         "helpers": list(helper_names),
         "helpers_detail": [
-            {
-                "name": h,
-                "level": HELPER_LEVELS.get(h),
-                "desc": HELPER_DESCRIPTIONS.get(h, "")
-            } for h in helper_names
+            {"name": h, "level": HELPER_LEVELS[h], "desc": HELPER_DESCRIPTIONS.get(h, "")}
+            for h in helper_names if h in HELPER_LEVELS
         ],
         "history": history,
         "time": tr_now().strftime("%H:%M:%S"),
@@ -307,6 +302,10 @@ def process_symbol_signals(item):
 
     register_success_candidate(signal)
     return [signal]
+
+# ======================================================
+# SUCCESS
+# ======================================================
 
 def register_success_candidate(signal):
     today = tr_now().date()
@@ -325,6 +324,10 @@ def update_success_targets(symbol, price):
             d["hit"] = True
             hits.append({"symbol": sym, "algorithm": algo})
     return hits
+
+# ======================================================
+# FORMAT (TELEGRAM)
+# ======================================================
 
 def format_signal_message(signal):
     lines = [
@@ -356,6 +359,10 @@ def format_signal_message(signal):
 
     lines.append(f"\n⏰ {signal['time']}")
     return "\n".join(lines)
+
+# ======================================================
+# BULK
+# ======================================================
 
 def process_signals(data):
     out = []
