@@ -3,43 +3,178 @@
 <head>
 <meta charset="UTF-8">
 <title>BIST Sinyal Dashboard</title>
+
 <style>
-body { margin:0; background:#0b0f1a; font-family:Segoe UI, Arial; color:#e6e6e6; }
-.top-status { display:flex; justify-content:space-between; padding:12px 20px; background:#0f172a; border-bottom:1px solid #1e293b; font-size:14px; }
+body {
+    margin:0;
+    background:#0b0f1a;
+    font-family:Segoe UI, Arial;
+    color:#e6e6e6;
+}
+
+/* ================= TOP STATUS ================= */
+.top-status {
+    display:flex;
+    justify-content:space-between;
+    padding:12px 20px;
+    background:#0f172a;
+    border-bottom:1px solid #1e293b;
+    font-size:14px;
+}
 .status-item span { font-weight:bold; }
-.filter-bar { display:flex; gap:10px; padding:12px 20px; background:#111827; }
-.filter-btn { background:#1f2937; padding:8px 14px; border-radius:10px; cursor:pointer; font-size:13px; transition:0.2s; }
-.filter-btn:hover, .filter-btn.active { background:#2563eb; }
-.container { padding:20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:18px; }
-.card { background:#121826; border-radius:14px; padding:16px; border-left:5px solid #2ecc71; box-shadow:0 0 18px rgba(0,0,0,.6); transition:.25s; }
+
+/* ================= FILTER BAR ================= */
+.filter-bar {
+    display:flex;
+    gap:10px;
+    padding:12px 20px;
+    background:#111827;
+    flex-wrap:wrap;
+}
+.filter-btn {
+    background:#1f2937;
+    padding:8px 14px;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:13px;
+    transition:.2s;
+}
+.filter-btn:hover,
+.filter-btn.active {
+    background:#2563eb;
+}
+
+/* ================= GRID ================= */
+.container {
+    padding:20px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(400px, 1fr));
+    gap:18px;
+}
+
+/* ================= CARD ================= */
+.card {
+    background:#121826;
+    border-radius:14px;
+    padding:16px;
+    border-left:6px solid #64748b;
+    box-shadow:0 0 18px rgba(0,0,0,.6);
+    transition:.25s;
+}
 .card:hover { transform:translateY(-6px); }
+
+/* CATEGORY COLORS */
 .signal-strong { border-left-color:#22c55e; }
-.signal-combo { border-left-color:#3b82f6; }
-.signal-strengthened { border-left-color:#facc15; }
+.signal-combo  { border-left-color:#3b82f6; }
+.signal-watch  { border-left-color:#facc15; }
 .signal-success { border-left-color:#a855f7; }
-.signal-title { font-size:14px; font-weight:bold; }
-.symbol { font-size:20px; font-weight:bold; }
-.row { font-size:13px; margin:4px 0; }
-.algorithms span { display:inline-block; background:#1f2937; padding:4px 8px; border-radius:8px; font-size:11px; margin:3px 3px 0 0; }
-.time { font-size:11px; opacity:.6; text-align:right; margin-top:6px; }
+
+/* ================= CONTENT ================= */
+.signal-title {
+    font-size:13px;
+    font-weight:bold;
+    opacity:.9;
+}
+.symbol {
+    font-size:22px;
+    font-weight:bold;
+    margin:6px 0;
+}
+
+/* LIVE PRICE – VURGULU */
+.price {
+    font-size:20px;
+    font-weight:800;
+    margin:6px 0;
+}
+
+.row {
+    font-size:13px;
+    margin:4px 0;
+}
+
+/* ================= HELPERS ================= */
+.helpers {
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:8px;
+}
+
+.helper {
+    padding:4px 8px;
+    border-radius:8px;
+    font-size:11px;
+    cursor:help;
+    position:relative;
+}
+
+/* Helper Levels */
+.helper.A { background:#16a34a; }
+.helper.B { background:#2563eb; }
+.helper.C { background:#ca8a04; }
+
+/* Hover tooltip */
+.helper:hover::after {
+    content: attr(data-desc);
+    position:absolute;
+    bottom:130%;
+    left:50%;
+    transform:translateX(-50%);
+    background:#020617;
+    color:#e5e7eb;
+    padding:8px 10px;
+    border-radius:8px;
+    font-size:11px;
+    width:220px;
+    text-align:center;
+    box-shadow:0 0 10px rgba(0,0,0,.8);
+    z-index:99;
+}
+
+/* ================= RESISTANCE ================= */
+.resistance {
+    margin-top:8px;
+    font-size:12px;
+    opacity:.9;
+}
+
+/* ================= HISTORY ================= */
+.history {
+    margin-top:10px;
+    font-size:11px;
+    opacity:.7;
+}
+
+/* ================= TIME ================= */
+.time {
+    font-size:11px;
+    opacity:.6;
+    text-align:right;
+    margin-top:8px;
+}
 </style>
 </head>
+
 <body>
 
+<!-- ================= TOP BAR ================= -->
 <div class="top-status">
     <div class="status-item">📊 Piyasa: <span id="market">-</span></div>
-    <div class="status-item">📈 Tarama: <span id="scanner">-</span></div>
+    <div class="status-item">📡 Tarama: <span id="scanner">-</span></div>
     <div class="status-item">🕒 Saat: <span id="clock">-</span></div>
 </div>
 
+<!-- ================= FILTERS ================= -->
 <div class="filter-bar">
     <div class="filter-btn active" onclick="setFilter('all')">Tüm</div>
-    <div class="filter-btn" onclick="setFilter('strong')">Güçlü AL</div>
-    <div class="filter-btn" onclick="setFilter('strengthened')">Güçlenen</div>
-    <div class="filter-btn" onclick="setFilter('combo')">Kombine</div>
+    <div class="filter-btn" onclick="setFilter('strong')">GÜÇLÜ AL</div>
+    <div class="filter-btn" onclick="setFilter('combo')">AL</div>
+    <div class="filter-btn" onclick="setFilter('watch')">İZLE</div>
     <div class="filter-btn" onclick="setFilter('success')">Başarılı</div>
 </div>
 
+<!-- ================= GRID ================= -->
 <div class="container" id="signals"></div>
 
 <script>
@@ -56,14 +191,18 @@ async function loadSignals() {
     const res = await fetch("/api/dashboard");
     const data = await res.json();
 
-    document.getElementById("market").innerText = data.market_open ? "AÇIK" : "KAPALI";
-    document.getElementById("scanner").innerText = data.system_active ? "AKTİF" : "PASİF";
-    document.getElementById("clock").innerText = data.server_time;
+    document.getElementById("market").innerText =
+        data.market_open ? "AÇIK" : "KAPALI";
+    document.getElementById("scanner").innerText =
+        data.system_active ? "AKTİF" : "PASİF";
+    document.getElementById("clock").innerText =
+        data.server_time;
 
     const box = document.getElementById("signals");
     box.innerHTML = "";
 
     data.signals.forEach(s => {
+
         if (CURRENT_FILTER !== "all" && s.category !== CURRENT_FILTER) return;
 
         const c = document.createElement("div");
@@ -72,15 +211,35 @@ async function loadSignals() {
         c.innerHTML = `
             <div class="signal-title">${s.title}</div>
             <div class="symbol">${s.symbol}</div>
-            <div class="row">💰 ${s.price ?? "-"}</div>
-            <div class="row">📈 EMA: ${s.ema_trend ?? "-"}</div>
-            <div class="algorithms">
-                ${(s.algorithms || []).map(a => `<span>${a}</span>`).join("")}
+
+            <div class="price">💰 ${s.price ?? "-"}</div>
+
+            <div class="row">📈 EMA Trend: ${s.ema_trend ?? "-"}</div>
+            <div class="row">📊 Hacim: ${s.volume_ok ? "YÜKSEK" : "Normal"}</div>
+
+            <div class="helpers">
+                ${(s.helpers_detail || []).map(h => `
+                    <div class="helper ${h.level}"
+                         data-desc="${h.desc}">
+                        ${h.name}
+                    </div>
+                `).join("")}
             </div>
-            <div class="row">1H Direnç: ${s.res_1h ?? "-"}</div>
-            <div class="row">4H Direnç: ${s.res_4h ?? "-"}</div>
+
+            <div class="resistance">
+                📍 1H Direnç: ${s.resistance_1h ?? "-"} |
+                4H Direnç: ${s.resistance_4h ?? "-"}
+            </div>
+
+            <div class="history">
+                ${(s.history || []).slice(-3).map(h =>
+                    `${h[0]} → ${h[1]}`
+                ).join("<br>")}
+            </div>
+
             <div class="time">${s.time}</div>
         `;
+
         box.appendChild(c);
     });
 }
