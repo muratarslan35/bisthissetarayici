@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify
-from datetime import datetime
+from flask import Blueprint, jsonify, current_app
+from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
+import requests
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -12,56 +13,57 @@ SUCCESS_SIGNALS = []
 MAX_SIGNALS = 200
 MAX_SUCCESS_SIGNALS = 50
 
+RESET_TIME = dtime(9, 40)
+LAST_DASHBOARD_RESET_DATE = None
+
+# ======================================================
+# RESET CONTROL
+# ======================================================
+
+def reset_dashboard_if_needed(now):
+    global LAST_DASHBOARD_RESET_DATE
+
+    if now.time() < RESET_TIME:
+        return
+
+    if LAST_DASHBOARD_RESET_DATE == now.date():
+        return
+
+    SIGNALS.clear()
+    SUCCESS_SIGNALS.clear()
+    LAST_DASHBOARD_RESET_DATE = now.date()
+
 # ======================================================
 # PUSH FUNCTIONS
 # ======================================================
 
-def get_nearest_resistance(levels):
-    if not levels:
-        return None
-    return max(l["level"] for l in levels)
-
 def push_signal(signal):
-    category = "strong"
-    if signal["action"] == "GÜÇLENEN SİNYAL":
-        category = "strengthened"
-    if "KOMBİNE" in signal["main_algorithm"]:
-        category = "combo"
-
-    res_1h = None
-    res_4h = None
-
-    if "tf" in signal:
-        if "1h" in signal["tf"]:
-            res_1h = get_nearest_resistance(
-                signal["tf"]["1h"].get("nearest_levels")
-            )
-        if "4h" in signal["tf"]:
-            res_4h = get_nearest_resistance(
-                signal["tf"]["4h"].get("nearest_levels")
-            )
-
     SIGNALS.insert(0, {
-        "symbol": signal["symbol"],
-        "price": signal["price"],
-        "ema_trend": signal["ema_trend"],
-        "algorithms": [signal["main_algorithm"]] + signal.get("helpers", []),
-        "res_1h": res_1h,
-        "res_4h": res_4h,
-        "time": signal["time"],
-        "title": signal["action"],
-        "category": category
+        "symbol": signal.get("symbol"),
+        "price": signal.get("price"),
+        "ema_trend": signal.get("ema_trend"),
+        "volume_ok": signal.get("volume_ok"),
+        "helpers_detail": signal.get("helpers_detail"),
+        "history": signal.get("history"),
+        "resistance_1h": signal.get("resistance_1h"),
+        "resistance_4h": signal.get("resistance_4h"),
+        "time": signal.get("time"),
+        "title": signal.get("title"),
+        "action": signal.get("action"),
+        "category": signal.get("category"),
+        "main_algorithm": signal.get("main_algorithm"),
+        "strength": signal.get("strength"),
     })
 
     del SIGNALS[MAX_SIGNALS:]
 
 def push_success_signal(data):
     SUCCESS_SIGNALS.insert(0, {
-        "symbol": data["symbol"],
-        "algorithm": data["algorithm"],
-        "time": data["time"],
+        "symbol": data.get("symbol"),
+        "algorithm": data.get("algorithm"),
+        "time": data.get("time"),
         "category": "success",
-        "title": "🎯 %1.5 HEDEF"
+        "title": "🎯 %1.5 HEDEF GELDİ"
     })
 
     del SUCCESS_SIGNALS[MAX_SUCCESS_SIGNALS:]
@@ -72,15 +74,29 @@ def push_success_signal(data):
 
 @dashboard_bp.route("/api/dashboard")
 def dashboard_api():
-    """
-    Dashboard artık market saatini hesaplamaz.
-    Bu bilgi app.py tarafından health / scanner üzerinden gelir.
-    """
     now = datetime.now(TR_TZ)
 
+    reset_dashboard_if_needed(now)
+
+    market_open = False
+    system_active = False
+
+    try:
+        health_url = current_app.config.get(
+            "SELF_URL", "http://127.0.0.1:5000"
+        ) + "/health"
+
+        r = requests.get(health_url, timeout=2)
+        if r.status_code == 200:
+            h = r.json()
+            market_open = h.get("market_open", False)
+            system_active = True
+    except Exception:
+        pass
+
     return jsonify({
-        "market_open": True,        # app.py health endpoint esas alınır
-        "system_active": True,      # scanner thread çalışıyor
+        "market_open": market_open,
+        "system_active": system_active,
         "server_time": now.strftime("%H:%M:%S"),
         "signals": SUCCESS_SIGNALS + SIGNALS
     })
