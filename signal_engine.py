@@ -7,12 +7,16 @@ from utils import (
     nearest_support_resistance_from_history
 )
 
+# ======================================================
+# GLOBALS
+# ======================================================
+
 REPEAT_BLOCK_MINUTES = 45
 TARGET_PCT = 0.015
 
 LAST_SENT = {}
-SUCCESS_TRACKER = {}
 LAST_SIGNAL_STATE = {}
+SUCCESS_TRACKER = {}
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -51,7 +55,7 @@ HELPER_DESCRIPTIONS = {
 }
 
 # ======================================================
-# TIME
+# TIME HELPERS
 # ======================================================
 
 def tr_now():
@@ -83,26 +87,59 @@ def ema_trend(e20, e50, e200):
     return "➖ YATAY"
 
 # ======================================================
+# CANDLE HELPERS
+# ======================================================
+
+def is_green(df, idx):
+    return df.iloc[idx]["Close"] > df.iloc[idx]["Open"]
+
+def is_4h_first_green_after_red(df):
+    if df is None or len(df) < 3:
+        return False
+
+    red = df.iloc[-3]
+    green = df.iloc[-2]
+
+    return (
+        red["Close"] < red["Open"] and
+        green["Close"] > green["Open"]
+    )
+
+def is_4h_trend_green(df):
+    if df is None or len(df) < 2:
+        return False
+
+    return (
+        df.iloc[-2]["Close"] > df.iloc[-2]["Open"] or
+        df.iloc[-1]["Close"] > df.iloc[-1]["Open"]
+    )
+
+# ======================================================
 # HELPERS
 # ======================================================
 
 def detect_order_block(df):
     if df is None or len(df) < 20:
         return False
+
     last = df.iloc[-1]
     reds = df.iloc[-8:-1]
     reds = reds[reds["Close"] < reds["Open"]]
+
     if reds.empty:
         return False
+
     ob = reds.iloc[-1]
     return last["Close"] > ob["High"]
 
 def detect_l2_l3_l4(df, price):
     helpers = []
     levels = nearest_support_resistance_from_history(df)
+
     for lvl in levels:
         if price <= lvl["level"]:
             continue
+
         s = lvl.get("strength", 0)
         if s == 4:
             helpers.append(("L4 MAJÖR KIRILIM", 20))
@@ -110,6 +147,7 @@ def detect_l2_l3_l4(df, price):
             helpers.append(("L3 GÜÇLÜ KIRILIM", 12))
         elif s == 2:
             helpers.append(("L2 KIRILIM", 6))
+
     return helpers
 
 def helper_indicators(item):
@@ -161,9 +199,6 @@ def helper_indicators(item):
 # MAIN ALGORITHMS
 # ======================================================
 
-def is_green(df, idx):
-    return df.iloc[idx]["Close"] > df.iloc[idx]["Open"]
-
 def kombine_signal(item):
     tf15 = item["tf"]["15m"]
     tf1d = item["tf"].get("1d")
@@ -173,29 +208,16 @@ def kombine_signal(item):
     if not tf1d or not tf4h or not tf1h:
         return None
 
-    dfd = tf1d["df"]
-    df4 = tf4h["df"]
-    df1 = tf1h["df"]
-
-    if len(dfd) < 2 or len(df4) < 3 or len(df1) < 1:
+    if not is_green(tf1d["df"], -2):
         return None
 
-    # 1D: son tamamlanmış mum yeşil
-    if not is_green(dfd, -2):
+    if not is_4h_first_green_after_red(tf4h["df"]):
         return None
 
-    # 4H: kırmızı → yeşil dönüş (ilk yeşil mum)
-    if not (
-        df4.iloc[-3]["Close"] < df4.iloc[-3]["Open"] and
-        df4.iloc[-2]["Close"] > df4.iloc[-2]["Open"]
-    ):
+    if not is_green(tf1h["df"], -1):
         return None
 
-    # 1H: aktif mum yeşil
-    if not is_green(df1, -1):
-        return None
-
-    if tf1d["rsi"] >= 50 or tf4h["rsi"] >= 50:
+    if tf1d["rsi"] >= 50:
         return None
 
     e20, e50, e200 = (
@@ -217,24 +239,23 @@ def super_kombine_signal(item):
     if not tf1d or not tf4h or not tf1h:
         return None
 
-    dfd = tf1d["df"]
-    df4 = tf4h["df"]
-    df1 = tf1h["df"]
-
-    if len(dfd) < 4 or len(df4) < 2 or len(df1) < 2:
+    if not (is_green(tf1d["df"], -2) and is_green(tf1d["df"], -1)):
         return None
 
-    if not (is_green(dfd, -2) and is_green(dfd, -1)):
-        return None
-    if not (is_green(df4, -2) or is_green(df4, -1)):
-        return None
-    if not is_green(df1, -1):
+    if not is_4h_trend_green(tf4h["df"]):
         return None
 
-    if tf1d["rsi"] >= 48 or tf4h["rsi"] >= 48:
+    if not is_green(tf1h["df"], -1):
         return None
 
-    e20, e50, e200 = tf15.get("ema20_live"), tf15.get("ema50_live"), tf15.get("ema200_live")
+    if tf1d["rsi"] >= 48:
+        return None
+
+    e20, e50, e200 = (
+        tf15.get("ema20_live"),
+        tf15.get("ema50_live"),
+        tf15.get("ema200_live"),
+    )
     if not (e20 and e50 and e200 and e20 > e50 > e200):
         return None
 
@@ -253,6 +274,7 @@ def process_symbol_signals(item):
         return []
 
     algo = main["main_type"]
+
     helpers = helper_indicators(item)
     helper_names = set(h[0] for h in helpers)
 
@@ -306,7 +328,11 @@ def process_symbol_signals(item):
         "volume_ok": bool(item["tf"]["15m"].get("volume_ok")),
         "helpers": list(helper_names),
         "helpers_detail": [
-            {"name": h, "level": HELPER_LEVELS[h], "desc": HELPER_DESCRIPTIONS.get(h, "")}
+            {
+                "name": h,
+                "level": HELPER_LEVELS[h],
+                "desc": HELPER_DESCRIPTIONS.get(h, "")
+            }
             for h in helper_names if h in HELPER_LEVELS
         ],
         "history": history,
@@ -335,10 +361,12 @@ def register_success_candidate(signal):
 def update_success_targets(symbol, price):
     today = tr_now().date()
     hits = []
+
     for (sym, algo), d in SUCCESS_TRACKER.get(today, {}).items():
         if sym == symbol and not d["hit"] and price >= d["target"]:
             d["hit"] = True
             hits.append({"symbol": sym, "algorithm": algo})
+
     return hits
 
 # ======================================================
