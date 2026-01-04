@@ -398,7 +398,7 @@ def super_kombine_signal(item):
 # ======================================================
 # PROCESS SYMBOL
 # ======================================================
-def process_symbol_signals(item):
+       def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
@@ -422,6 +422,16 @@ def process_symbol_signals(item):
     power_delta = total_power - prev_power
 
     # ==================================================
+    # MOST DURUMU (DOWN / UP)
+    # ==================================================
+    most_state = None
+    tf4h = item["tf"].get("4h")
+    if tf4h:
+        most_state = detect_most_trend(tf4h["df"])  # "UP" | "DOWN" | None
+
+    prev_most = prev.get("most_state") if prev else None
+
+    # ==================================================
     # SEVİYE SAYIMI
     # ==================================================
     levels = {"A": 0, "B": 0, "C": 0}
@@ -431,43 +441,47 @@ def process_symbol_signals(item):
             levels[lvl] += 1
 
     # ==================================================
-    # KARAR
+    # ANA KARAR
     # ==================================================
     if levels["A"] >= 1:
-        action, category, title = (
-            "GÜÇLÜ AL",
-            "strong",
-            "🚀 GÜÇLÜ AL – A Seviye Onay"
-        )
+        action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye Onay"
     elif levels["B"] >= 1:
-        action, category, title = (
-            "AL",
-            "combo",
-            "📈 AL – B Seviye Onay"
-        )
+        action, category, title = "AL", "combo", "📈 AL – B Seviye Onay"
     elif levels["C"] >= 1:
-        action, category, title = (
-            "İZLE",
-            "watch",
-            "👀 İZLE – Erken Yapı"
-        )
+        action, category, title = "İZLE", "watch", "👀 İZLE – Erken Yapı"
     else:
         return []
-# ==================================================
-    # MOST DOWNGRADE KARARI
-    # ==================================================
-    if most_down:
-        if action == "GÜÇLÜ AL":
-            action = "AL"
-            category = "combo"
-            title = "⚠️ MOST KIRILDI – GÜÇ DÜŞÜYOR"
 
-        elif action == "AL":
-            action = "İZLE"
-            category = "watch"
-            title = "⛔ MOST AŞAĞI – İZLEME MODU"
     # ==================================================
-    # GÜÇLENME / ZAYIFLAMA
+    # MOST DOWNGRADE / UPGRADE
+    # ==================================================
+    most_downgrade = False
+    most_upgrade = False
+
+    if most_state == "DOWN":
+        most_downgrade = True
+
+    if prev_most == "DOWN" and most_state == "UP":
+        most_upgrade = True
+
+    if most_downgrade:
+        if action == "GÜÇLÜ AL":
+            action, category = "AL", "combo"
+            title = "⚠️ MOST AŞAĞI – GÜÇ DÜŞÜRÜLDÜ"
+        elif action == "AL":
+            action, category = "İZLE", "watch"
+            title = "⛔ MOST AŞAĞI – İZLEME MODU"
+
+    if most_upgrade:
+        if action == "İZLE":
+            action, category = "AL", "combo"
+            title = "✅ MOST YUKARI – TEKRAR AL"
+        elif action == "AL":
+            action, category = "GÜÇLÜ AL", "strong"
+            title = "🚀 MOST YUKARI – GÜÇLÜ AL"
+
+    # ==================================================
+    # GÜÇLENME / ZAYIFLAMA (POWER BASED)
     # ==================================================
     strengthened = False
     weakened = False
@@ -481,22 +495,12 @@ def process_symbol_signals(item):
         elif power_delta <= -POWER_STRENGTH_THRESHOLD:
             weakened = True
             title = "⚠️ ZAYIFLAYAN SİNYAL"
-            if action == "GÜÇLÜ AL":
-                category = "watch"
-# ==================================================
-    # MOST OTOMATİK DOWNGRADE (YENİ)
-    # ==================================================
-    most_down = False
+            category = "watch"
 
-    tf4h = item["tf"].get("4h")
-    if tf4h:
-        most_4h = detect_most_trend(tf4h["df"])
-        if most_4h == "DOWN":
-            most_down = True
     # ==================================================
     # TEKRAR BLOĞU
     # ==================================================
-    if in_repeat_block(symbol, algo) and not (strengthened or weakened):
+    if in_repeat_block(symbol, algo) and not (strengthened or weakened or most_upgrade):
         return []
 
     mark_sent(symbol, algo)
@@ -507,25 +511,20 @@ def process_symbol_signals(item):
     now_h = tr_now().strftime("%H:%M")
     history = prev["history"][:] if prev else [(now_h, f"{algo} sinyal")]
 
+    if most_downgrade:
+        history.append((now_h, "MOST aşağı – downgrade"))
+    if most_upgrade:
+        history.append((now_h, "MOST yukarı – upgrade"))
     if strengthened:
-        if prev and prev["action"] == action:
-            history.append(
-                (now_h, f"{action} güçlendi (+{power_delta})")
-            )
-        else:
-            history.append(
-                (now_h, f"{prev['action']} → {action}")
-            )
-
+        history.append((now_h, f"Güç arttı (+{power_delta})"))
     if weakened:
-        history.append(
-            (now_h, f"{action} zayıfladı ({power_delta})")
-        )
+        history.append((now_h, f"Güç düştü ({power_delta})"))
 
     LAST_SIGNAL_STATE[key] = {
         "action": action,
         "history": history,
-        "power": total_power
+        "power": total_power,
+        "most_state": most_state
     }
 
     # ==================================================
@@ -572,7 +571,7 @@ def process_symbol_signals(item):
     }
 
     register_success_candidate(signal)
-    return [signal]       
+    return [signal]
 # ======================================================
 # SUCCESS TRACK
 # ======================================================
