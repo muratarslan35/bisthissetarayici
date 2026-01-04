@@ -16,32 +16,46 @@ body {
 .top-status {
     display:flex;
     justify-content:space-between;
-    padding:12px 20px;
+    align-items:center;
+    padding:18px 28px;              /* ⬆ büyütüldü */
     background:#0f172a;
-    border-bottom:1px solid #1e293b;
-    font-size:14px;
+    border-bottom:2px solid #1e293b;
+    font-size:16px;                 /* ⬆ büyütüldü */
 }
-.status-item span { font-weight:bold; }
+.status-item span {
+    font-weight:700;
+    margin-left:6px;
+}
 
 /* ================= FILTER BAR ================= */
 .filter-bar {
     display:flex;
-    gap:10px;
-    padding:12px 20px;
+    gap:14px;                       /* ⬆ */
+    padding:18px 28px;              /* ⬆ */
     background:#111827;
     flex-wrap:wrap;
+    border-bottom:1px solid #1e293b;
 }
+
 .filter-btn {
     background:#1f2937;
-    padding:8px 14px;
-    border-radius:10px;
+    padding:12px 22px;              /* ⬆ */
+    border-radius:14px;             /* ⬆ */
     cursor:pointer;
-    font-size:13px;
-    transition:.2s;
+    font-size:15px;                 /* ⬆ */
+    font-weight:600;
+    transition:.2s ease;
+    user-select:none;
 }
-.filter-btn:hover,
+
+.filter-btn:hover {
+    background:#334155;
+    transform:translateY(-1px);
+}
+
 .filter-btn.active {
     background:#2563eb;
+    box-shadow:0 0 0 2px rgba(37,99,235,.35);
 }
 
 /* ================= GRID ================= */
@@ -69,7 +83,7 @@ body {
 .signal-watch  { border-left-color:#facc15; }
 .signal-success { border-left-color:#a855f7; }
 
-/* MOST KIRILIM */
+/* MOST BREAK */
 .signal-most-break {
     border-left-color:#ef4444 !important;
     background:#1a0f14;
@@ -87,7 +101,7 @@ body {
     margin:6px 0;
 }
 
-/* LIVE PRICE */
+/* PRICE */
 .price {
     font-size:22px;
     font-weight:900;
@@ -186,11 +200,11 @@ body {
 
 <!-- ================= FILTERS ================= -->
 <div class="filter-bar">
-    <div class="filter-btn active" onclick="setFilter('all')">Tüm</div>
-    <div class="filter-btn" onclick="setFilter('strong')">GÜÇLÜ AL</div>
-    <div class="filter-btn" onclick="setFilter('combo')">AL</div>
-    <div class="filter-btn" onclick="setFilter('watch')">İZLE</div>
-    <div class="filter-btn" onclick="setFilter('success')">Başarılı</div>
+    <div class="filter-btn active" onclick="setFilter('all', event)">Tüm</div>
+    <div class="filter-btn" onclick="setFilter('strong', event)">GÜÇLÜ AL</div>
+    <div class="filter-btn" onclick="setFilter('combo', event)">AL</div>
+    <div class="filter-btn" onclick="setFilter('watch', event)">İZLE</div>
+    <div class="filter-btn" onclick="setFilter('success', event)">Başarılı</div>
 </div>
 
 <!-- ================= GRID ================= -->
@@ -199,10 +213,10 @@ body {
 <script>
 let CURRENT_FILTER = "all";
 
-function setFilter(f) {
+function setFilter(f, ev) {
     CURRENT_FILTER = f;
     document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-    event.target.classList.add("active");
+    ev.target.classList.add("active");
     loadSignals();
 }
 
@@ -223,8 +237,10 @@ async function loadSignals() {
     data.signals.forEach(s => {
         if (CURRENT_FILTER !== "all" && s.category !== CURRENT_FILTER) return;
 
-        const helpers = s.helpers || [];
-        const mostBroken = helpers.includes("MOST KIRILIMI");
+        const historyText = (s.history || []).map(h => h[1]).join(" ");
+        const mostBroken =
+            historyText.includes("MOST aşağı") ||
+            (s.title && s.title.includes("MOST AŞAĞI"));
 
         const c = document.createElement("div");
         c.className = `card signal-${s.category} ${mostBroken ? "signal-most-break" : ""}`;
@@ -246,6 +262,10 @@ async function loadSignals() {
 
             <div class="row">📈 EMA Trend: ${s.ema_trend ?? "-"}</div>
             <div class="row">📊 Hacim: ${s.volume_ok ? "YÜKSEK" : "Normal"}</div>
+            <div class="row">🧭 MOST: ${
+                s.most_state === "UP" ? "⬆️ YUKARI" :
+                s.most_state === "DOWN" ? "⬇️ AŞAĞI" : "-"
+            }</div>
 
             <div class="helpers">
                 ${(s.helpers_detail || []).map(h => `
