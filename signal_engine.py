@@ -513,7 +513,7 @@ def process_symbol_signals(item):
         "most_state": most_state
     }
 
-# ================= RESISTANCE =================
+    # ================= RESISTANCE =================
     tf1h = item["tf"].get("1h")
     tf4h = item["tf"].get("4h")
 
