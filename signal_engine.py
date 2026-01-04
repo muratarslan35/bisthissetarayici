@@ -547,7 +547,8 @@ def process_symbol_signals(item):
         "resistance_4h": fmt(r4h),
         "power": total_power,
         "power_delta": power_delta,
-        "tf": item["tf"]
+        "tf": item["tf"],
+        "most_state": most_state
     }
 
     register_success_candidate(signal)
