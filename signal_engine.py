@@ -5,7 +5,8 @@ import numpy as np
 from utils import (
     detect_three_peaks,
     detect_support_resistance_break,
-    nearest_support_resistance_from_history
+    nearest_support_resistance_from_history, 
+    get_last_resistance
 )
 
 # ======================================================
@@ -514,10 +515,11 @@ def process_symbol_signals(item):
     }
 
     # ================= RESISTANCE =================
-    df15 = item["tf"]["15m"]["df"]
-    sr = nearest_support_resistance_from_history(df15)
-    r1h = next((x["level"] for x in sr if x["tf"] == "1h"), None)
-    r4h = next((x["level"] for x in sr if x["tf"] == "4h"), None)
+    tf1h = item["tf"].get("1h")
+tf4h = item["tf"].get("4h")
+
+r1h = get_last_resistance(tf1h["df"]) if tf1h else None
+r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
     signal = {
         "symbol": symbol,
