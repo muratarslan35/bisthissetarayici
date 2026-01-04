@@ -467,15 +467,16 @@ def process_symbol_signals(item):
 # ==================================================
 # ZAYIFLAMA KONTROLÜ (ÖNERİLEN)
 # ==================================================
-    weakened = False
-    if prev and power_delta <= -POWER_STRENGTH_THRESHOLD:
-    weakened = True
-    title = "⚠️ ZAYIFLAYAN SİNYAL"
+       weakened = False
+       if prev and power_delta <= 
+    -POWER_STRENGTH_THRESHOLD:
+            weakened = True
+            title = "⚠️ ZAYIFLAYAN SİNYAL"
     # ==================================================
     # TEKRAR BLOĞU
     # ==================================================
-    if in_repeat_block(symbol, algo) and not strengthened:
-        return []
+    if in_repeat_block(symbol, algo) and not (strengthened or weakened):
+    return []
 
     mark_sent(symbol, algo)
 
@@ -485,11 +486,16 @@ def process_symbol_signals(item):
     now_h = tr_now().strftime("%H:%M")
     history = prev["history"][:] if prev else [(now_h, f"{algo} sinyal")]
 
-    if strengthened:
-    if prev["action"] == action:
-        history.append(
-            (now_h, f"{action} güçlendi (+{power_delta})")
-        )
+if strengthened:
+        if prev["action"] == action:
+            history.append(
+                (now_h, f"{action} güçlendi (+{power_delta})")
+            )
+        else:
+            history.append(
+                (now_h, f"{prev['action']} → {action}")
+            )
+    
     else:
         history.append(
             (now_h, f"{prev['action']} → {action}")
