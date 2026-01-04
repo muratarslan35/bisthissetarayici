@@ -396,7 +396,6 @@ def super_kombine_signal(item):
 # ======================================================
 # PROCESS SYMBOL
 # ======================================================
-
 def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
@@ -410,18 +409,27 @@ def process_symbol_signals(item):
     helpers = helper_indicators(item)
     helper_names = set(h[0] for h in helpers)
 
-    # -----------------------
+    # ==================================================
+    # POWER HESABI (YENİ)
+    # ==================================================
+    total_power = sum(p for _, p in helpers if isinstance(p, (int, float)))
+
+    prev = LAST_SIGNAL_STATE.get(symbol)
+    prev_power = prev.get("power", 0) if prev else 0
+    power_delta = total_power - prev_power
+
+    # ==================================================
     # SEVİYE SAYIMI
-    # -----------------------
+    # ==================================================
     levels = {"A": 0, "B": 0, "C": 0}
     for h in helper_names:
         lvl = HELPER_LEVELS.get(h)
         if lvl:
             levels[lvl] += 1
 
-    # -----------------------
+    # ==================================================
     # KARAR
-    # -----------------------
+    # ==================================================
     if levels["A"] >= 1:
         action, category, title = (
             "GÜÇLÜ AL",
@@ -443,43 +451,54 @@ def process_symbol_signals(item):
     else:
         return []
 
-    # -----------------------
-    # TEKRAR BLOĞU
-    # -----------------------
-    prev = LAST_SIGNAL_STATE.get(symbol)
-    strengthened = prev and action != prev["action"]
+    # ==================================================
+    # GÜÇLENME KONTROLÜ (YENİ)
+    # ==================================================
+    strengthened = False
+    if prev:
+        if action != prev["action"]:
+            strengthened = True
+        elif power_delta >= POWER_STRENGTH_THRESHOLD:
+            strengthened = True
+            title = "🔥 GÜÇLENEN SİNYAL"
 
+    # ==================================================
+    # TEKRAR BLOĞU
+    # ==================================================
     if in_repeat_block(symbol, algo) and not strengthened:
         return []
 
     mark_sent(symbol, algo)
 
-    # -----------------------
+    # ==================================================
     # GEÇMİŞ
-    # -----------------------
+    # ==================================================
     now_h = tr_now().strftime("%H:%M")
     history = prev["history"][:] if prev else [(now_h, f"{algo} sinyal")]
 
     if strengthened:
-        history.append((now_h, f"{prev['action']} → {action}"))
+        history.append(
+            (now_h, f"{prev['action']} → {action} (+{power_delta} güç)")
+        )
 
     LAST_SIGNAL_STATE[symbol] = {
         "action": action,
-        "history": history
+        "history": history,
+        "power": total_power
     }
 
-    # -----------------------
+    # ==================================================
     # DİRENÇLER
-    # -----------------------
+    # ==================================================
     df15 = item["tf"]["15m"]["df"]
     sr = nearest_support_resistance_from_history(df15)
 
     r1h = next((x["level"] for x in sr if x["tf"] == "1h"), None)
     r4h = next((x["level"] for x in sr if x["tf"] == "4h"), None)
 
-    # -----------------------
+    # ==================================================
     # SİNYAL OBJESİ
-    # -----------------------
+    # ==================================================
     signal = {
         "symbol": symbol,
         "title": title,
@@ -506,12 +525,14 @@ def process_symbol_signals(item):
         "time": tr_now().strftime("%H:%M:%S"),
         "resistance_1h": fmt(r1h),
         "resistance_4h": fmt(r4h),
+        "power": total_power,
+        "power_delta": power_delta,
         "tf": item["tf"]
     }
 
     register_success_candidate(signal)
     return [signal]
-
+                
 # ======================================================
 # SUCCESS TRACK
 # ======================================================
