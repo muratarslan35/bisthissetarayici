@@ -398,7 +398,7 @@ def super_kombine_signal(item):
 # ======================================================
 # PROCESS SYMBOL
 # ======================================================
-       def process_symbol_signals(item):
+def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
@@ -411,9 +411,6 @@ def super_kombine_signal(item):
     helpers = helper_indicators(item)
     helper_names = set(h[0] for h in helpers)
 
-    # ==================================================
-    # POWER HESABI
-    # ==================================================
     total_power = sum(p for _, p in helpers if isinstance(p, (int, float)))
 
     key = (symbol, algo)
@@ -421,28 +418,22 @@ def super_kombine_signal(item):
     prev_power = prev.get("power", 0) if prev else 0
     power_delta = total_power - prev_power
 
-    # ==================================================
-    # MOST DURUMU (DOWN / UP)
-    # ==================================================
+    # ================= MOST STATE =================
     most_state = None
     tf4h = item["tf"].get("4h")
     if tf4h:
-        most_state = detect_most_trend(tf4h["df"])  # "UP" | "DOWN" | None
+        most_state = detect_most_trend(tf4h["df"])
 
     prev_most = prev.get("most_state") if prev else None
 
-    # ==================================================
-    # SEVİYE SAYIMI
-    # ==================================================
+    # ================= LEVEL COUNT =================
     levels = {"A": 0, "B": 0, "C": 0}
     for h in helper_names:
         lvl = HELPER_LEVELS.get(h)
         if lvl:
             levels[lvl] += 1
 
-    # ==================================================
-    # ANA KARAR
-    # ==================================================
+    # ================= BASE ACTION =================
     if levels["A"] >= 1:
         action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye Onay"
     elif levels["B"] >= 1:
@@ -452,17 +443,9 @@ def super_kombine_signal(item):
     else:
         return []
 
-    # ==================================================
-    # MOST DOWNGRADE / UPGRADE
-    # ==================================================
-    most_downgrade = False
-    most_upgrade = False
-
-    if most_state == "DOWN":
-        most_downgrade = True
-
-    if prev_most == "DOWN" and most_state == "UP":
-        most_upgrade = True
+    # ================= MOST DOWN / UP =================
+    most_downgrade = prev_most == "UP" and most_state == "DOWN"
+    most_upgrade = prev_most == "DOWN" and most_state == "UP"
 
     if most_downgrade:
         if action == "GÜÇLÜ AL":
@@ -480,9 +463,7 @@ def super_kombine_signal(item):
             action, category = "GÜÇLÜ AL", "strong"
             title = "🚀 MOST YUKARI – GÜÇLÜ AL"
 
-    # ==================================================
-    # GÜÇLENME / ZAYIFLAMA (POWER BASED)
-    # ==================================================
+    # ================= POWER BASED =================
     strengthened = False
     weakened = False
 
@@ -497,17 +478,13 @@ def super_kombine_signal(item):
             title = "⚠️ ZAYIFLAYAN SİNYAL"
             category = "watch"
 
-    # ==================================================
-    # TEKRAR BLOĞU
-    # ==================================================
-    if in_repeat_block(symbol, algo) and not (strengthened or weakened or most_upgrade):
+    # ================= REPEAT BLOCK =================
+    if in_repeat_block(symbol, algo) and not (strengthened or weakened or most_upgrade or most_downgrade):
         return []
 
     mark_sent(symbol, algo)
 
-    # ==================================================
-    # GEÇMİŞ
-    # ==================================================
+    # ================= HISTORY =================
     now_h = tr_now().strftime("%H:%M")
     history = prev["history"][:] if prev else [(now_h, f"{algo} sinyal")]
 
@@ -527,18 +504,12 @@ def super_kombine_signal(item):
         "most_state": most_state
     }
 
-    # ==================================================
-    # DİRENÇLER
-    # ==================================================
+    # ================= RESISTANCE =================
     df15 = item["tf"]["15m"]["df"]
     sr = nearest_support_resistance_from_history(df15)
-
     r1h = next((x["level"] for x in sr if x["tf"] == "1h"), None)
     r4h = next((x["level"] for x in sr if x["tf"] == "4h"), None)
 
-    # ==================================================
-    # SİNYAL OBJESİ
-    # ==================================================
     signal = {
         "symbol": symbol,
         "title": title,
