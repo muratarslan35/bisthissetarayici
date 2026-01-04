@@ -132,18 +132,20 @@ def is_duplicate_signal(signal):
         signal["main_algorithm"],
         signal["action"]
     )
+
     prev = LAST_SENT_SIGNAL.get(key)
 
+    current_power = signal.get("power", 0)
+
     if prev:
-        if signal["strength"] <= prev["strength"]:
+        if current_power <= prev.get("power", 0):
             return True
 
     LAST_SENT_SIGNAL[key] = {
-        "strength": signal["strength"],
-        "time": signal["time"]
+        "power": current_power,
+        "time": signal.get("time")
     }
     return False
-
 # ======================================================
 # SCANNER LOOP
 # ======================================================
