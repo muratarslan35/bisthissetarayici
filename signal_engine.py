@@ -4,7 +4,8 @@ import numpy as np
 
 from utils import (
     detect_three_peaks,
-    detect_support_resistance_break, 
+    detect_support_resistance_break,
+    nearest_support_resistance_from_history,
     get_last_resistance
 )
 
