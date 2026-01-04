@@ -464,7 +464,13 @@ def process_symbol_signals(item):
         elif power_delta >= POWER_STRENGTH_THRESHOLD:
             strengthened = True
             title = "🔥 GÜÇLENEN SİNYAL"
-
+# ==================================================
+# ZAYIFLAMA KONTROLÜ (ÖNERİLEN)
+# ==================================================
+    weakened = False
+    if prev and power_delta <= -POWER_STRENGTH_THRESHOLD:
+    weakened = True
+    title = "⚠️ ZAYIFLAYAN SİNYAL"
     # ==================================================
     # TEKRAR BLOĞU
     # ==================================================
@@ -480,10 +486,14 @@ def process_symbol_signals(item):
     history = prev["history"][:] if prev else [(now_h, f"{algo} sinyal")]
 
     if strengthened:
+    if prev["action"] == action:
         history.append(
-            (now_h, f"{prev['action']} → {action} (+{power_delta} güç)")
+            (now_h, f"{action} güçlendi (+{power_delta})")
         )
-
+    else:
+        history.append(
+            (now_h, f"{prev['action']} → {action}")
+        )
     LAST_SIGNAL_STATE[key] = {
     "action": action,
     "history": history,
