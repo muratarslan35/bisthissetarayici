@@ -424,7 +424,7 @@ def process_symbol_signals(item):
     if tf4h:
         most_state = detect_most_trend(tf4h["df"])
 
-    prev_most = prev.get("most_state") if prev else None
+    prev_most = prev.get("most_state") if isinstance(prev, dict) else None
 
     # ================= LEVEL COUNT =================
     levels = {"A": 0, "B": 0, "C": 0}
