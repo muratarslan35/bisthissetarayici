@@ -43,7 +43,7 @@ HELPER_LEVELS = {
     "RSI AŞIRI SATIM": "C",
     "3LÜ TEPE": "C",
     "L2 KIRILIM": "C",
-    " MOST KIRILIMI": "C",
+    "MOST KIRILIMI": "C",
 }
 
 HELPER_DESCRIPTIONS = {
