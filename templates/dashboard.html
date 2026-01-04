@@ -69,6 +69,12 @@ body {
 .signal-watch  { border-left-color:#facc15; }
 .signal-success { border-left-color:#a855f7; }
 
+/* MOST KIRILIM */
+.signal-most-break {
+    border-left-color:#ef4444 !important;
+    background:#1a0f14;
+}
+
 /* ================= CONTENT ================= */
 .signal-title {
     font-size:13px;
@@ -81,13 +87,29 @@ body {
     margin:6px 0;
 }
 
-/* LIVE PRICE – VURGULU */
+/* LIVE PRICE */
 .price {
-    font-size:20px;
-    font-weight:800;
+    font-size:22px;
+    font-weight:900;
     margin:6px 0;
 }
 
+/* ================= TP BAR ================= */
+.tp-bar {
+    height:6px;
+    background:#1f2937;
+    border-radius:6px;
+    overflow:hidden;
+    margin:8px 0;
+}
+.tp-progress {
+    height:100%;
+    background:linear-gradient(90deg,#22c55e,#3b82f6);
+    width:0%;
+    transition:.5s;
+}
+
+/* ================= ROW ================= */
 .row {
     font-size:13px;
     margin:4px 0;
@@ -100,7 +122,6 @@ body {
     gap:6px;
     margin-top:8px;
 }
-
 .helper {
     padding:4px 8px;
     border-radius:8px;
@@ -108,13 +129,11 @@ body {
     cursor:help;
     position:relative;
 }
-
-/* Helper Levels */
 .helper.A { background:#16a34a; }
 .helper.B { background:#2563eb; }
 .helper.C { background:#ca8a04; }
 
-/* Hover tooltip */
+/* Tooltip */
 .helper:hover::after {
     content: attr(data-desc);
     position:absolute;
@@ -202,11 +221,18 @@ async function loadSignals() {
     box.innerHTML = "";
 
     data.signals.forEach(s => {
-
         if (CURRENT_FILTER !== "all" && s.category !== CURRENT_FILTER) return;
 
+        const helpers = s.helpers || [];
+        const mostBroken = helpers.includes("MOST KIRILIMI");
+
         const c = document.createElement("div");
-        c.className = `card signal-${s.category}`;
+        c.className = `card signal-${s.category} ${mostBroken ? "signal-most-break" : ""}`;
+
+        let tpPercent = 0;
+        if (s.price && s.resistance_4h && s.resistance_4h > s.price) {
+            tpPercent = Math.min(100, ((s.price / s.resistance_4h) * 100));
+        }
 
         c.innerHTML = `
             <div class="signal-title">${s.title}</div>
@@ -214,21 +240,23 @@ async function loadSignals() {
 
             <div class="price">💰 ${s.price ?? "-"}</div>
 
+            <div class="tp-bar">
+                <div class="tp-progress" style="width:${tpPercent}%"></div>
+            </div>
+
             <div class="row">📈 EMA Trend: ${s.ema_trend ?? "-"}</div>
             <div class="row">📊 Hacim: ${s.volume_ok ? "YÜKSEK" : "Normal"}</div>
 
             <div class="helpers">
                 ${(s.helpers_detail || []).map(h => `
-                    <div class="helper ${h.level}"
-                         data-desc="${h.desc}">
+                    <div class="helper ${h.level}" data-desc="${h.desc}">
                         ${h.name}
                     </div>
                 `).join("")}
             </div>
 
             <div class="resistance">
-                📍 1H Direnç: ${s.resistance_1h ?? "-"} |
-                4H Direnç: ${s.resistance_4h ?? "-"}
+                🎯 TP (4H): ${s.resistance_4h ?? "-"}
             </div>
 
             <div class="history">
