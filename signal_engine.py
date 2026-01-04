@@ -412,7 +412,7 @@ def process_symbol_signals(item):
     helper_names = set(h[0] for h in helpers)
 
     # ==================================================
-    # POWER HESABI (YENİ)
+    # POWER HESABI
     # ==================================================
     total_power = sum(p for _, p in helpers if isinstance(p, (int, float)))
 
@@ -453,30 +453,51 @@ def process_symbol_signals(item):
         )
     else:
         return []
-
+# ==================================================
+    # MOST DOWNGRADE KARARI
     # ==================================================
-    # GÜÇLENME KONTROLÜ (YENİ)
+    if most_down:
+        if action == "GÜÇLÜ AL":
+            action = "AL"
+            category = "combo"
+            title = "⚠️ MOST KIRILDI – GÜÇ DÜŞÜYOR"
+
+        elif action == "AL":
+            action = "İZLE"
+            category = "watch"
+            title = "⛔ MOST AŞAĞI – İZLEME MODU"
+    # ==================================================
+    # GÜÇLENME / ZAYIFLAMA
     # ==================================================
     strengthened = False
+    weakened = False
+
     if prev:
         if action != prev["action"]:
             strengthened = True
         elif power_delta >= POWER_STRENGTH_THRESHOLD:
             strengthened = True
             title = "🔥 GÜÇLENEN SİNYAL"
-# ==================================================
-# ZAYIFLAMA KONTROLÜ (ÖNERİLEN)
-# ==================================================
-       weakened = False
-       if prev and power_delta <= 
-    -POWER_STRENGTH_THRESHOLD:
+        elif power_delta <= -POWER_STRENGTH_THRESHOLD:
             weakened = True
             title = "⚠️ ZAYIFLAYAN SİNYAL"
+            if action == "GÜÇLÜ AL":
+                category = "watch"
+# ==================================================
+    # MOST OTOMATİK DOWNGRADE (YENİ)
+    # ==================================================
+    most_down = False
+
+    tf4h = item["tf"].get("4h")
+    if tf4h:
+        most_4h = detect_most_trend(tf4h["df"])
+        if most_4h == "DOWN":
+            most_down = True
     # ==================================================
     # TEKRAR BLOĞU
     # ==================================================
     if in_repeat_block(symbol, algo) and not (strengthened or weakened):
-    return []
+        return []
 
     mark_sent(symbol, algo)
 
@@ -486,8 +507,8 @@ def process_symbol_signals(item):
     now_h = tr_now().strftime("%H:%M")
     history = prev["history"][:] if prev else [(now_h, f"{algo} sinyal")]
 
-if strengthened:
-        if prev["action"] == action:
+    if strengthened:
+        if prev and prev["action"] == action:
             history.append(
                 (now_h, f"{action} güçlendi (+{power_delta})")
             )
@@ -495,15 +516,16 @@ if strengthened:
             history.append(
                 (now_h, f"{prev['action']} → {action}")
             )
-    
-    else:
+
+    if weakened:
         history.append(
-            (now_h, f"{prev['action']} → {action}")
+            (now_h, f"{action} zayıfladı ({power_delta})")
         )
+
     LAST_SIGNAL_STATE[key] = {
-    "action": action,
-    "history": history,
-    "power": total_power
+        "action": action,
+        "history": history,
+        "power": total_power
     }
 
     # ==================================================
@@ -550,8 +572,7 @@ if strengthened:
     }
 
     register_success_candidate(signal)
-    return [signal]
-                
+    return [signal]       
 # ======================================================
 # SUCCESS TRACK
 # ======================================================
