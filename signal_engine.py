@@ -15,6 +15,8 @@ from utils import (
 REPEAT_BLOCK_MINUTES = 45
 TARGET_PCT = 0.015
 
+POWER_STRENGTH_THRESHOLD = 20
+
 LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
 SUCCESS_TRACKER = {}
@@ -414,7 +416,8 @@ def process_symbol_signals(item):
     # ==================================================
     total_power = sum(p for _, p in helpers if isinstance(p, (int, float)))
 
-    prev = LAST_SIGNAL_STATE.get(symbol)
+    key = (symbol, algo)
+    prev = LAST_SIGNAL_STATE.get(key)
     prev_power = prev.get("power", 0) if prev else 0
     power_delta = total_power - prev_power
 
@@ -481,10 +484,10 @@ def process_symbol_signals(item):
             (now_h, f"{prev['action']} → {action} (+{power_delta} güç)")
         )
 
-    LAST_SIGNAL_STATE[symbol] = {
-        "action": action,
-        "history": history,
-        "power": total_power
+    LAST_SIGNAL_STATE[key] = {
+    "action": action,
+    "history": history,
+    "power": total_power
     }
 
     # ==================================================
