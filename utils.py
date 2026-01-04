@@ -84,3 +84,25 @@ def detect_three_peaks(series):
         if values[i] > values[i-1] and values[i] > values[i+1]:
             peaks.append(values[i])
     return len(peaks) >= 3
+    
+def get_last_resistance(df, min_strength=3):
+    """
+    Verilen timeframe datasından en yakın ÜST direnç seviyesini döndürür
+    """
+    if df is None or len(df) < 30:
+        return None
+
+    levels = nearest_support_resistance_from_history(df)
+
+    if not levels:
+        return None
+
+    strong_levels = [
+        x["level"] for x in levels
+        if x.get("strength", 0) >= min_strength
+    ]
+
+    if not strong_levels:
+        return None
+
+    return round(max(strong_levels), 2)
