@@ -127,6 +127,7 @@ def send_daily_success_report():
 LAST_SENT_SIGNAL = {}
 
 def is_duplicate_signal(signal):
+def is_duplicate_signal(signal):
     key = (
         signal["symbol"],
         signal["main_algorithm"],
@@ -136,13 +137,18 @@ def is_duplicate_signal(signal):
     prev = LAST_SENT_SIGNAL.get(key)
 
     current_power = signal.get("power", 0)
+    current_most = signal.get("most_state")
 
     if prev:
-        if current_power <= prev.get("power", 0):
+        # MOST değiştiyse ENGELLEME
+        if prev.get("most_state") != current_most:
+            pass
+        elif current_power <= prev.get("power", 0):
             return True
 
     LAST_SENT_SIGNAL[key] = {
         "power": current_power,
+        "most_state": current_most,
         "time": signal.get("time")
     }
     return False
