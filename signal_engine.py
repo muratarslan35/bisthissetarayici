@@ -43,6 +43,7 @@ HELPER_LEVELS = {
     "RSI AŞIRI SATIM": "C",
     "3LÜ TEPE": "C",
     "L2 KIRILIM": "C",
+    " MOST KIRILIMI": "C",
 }
 
 HELPER_DESCRIPTIONS = {
@@ -61,6 +62,7 @@ HELPER_DESCRIPTIONS = {
     "RSI AŞIRI SATIM": "Aşırı satımdan dönüş",
     "3LÜ TEPE": "Zayıf yapı – izleme",
     "L2 KIRILIM": "Zayıf kırılım",
+    "MOST KIRILIMI": "MOST trendi aşağı kırıldı – risk arttı",
 }
 
 # ======================================================
@@ -414,8 +416,8 @@ def process_symbol_signals(item):
     total_power = sum(p for _, p in helpers if isinstance(p, (int, float)))
 
     key = (symbol, algo)
-    prev = LAST_SIGNAL_STATE.get(key)
-    prev_power = prev.get("power", 0) if prev else 0
+    prev = LAST_SIGNAL_STATE.get(key) or {}
+    prev_power = prev.get("power", 0)
     power_delta = total_power - prev_power
 
     # ================= MOST STATE =================
@@ -424,7 +426,7 @@ def process_symbol_signals(item):
     if tf4h:
         most_state = detect_most_trend(tf4h["df"])
 
-    prev_most = prev.get("most_state") if isinstance(prev, dict) else None
+    prev_most = prev.get("most_state")
 
     # ================= LEVEL COUNT =================
     levels = {"A": 0, "B": 0, "C": 0}
@@ -445,7 +447,12 @@ def process_symbol_signals(item):
 
     # ================= MOST DOWN / UP =================
     most_downgrade = prev_most == "UP" and most_state == "DOWN"
-    most_upgrade = prev_most == "DOWN" and most_state == "UP"
+    most_upgrade   = prev_most == "DOWN" and most_state == "UP"
+
+    # 🔴 MOST KIRILIMI → HELPER EKLE
+    if most_downgrade:
+        helpers.append(("MOST KIRILIMI", -50))
+        helper_names.add("MOST KIRILIMI")
 
     if most_downgrade:
         if action == "GÜÇLÜ AL":
@@ -468,7 +475,7 @@ def process_symbol_signals(item):
     weakened = False
 
     if prev:
-        if action != prev["action"]:
+        if action != prev.get("action"):
             strengthened = True
         elif power_delta >= POWER_STRENGTH_THRESHOLD:
             strengthened = True
@@ -479,14 +486,16 @@ def process_symbol_signals(item):
             category = "watch"
 
     # ================= REPEAT BLOCK =================
-    if in_repeat_block(symbol, algo) and not (strengthened or weakened or most_upgrade or most_downgrade):
+    if in_repeat_block(symbol, algo) and not (
+        strengthened or weakened or most_upgrade or most_downgrade
+    ):
         return []
 
     mark_sent(symbol, algo)
 
     # ================= HISTORY =================
     now_h = tr_now().strftime("%H:%M")
-    history = prev["history"][:] if prev else [(now_h, f"{algo} sinyal")]
+    history = prev.get("history", [(now_h, f"{algo} sinyal")])
 
     if most_downgrade:
         history.append((now_h, "MOST aşağı – downgrade"))
