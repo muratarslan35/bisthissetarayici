@@ -127,7 +127,6 @@ def send_daily_success_report():
 LAST_SENT_SIGNAL = {}
 
 def is_duplicate_signal(signal):
-def is_duplicate_signal(signal):
     key = (
         signal["symbol"],
         signal["main_algorithm"],
