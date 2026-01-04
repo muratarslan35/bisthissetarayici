@@ -514,13 +514,13 @@ def process_symbol_signals(item):
         "most_state": most_state
     }
 
-    # ================= RESISTANCE =================
+# ================= RESISTANCE =================
     tf1h = item["tf"].get("1h")
-tf4h = item["tf"].get("4h")
+    tf4h = item["tf"].get("4h")
 
-r1h = get_last_resistance(tf1h["df"]) if tf1h else None
-r4h = get_last_resistance(tf4h["df"]) if tf4h else None
-
+    r1h = get_last_resistance(tf1h["df"]) if tf1h else None
+    r4h = get_last_resistance(tf4h["df"]) if tf4h else None
+    
     signal = {
         "symbol": symbol,
         "title": title,
