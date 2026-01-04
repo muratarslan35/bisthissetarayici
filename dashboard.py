@@ -44,6 +44,7 @@ def push_signal(signal):
         "ema_trend": signal.get("ema_trend"),
         "volume_ok": signal.get("volume_ok"),
         "helpers_detail": signal.get("helpers_detail"),
+        "helpers": signal.get("helpers"),
         "history": signal.get("history"),
         "resistance_1h": signal.get("resistance_1h"),
         "resistance_4h": signal.get("resistance_4h"),
@@ -52,18 +53,35 @@ def push_signal(signal):
         "action": signal.get("action"),
         "category": signal.get("category"),
         "main_algorithm": signal.get("main_algorithm"),
-        "strength": signal.get("strength"),
+
+        # ✅ EKLENENLER
+        "power": signal.get("power"),
+        "power_delta": signal.get("power_delta"),
+        "most_state": signal.get("most_state"),
     })
 
     del SIGNALS[MAX_SIGNALS:]
 
+
 def push_success_signal(data):
     SUCCESS_SIGNALS.insert(0, {
         "symbol": data.get("symbol"),
-        "algorithm": data.get("algorithm"),
+        "price": None,
+        "ema_trend": None,
+        "volume_ok": None,
+        "helpers_detail": [],
+        "helpers": [],
+        "history": [],
+        "resistance_1h": None,
+        "resistance_4h": None,
         "time": data.get("time"),
+        "title": "🎯 %1.5 HEDEF GELDİ",
+        "action": "BAŞARILI",
         "category": "success",
-        "title": "🎯 %1.5 HEDEF GELDİ"
+        "main_algorithm": data.get("algorithm"),
+        "power": None,
+        "power_delta": None,
+        "most_state": None,
     })
 
     del SUCCESS_SIGNALS[MAX_SUCCESS_SIGNALS:]
