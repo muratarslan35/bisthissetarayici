@@ -13,7 +13,12 @@ from signal_engine import (
     format_signal_message,
     update_success_targets,
     SUCCESS_TRACKER,
-    tr_now
+    tr_now,
+
+    # ✅ YENİ EKLENENLER
+    reset_daily_success_if_needed,
+    reset_weekly_success_if_needed,
+    send_weekly_report_if_needed
 )
 
 from dashboard import (
@@ -102,7 +107,7 @@ def send_startup_message():
     send_telegram_message(msg)
 
 # ======================================================
-# DAILY REPORT
+# DAILY REPORT (MEVCUT – KORUNDU)
 # ======================================================
 def daily_success_summary():
     today = tr_now().date()
@@ -122,7 +127,7 @@ def send_daily_success_report():
         send_telegram_message(report)
 
 # ======================================================
-# SIGNAL REPEAT CONTROL (YENİ)
+# SIGNAL REPEAT CONTROL (MEVCUT – KORUNDU)
 # ======================================================
 LAST_SENT_SIGNAL = {}
 
@@ -139,7 +144,6 @@ def is_duplicate_signal(signal):
     current_most = signal.get("most_state")
 
     if prev:
-        # MOST değiştiyse ENGELLEME
         if prev.get("most_state") != current_most:
             pass
         elif current_power <= prev.get("power", 0):
@@ -151,6 +155,7 @@ def is_duplicate_signal(signal):
         "time": signal.get("time")
     }
     return False
+
 # ======================================================
 # SCANNER LOOP
 # ======================================================
@@ -161,6 +166,13 @@ def scanner_loop():
     while True:
         now = now_tr()
         print(f"\n⏱ Döngü tick: {now.strftime('%H:%M:%S')}", flush=True)
+
+        # ==================================================
+        # ✅ GÜNLÜK / HAFTALIK RESET & RAPOR
+        # ==================================================
+        reset_daily_success_if_needed()
+        reset_weekly_success_if_needed()
+        send_weekly_report_if_needed(send_telegram_message)
 
         try:
             if not is_market_open(now):
@@ -194,11 +206,10 @@ def scanner_loop():
                     )
 
                     for s in successes:
-                        push_success_signal({
-                            "symbol": symbol,
-                            "algorithm": s["algorithm"],
-                            "time": now.strftime("%H:%M:%S")
-                        })
+                        push_success_signal(s)
+                        send_telegram_message(
+                            format_signal_message(s)
+                        )
 
                     for signal in signals:
                         if is_duplicate_signal(signal):
