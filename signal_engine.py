@@ -609,12 +609,21 @@ def register_success_candidate(signal):
     today = tr_now().date()
     SUCCESS_TRACKER.setdefault(today, {})
 
-    SUCCESS_TRACKER[today][
-        (signal["symbol"], signal["main_algorithm"])
-    ] = {
-        "entry": signal["price"],
-        "target": signal["price"] * (1 + TARGET_PCT),
-        "hit": False
+    key = (signal["symbol"], signal["main_algorithm"])
+
+    # 🚫 Aynı gün aynı sinyal varsa ENTRY overwrite ETME
+    if key in SUCCESS_TRACKER[today]:
+        return
+
+    entry_price = signal.get("price")
+    if not entry_price:
+        return
+
+    SUCCESS_TRACKER[today][key] = {
+        "entry": entry_price,
+        "target": entry_price * (1 + TARGET_PCT),
+        "hit": False,
+        "entry_time": tr_now().strftime("%H:%M:%S"),
     }
 
 # ======================================================
