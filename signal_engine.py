@@ -630,14 +630,15 @@ def register_success_candidate(signal):
     if key in SUCCESS_TRACKER[today]:
         return
 
+    # 🔒 Entry her zaman ilk sinyalin fiyatıdır
     entry_price = signal.get("price")
-    if not entry_price:
+    if entry_price is None:
         return
 
     SUCCESS_TRACKER[today][key] = {
-        "entry": entry_price,
-        "target": entry_price * (1 + TARGET_PCT),
-        "hit": False,
+        "entry": entry_price,                     # SABİT giriş fiyatı
+        "target": entry_price * (1 + TARGET_PCT), # hedef
+        "hit": False,                             # başarı durumu
         "entry_time": tr_now().strftime("%H:%M:%S"),
     }
 
@@ -718,7 +719,7 @@ def format_signal_message(signal):
     if signal.get("category") == "success":
         return "\n".join([
             "🎯 HEDEF GELDİ",
-            f"📊 {signal['symbol']}",
+            f"📊 {signal.get('symbol')}",
             "",
             f"🎯 Giriş Fiyatı: {signal.get('entry_price')}",
             f"📈 Hedef Fiyat: {signal.get('target_price')}",
@@ -729,19 +730,22 @@ def format_signal_message(signal):
             f"⏰ {signal.get('time')}",
         ])
 
+    # ======================================================
+    # NORMAL SIGNAL FORMAT
+    # ======================================================
     lines = []
 
-    # ======================================================
     # BAŞLIK
-    # ======================================================
-    lines.append(f"📊 {signal['symbol']}")
-    lines.append(f"🏷 {signal['title']}")
+    lines.append(f"📊 {signal.get('symbol')}")
+    lines.append(f"🏷 {signal.get('title')}")
     lines.append("")
 
-    # ======================================================
-    # TEMEL BİLGİLER
-    # ======================================================
+    # FİYAT BİLGİSİ
+    if signal.get("entry_price"):
+        lines.append(f"🎯 Giriş Fiyatı: {signal.get('entry_price')}")
     lines.append(f"💰 Canlı Fiyat: {signal.get('price')}")
+
+    # TEMEL BİLGİLER
     lines.append(f"⚡ Sinyal: {signal.get('action')}")
     lines.append(f"🧠 Algo: {signal.get('main_algorithm')}")
     lines.append(f"📈 Trend: {signal.get('ema_trend')}")
@@ -749,55 +753,50 @@ def format_signal_message(signal):
         f"📊 Hacim: {'YÜKSEK' if signal.get('volume_ok') else 'Normal'}"
     )
 
-    # ======================================================
-    # MOST
-    # ======================================================
+    # MOST DURUMU
     most_1h = signal.get("most_1h")
     most_4h = signal.get("most_4h")
-
     if most_1h or most_4h:
         lines.append("")
         lines.append("🧭 MOST Durumu:")
         if most_1h:
-            lines.append(f"• 1H: {'⬆️ YUKARI' if most_1h == 'UP' else '⬇️ AŞAĞI'}")
+            lines.append(
+                f"• 1H: {'⬆️ YUKARI' if most_1h == 'UP' else '⬇️ AŞAĞI'}"
+            )
         if most_4h:
-            lines.append(f"• 4H: {'⬆️ YUKARI' if most_4h == 'UP' else '⬇️ AŞAĞI'}")
+            lines.append(
+                f"• 4H: {'⬆️ YUKARI' if most_4h == 'UP' else '⬇️ AŞAĞI'}"
+            )
 
-    # ======================================================
     # DİRENÇLER
-    # ======================================================
     if signal.get("resistance_1h") or signal.get("resistance_4h"):
         lines.append("")
         lines.append("🎯 Direnç Seviyeleri:")
         if signal.get("resistance_1h"):
-            lines.append(f"• 1H: {signal['resistance_1h']}")
+            lines.append(f"• 1H: {signal.get('resistance_1h')}")
         if signal.get("resistance_4h"):
-            lines.append(f"• 4H: {signal['resistance_4h']}")
+            lines.append(f"• 4H: {signal.get('resistance_4h')}")
 
-    # ======================================================
-    # YARDIMCILAR
-    # ======================================================
+    # YARDIMCI ONAYLAR
     helpers = signal.get("helpers_detail", [])
     if helpers:
         lines.append("")
         lines.append("🧩 Yardımcı Onaylar:")
         for h in helpers:
-            lines.append(f"• [{h['level']}] {h['name']} – {h['desc']}")
+            lines.append(
+                f"• [{h.get('level')}] {h.get('name')} – {h.get('desc')}"
+            )
 
-    # ======================================================
     # GÜÇ DEĞİŞİMİ
-    # ======================================================
     power_delta = signal.get("power_delta")
-    if power_delta:
+    if isinstance(power_delta, (int, float)) and power_delta != 0:
         lines.append("")
         if power_delta > 0:
             lines.append(f"🔥 Güç Artışı: +{power_delta}")
         else:
             lines.append(f"⚠️ Güç Azalışı: {power_delta}")
 
-    # ======================================================
-    # GELİŞİM GEÇMİŞİ
-    # ======================================================
+    # GEÇMİŞ (SON 4)
     history = signal.get("history", [])
     if history:
         lines.append("")
@@ -805,13 +804,7 @@ def format_signal_message(signal):
         for t, msg in history[-4:]:
             lines.append(f"{t} → {msg}")
 
-    lines.append("")
-    lines.append(f"⏰ {signal.get('time')}")
-
-    return "\n".join(lines)
-    # ======================================================
     # ZAMAN
-    # ======================================================
     lines.append("")
     lines.append(f"⏰ {signal.get('time')}")
 
