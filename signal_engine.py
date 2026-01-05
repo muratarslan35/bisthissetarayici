@@ -707,3 +707,78 @@ def process_signals(data):
             continue
 
     return out
+# ======================================================
+# DAILY SUCCESS REPORT
+# ======================================================
+
+def build_daily_success_report():
+    today = tr_now().date()
+    day_data = SUCCESS_TRACKER.get(today, {})
+
+    if not day_data:
+        return "📊 BUGÜN BAŞARI RAPORU\n\n❌ Bugün takip edilen sinyal yok."
+
+    total = len(day_data)
+    hits = [d for d in day_data.values() if d.get("hit")]
+    fails = [d for d in day_data.values() if not d.get("hit")]
+
+    hit_count = len(hits)
+    fail_count = len(fails)
+
+    # Kazanç hesapları
+    gains = []
+    for d in hits:
+        entry = d.get("entry")
+        hit_price = d.get("hit_price")
+        if entry and hit_price:
+            gains.append(((hit_price - entry) / entry) * 100)
+
+    avg_gain = round(sum(gains) / len(gains), 2) if gains else 0
+    max_gain = round(max(gains), 2) if gains else 0
+
+    # Algoritma istatistiği
+    algo_stats = {}
+    for d in hits:
+        algo = d.get("algo")
+        algo_stats[algo] = algo_stats.get(algo, 0) + 1
+
+    lines = []
+    lines.append("📊 GÜNLÜK BAŞARI RAPORU")
+    lines.append(f"📅 Tarih: {today}")
+    lines.append("")
+    lines.append(f"📡 Toplam Sinyal: {total}")
+    lines.append(f"✅ Başarılı: {hit_count}")
+    lines.append(f"❌ Başarısız: {fail_count}")
+    lines.append("")
+    lines.append(f"📈 Ortalama Kazanç: %{avg_gain}")
+    lines.append(f"🚀 Maksimum Kazanç: %{max_gain}")
+
+    if algo_stats:
+        lines.append("")
+        lines.append("🧠 Algoritma Başarıları:")
+        for algo, cnt in algo_stats.items():
+            lines.append(f"• {algo}: {cnt} adet")
+
+    if hits:
+        lines.append("")
+        lines.append("🎯 BAŞARILI SİNYALLER:")
+        for d in hits:
+            entry = d.get("entry")
+            hit_price = d.get("hit_price")
+            gain = round(((hit_price - entry) / entry) * 100, 2)
+            lines.append(
+                f"• {d['symbol']} | {d['algo']} | %{gain}"
+            )
+
+    if fails:
+        lines.append("")
+        lines.append("⛔ HEDEFE ULAŞMAYANLAR:")
+        for d in fails:
+            lines.append(
+                f"• {d['symbol']} | {d['algo']}"
+            )
+
+    lines.append("")
+    lines.append("🕒 Rapor saati: " + tr_now().strftime("%H:%M"))
+
+    return "\n".join(lines)
