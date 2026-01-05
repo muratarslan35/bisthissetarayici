@@ -15,17 +15,55 @@ from utils import (
 
 REPEAT_BLOCK_MINUTES = 45
 TARGET_PCT = 0.015
-
 POWER_STRENGTH_THRESHOLD = 20
 
 LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
-SUCCESS_TRACKER = {}
+
+# 🔹 GÜNLÜK BAŞARI (HER SABAH SIFIRLANIR)
+DAILY_SUCCESS_TRACKER = {}
+
+# 🔹 HAFTALIK TAKİP (PAZARTESİ BAŞLAR – CUMA RAPOR)
+WEEKLY_SUCCESS_TRACKER = {}
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # ======================================================
-# HELPER LEVELS
+# ZAMAN
+# ======================================================
+
+def tr_now():
+    return datetime.now(TR_TZ)
+
+def today_key():
+    return tr_now().date().isoformat()
+
+def week_key():
+    now = tr_now()
+    monday = now - timedelta(days=now.weekday())
+    return monday.date().isoformat()
+
+def fmt(v):
+    return round(v, 2) if isinstance(v, (int, float)) else None
+
+# ======================================================
+# RESET MEKANİZMALARI
+# ======================================================
+
+def reset_daily_if_needed():
+    key = today_key()
+    if key not in DAILY_SUCCESS_TRACKER:
+        DAILY_SUCCESS_TRACKER.clear()
+        DAILY_SUCCESS_TRACKER[key] = {}
+
+def reset_weekly_if_needed():
+    key = week_key()
+    if key not in WEEKLY_SUCCESS_TRACKER:
+        WEEKLY_SUCCESS_TRACKER.clear()
+        WEEKLY_SUCCESS_TRACKER[key] = {}
+
+# ======================================================
+# HELPER SEVİYELERİ
 # ======================================================
 
 HELPER_LEVELS = {
@@ -51,30 +89,20 @@ HELPER_DESCRIPTIONS = {
     "ORDER BLOCK": "Kurumsal alım bölgesi",
     "1H YAPISAL KIRILIM": "Saatlik yapıda kalıcı direnç aşımı",
     "4H TREND KIRILIMI": "4 saatlik ana trend yukarı kırıldı",
-    "4H SIKIŞMA KIRILIMI (ONAYLI)": "4H dar bant sıkışması sonrası hacimli ve onaylı kırılım",
-    "MOST 4H YUKARI": "4 saatlik MOST trendi yukarı – trend taşınabilir",
+    "4H SIKIŞMA KIRILIMI (ONAYLI)": "4H dar bant sıkışması sonrası hacimli kırılım",
+    "MOST 4H YUKARI": "4 saatlik MOST trendi yukarı",
 
     "ÇOKLU ZAMAN EMA ONAYI": "15m–1H–4H EMA hizalanması",
     "GOLDEN CROSS": "Uzun vadeli trend dönüşü",
     "L3 GÜÇLÜ KIRILIM": "Orta seviye yapısal kırılım",
-    "MOST 1D YUKARI": "Günlük MOST trendi yukarı – büyük resim onayı",
+    "MOST 1D YUKARI": "Günlük MOST ana trend",
 
-    "RSI DÜŞÜK": "Momentum başlangıç aşaması",
+    "RSI DÜŞÜK": "Momentum başlangıcı",
     "RSI AŞIRI SATIM": "Aşırı satımdan dönüş",
-    "3LÜ TEPE": "Zayıf yapı – izleme",
+    "3LÜ TEPE": "Zayıf yapı",
     "L2 KIRILIM": "Zayıf kırılım",
-    "MOST KIRILIMI": "MOST trendi aşağı kırıldı – risk arttı",
+    "MOST KIRILIMI": "MOST aşağı – risk",
 }
-
-# ======================================================
-# TIME
-# ======================================================
-
-def tr_now():
-    return datetime.now(TR_TZ)
-
-def fmt(v):
-    return round(v, 2) if isinstance(v, (int, float)) else None
 
 # ======================================================
 # REPEAT BLOCK
@@ -88,7 +116,7 @@ def mark_sent(symbol, algo):
     LAST_SENT[(symbol, algo)] = tr_now() + timedelta(minutes=REPEAT_BLOCK_MINUTES)
 
 # ======================================================
-# TREND
+# EMA TREND
 # ======================================================
 
 def ema_trend(e20, e50, e200):
@@ -133,7 +161,6 @@ def detect_4h_squeeze_breakout(df):
     high_range = zone["High"].max()
     low_range = zone["Low"].min()
 
-    # Dar bant (%6’dan küçük)
     if (high_range - low_range) / low_range > 0.06:
         return False
 
@@ -150,7 +177,7 @@ def detect_4h_squeeze_breakout(df):
     return True
 
 # ======================================================
-# MOST (MOVING STOP) HESAPLAMA
+# MOST (MOVING STOP)
 # ======================================================
 
 def calculate_most(df, period=9, multiplier=2.0):
@@ -196,13 +223,10 @@ def detect_most_trend(df):
     res = calculate_most(df)
     if not res:
         return None
-
-    if res["trend"] == "UP":
-        return "UP"
-    return "DOWN"
+    return "UP" if res["trend"] == "UP" else "DOWN"
 
 # ======================================================
-# HELPERS
+# YARDIMCI FORMASYONLAR
 # ======================================================
 
 def detect_order_block(df):
@@ -234,6 +258,10 @@ def detect_l2_l3_l4(df, price):
 
     return helpers
 
+# ======================================================
+# HELPER INDICATORS (ANA TOPLAMA)
+# ======================================================
+
 def helper_indicators(item):
     helpers = []
 
@@ -242,9 +270,7 @@ def helper_indicators(item):
     tf4h = item["tf"].get("4h")
     tf1d = item["tf"].get("1d")
 
-    # =========================
-    # RSI (15m)
-    # =========================
+    # RSI
     rsi = tf15.get("rsi")
     if rsi is not None:
         if rsi < 28:
@@ -252,46 +278,31 @@ def helper_indicators(item):
         elif rsi < 35:
             helpers.append(("RSI DÜŞÜK", 6))
 
-    # =========================
     # HACİM
-    # =========================
     if tf15.get("volume_ok"):
         helpers.append(("GÜÇLÜ HACİM", 10))
 
-    # =========================
-    # ORDER BLOCK / L2-L3-L4
-    # =========================
+    # ORDER BLOCK / L2-L3
     df15 = tf15.get("df")
     if df15 is not None:
         if detect_three_peaks(df15["Close"]):
             helpers.append(("3LÜ TEPE", 8))
-
         if detect_order_block(df15):
             helpers.append(("ORDER BLOCK", 15))
+        helpers.extend(detect_l2_l3_l4(df15, item["current_price"]))
 
-        helpers.extend(
-            detect_l2_l3_l4(df15, item["current_price"])
-        )
-
-    # =========================
-    # 1H YAPISAL KIRILIM
-    # =========================
+    # 1H KIRILIM
     if tf1h and detect_support_resistance_break(tf1h["df"]):
         helpers.append(("1H YAPISAL KIRILIM", 20))
 
-    # =========================
-    # 4H TREND + SIKIŞMA
-    # =========================
+    # 4H KIRILIM
     if tf4h:
         if detect_support_resistance_break(tf4h["df"]):
             helpers.append(("4H TREND KIRILIMI", 25))
-
         if detect_4h_squeeze_breakout(tf4h["df"]):
             helpers.append(("4H SIKIŞMA KIRILIMI (ONAYLI)", 30))
 
-    # =========================
-    # EMA HİZALANMASI
-    # =========================
+    # EMA ONAY
     if tf1h and tf4h:
         if (
             tf15["ema20"] > tf15["ema50"] and
@@ -300,27 +311,23 @@ def helper_indicators(item):
         ):
             helpers.append(("ÇOKLU ZAMAN EMA ONAYI", 10))
 
-    # =========================
-    # GOLDEN CROSS (1D)
-    # =========================
+    # GOLDEN CROSS
     if tf1d and tf1d.get("ema50") > tf1d.get("ema200"):
         helpers.append(("GOLDEN CROSS", 10))
 
-    # =========================
-    # MOST 4H + 1D (ANA TREND)
-    # =========================
+    # MOST
     if tf4h:
-        most_4h = detect_most_trend(tf4h["df"])
-        if most_4h == "UP":
+        m4 = detect_most_trend(tf4h["df"])
+        if m4 == "UP":
             helpers.append(("MOST 4H YUKARI", 18))
-        elif most_4h == "DOWN":
+        elif m4 == "DOWN":
             helpers.append(("MOST 4H AŞAĞI", -20))
 
     if tf1d:
-        most_1d = detect_most_trend(tf1d["df"])
-        if most_1d == "UP":
+        m1 = detect_most_trend(tf1d["df"])
+        if m1 == "UP":
             helpers.append(("MOST 1D YUKARI", 22))
-        elif most_1d == "DOWN":
+        elif m1 == "DOWN":
             helpers.append(("MOST 1D AŞAĞI", -30))
 
     return helpers
@@ -338,23 +345,18 @@ def kombine_signal(item):
     if not tf1d or not tf4h or not tf1h:
         return None
 
-    # 1D: son TAMAMLANMIŞ mum yeşil
     if not is_green(tf1d["df"], -2):
         return None
 
-    # 4H: kırmızı → ilk yeşil dönüş
     if not is_4h_first_green_after_red(tf4h["df"]):
         return None
 
-    # 1H: aktif mum yeşil
     if not is_green(tf1h["df"], -1):
         return None
 
-    # RSI filtre
     if tf1d["rsi"] >= 50:
         return None
 
-    # 15m LIVE EMA
     e20 = tf15.get("ema20_live")
     e50 = tf15.get("ema50_live")
     e200 = tf15.get("ema200_live")
@@ -363,6 +365,7 @@ def kombine_signal(item):
         return None
 
     return {"main_type": "KOMBİNE", "base_strength": 55}
+
 
 def super_kombine_signal(item):
     tf15 = item["tf"]["15m"]
@@ -373,19 +376,15 @@ def super_kombine_signal(item):
     if not tf1d or not tf4h or not tf1h:
         return None
 
-    # 1D: ardışık 2 yeşil
     if not (is_green(tf1d["df"], -2) and is_green(tf1d["df"], -1)):
         return None
 
-    # 4H: trend yeşil
     if not is_4h_trend_green(tf4h["df"]):
         return None
 
-    # 1H: aktif yeşil
     if not is_green(tf1h["df"], -1):
         return None
 
-    # RSI daha sıkı
     if tf1d["rsi"] >= 48:
         return None
 
@@ -399,32 +398,24 @@ def super_kombine_signal(item):
     return {"main_type": "SÜPER KOMBİNE", "base_strength": 75}
 
 # ======================================================
-# PROCESS SYMBOL
-# ===============
+# PROCESS SYMBOL SIGNALS
+# ======================================================
+
 def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
-    # ======================================================
-    # ANA ALGO
-    # ======================================================
     main = super_kombine_signal(item) or kombine_signal(item)
     if not main:
         return []
 
     algo = main["main_type"]
 
-    # ======================================================
-    # HELPERS + POWER
-    # ======================================================
     helpers = helper_indicators(item)
     helper_map = {h[0]: h[1] for h in helpers}
     helper_names = set(helper_map.keys())
 
-    total_power = sum(
-        p for p in helper_map.values()
-        if isinstance(p, (int, float))
-    )
+    total_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
 
     key = (symbol, algo)
     prev = LAST_SIGNAL_STATE.get(key, {})
@@ -436,9 +427,6 @@ def process_symbol_signals(item):
     added_helpers = list(helper_names - prev_helpers)
     removed_helpers = list(prev_helpers - helper_names)
 
-    # ======================================================
-    # MOST (1H + 4H)
-    # ======================================================
     tf1h = item["tf"].get("1h")
     tf4h = item["tf"].get("4h")
 
@@ -446,57 +434,28 @@ def process_symbol_signals(item):
     most_4h = detect_most_trend(tf4h["df"]) if tf4h else None
 
     prev_most_4h = prev.get("most_4h")
-
     most_downgrade = prev_most_4h == "UP" and most_4h == "DOWN"
-    most_upgrade   = prev_most_4h == "DOWN" and most_4h == "UP"
+    most_upgrade = prev_most_4h == "DOWN" and most_4h == "UP"
 
     if most_downgrade:
         helper_names.add("MOST KIRILIMI")
         helper_map["MOST KIRILIMI"] = -50
 
-    # ======================================================
-    # SEVİYE SAYIMI
-    # ======================================================
     levels = {"A": 0, "B": 0, "C": 0}
     for h in helper_names:
         lvl = HELPER_LEVELS.get(h)
         if lvl:
             levels[lvl] += 1
 
-    # ======================================================
-    # TEMEL AKSİYON
-    # ======================================================
     if levels["A"] >= 1:
-        action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye Onay"
+        action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye"
     elif levels["B"] >= 1:
-        action, category, title = "AL", "combo", "📈 AL – B Seviye Onay"
+        action, category, title = "AL", "combo", "📈 AL – B Seviye"
     elif levels["C"] >= 1:
-        action, category, title = "İZLE", "watch", "👀 İZLE – Erken Yapı"
+        action, category, title = "İZLE", "watch", "👀 İZLE"
     else:
         return []
 
-    # ======================================================
-    # MOST DOWNGRADE / UPGRADE
-    # ======================================================
-    if most_downgrade:
-        if action == "GÜÇLÜ AL":
-            action, category = "AL", "combo"
-            title = "⚠️ MOST 4H AŞAĞI – GÜÇ DÜŞÜRÜLDÜ"
-        elif action == "AL":
-            action, category = "İZLE", "watch"
-            title = "⛔ MOST 4H AŞAĞI – İZLE"
-
-    if most_upgrade:
-        if action == "İZLE":
-            action, category = "AL", "combo"
-            title = "✅ MOST 4H YUKARI – TEKRAR AL"
-        elif action == "AL":
-            action, category = "GÜÇLÜ AL", "strong"
-            title = "🚀 MOST 4H YUKARI – GÜÇLÜ AL"
-
-    # ======================================================
-    # POWER DEĞİŞİMİ
-    # ======================================================
     strengthened = False
     weakened = False
 
@@ -509,9 +468,6 @@ def process_symbol_signals(item):
             title = "⚠️ ZAYIFLAYAN SİNYAL"
             category = "watch"
 
-    # ======================================================
-    # REPEAT BLOCK
-    # ======================================================
     if in_repeat_block(symbol, algo) and not (
         strengthened or weakened or most_upgrade or most_downgrade
     ):
@@ -519,9 +475,6 @@ def process_symbol_signals(item):
 
     mark_sent(symbol, algo)
 
-    # ======================================================
-    # HISTORY
-    # ======================================================
     now_h = tr_now().strftime("%H:%M")
     history = prev.get("history", [(now_h, f"{algo} sinyal")])
 
@@ -530,94 +483,54 @@ def process_symbol_signals(item):
     if removed_helpers:
         history.append((now_h, f"Çıktı: {', '.join(removed_helpers)}"))
 
-    if most_downgrade:
-        history.append((now_h, "MOST 4H aşağı – downgrade"))
-    if most_upgrade:
-        history.append((now_h, "MOST 4H yukarı – upgrade"))
-
-    if strengthened:
-        history.append((now_h, f"Güç arttı (+{power_delta})"))
-    if weakened:
-        history.append((now_h, f"Güç düştü ({power_delta})"))
-
-    # ======================================================
-    # STATE KAYDI
-    # ======================================================
     LAST_SIGNAL_STATE[key] = {
-        "action": action,
-        "history": history,
         "power": total_power,
         "helpers": list(helper_names),
-        "most_4h": most_4h
+        "most_4h": most_4h,
+        "history": history,
     }
 
-    # ======================================================
-    # DİRENÇLER
-    # ======================================================
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
-    # ======================================================
-    # ENTRY PRICE (SABİT)
-    # ======================================================
     today = tr_now().date()
     entry_price = None
     if (symbol, algo) in SUCCESS_TRACKER.get(today, {}):
         entry_price = SUCCESS_TRACKER[today][(symbol, algo)].get("entry")
 
-    # ======================================================
-    # SIGNAL OBJESİ
-    # ======================================================
     signal = {
         "symbol": symbol,
-
-        # 🔒 SABİT
         "entry_price": fmt(entry_price),
-
-        # 🔄 CANLI
         "price": fmt(price),
-
         "title": title,
         "action": action,
         "category": category,
         "main_algorithm": algo,
-
         "ema_trend": ema_trend(
             item["tf"]["15m"]["ema20_live"],
             item["tf"]["15m"]["ema50_live"],
             item["tf"]["15m"]["ema200_live"]
         ),
-
-        "volume_ok": bool(item["tf"]["15m"].get("volume_ok")),
-
         "helpers": list(helper_names),
         "helpers_detail": [
-            {
-                "name": h,
-                "level": HELPER_LEVELS[h],
-                "desc": HELPER_DESCRIPTIONS.get(h, "")
-            }
+            {"name": h, "level": HELPER_LEVELS[h], "desc": HELPER_DESCRIPTIONS.get(h, "")}
             for h in helper_names if h in HELPER_LEVELS
         ],
-
         "history": history,
         "time": tr_now().strftime("%H:%M:%S"),
-
         "resistance_1h": fmt(r1h),
         "resistance_4h": fmt(r4h),
-
         "power": total_power,
         "power_delta": power_delta,
-
         "most_1h": most_1h,
-        "most_4h": most_4h
+        "most_4h": most_4h,
     }
 
     register_success_candidate(signal)
-    return [signal] 
+    return [signal]
 
 # ======================================================
-# SUCCESS TRACK
+# SUCCESS TRACK (DAILY + WEEKLY ALTYAPI)
 # ======================================================
 
 def register_success_candidate(signal):
@@ -626,32 +539,31 @@ def register_success_candidate(signal):
 
     key = (signal["symbol"], signal["main_algorithm"])
 
-    # 🚫 Aynı gün aynı sinyal varsa ENTRY overwrite ETME
+    # Aynı gün aynı sinyal varsa ENTRY overwrite yok
     if key in SUCCESS_TRACKER[today]:
         return
 
-    # 🔒 Entry her zaman ilk sinyalin fiyatıdır
     entry_price = signal.get("price")
     if entry_price is None:
         return
 
     SUCCESS_TRACKER[today][key] = {
-        "entry": entry_price,                     # SABİT giriş fiyatı
-        "target": entry_price * (1 + TARGET_PCT), # hedef
-        "hit": False,                             # başarı durumu
+        "symbol": signal["symbol"],
+        "algo": signal["main_algorithm"],
+        "helpers": signal.get("helpers", []),
+        "entry": entry_price,
+        "target": entry_price * (1 + TARGET_PCT),
+        "hit": False,
         "entry_time": tr_now().strftime("%H:%M:%S"),
+        "entry_date": today,
     }
 
+
 # ======================================================
-# SUCCESS SIGNAL (DETAYLI)
+# SUCCESS TARGET UPDATE
 # ======================================================
 
 def update_success_targets(symbol, price):
-    """
-    Hedefe ulaşan sinyaller için:
-    - başarıyı işaretler
-    - detaylı SUCCESS SIGNAL üretir
-    """
     today = tr_now().date()
     success_signals = []
 
@@ -660,9 +572,8 @@ def update_success_targets(symbol, price):
         return []
 
     for (sym, algo), d in day_data.items():
-        if d.get("hit"):
+        if d["hit"]:
             continue
-
         if sym != symbol:
             continue
 
@@ -671,147 +582,109 @@ def update_success_targets(symbol, price):
             d["hit_price"] = price
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
 
-            entry = d.get("entry")
-            target = d.get("target")
+            entry = d["entry"]
 
-            # 🎯 SUCCESS SIGNAL OBJESİ
-            success_signal = {
+            success_signals.append({
                 "symbol": sym,
                 "title": "🎯 HEDEF GELDİ",
                 "price": fmt(price),
-
                 "action": "BAŞARILI",
                 "category": "success",
                 "main_algorithm": algo,
-
-                # 🎯 başarı detayları
                 "entry_price": fmt(entry),
-                "target_price": fmt(target),
+                "target_price": fmt(d["target"]),
                 "hit_price": fmt(price),
-
-                "gain_pct": (
-                    round(((price - entry) / entry) * 100, 2)
-                    if entry else None
-                ),
-
+                "gain_pct": round(((price - entry) / entry) * 100, 2),
                 "time": d["hit_time"],
-
-                # dashboard için
+                "helpers": d.get("helpers", []),
                 "history": [
-                    ("ENTRY", f"İlk sinyal fiyatı: {fmt(entry)}"),
-                    ("TARGET", f"Hedef fiyat: {fmt(target)}"),
-                    ("HIT", f"Hedefe ulaşılan fiyat: {fmt(price)}"),
+                    ("ENTRY", f"{fmt(entry)}"),
+                    ("TARGET", f"{fmt(d['target'])}"),
+                    ("HIT", f"{fmt(price)}"),
                 ],
-            }
-
-            success_signals.append(success_signal)
+            })
 
     return success_signals
+
 
 # ======================================================
 # TELEGRAM FORMAT
 # ======================================================
 
 def format_signal_message(signal):
-    # ======================================================
-    # SUCCESS SIGNAL FORMAT
-    # ======================================================
+    # ---------------- SUCCESS ----------------
     if signal.get("category") == "success":
         return "\n".join([
             "🎯 HEDEF GELDİ",
-            f"📊 {signal.get('symbol')}",
+            f"📊 {signal['symbol']}",
             "",
-            f"🎯 Giriş Fiyatı: {signal.get('entry_price')}",
-            f"📈 Hedef Fiyat: {signal.get('target_price')}",
-            f"✅ Gerçekleşen: {signal.get('hit_price')}",
+            f"🎯 Giriş: {signal['entry_price']}",
+            f"📈 Hedef: {signal['target_price']}",
+            f"✅ Gerçekleşen: {signal['hit_price']}",
             "",
-            f"💰 Kazanç: %{signal.get('gain_pct')}",
+            f"💰 Kazanç: %{signal['gain_pct']}",
             "",
-            f"⏰ {signal.get('time')}",
+            f"⏰ {signal['time']}",
         ])
 
-    # ======================================================
-    # NORMAL SIGNAL FORMAT
-    # ======================================================
+    # ---------------- NORMAL ----------------
     lines = []
-
-    # BAŞLIK
-    lines.append(f"📊 {signal.get('symbol')}")
-    lines.append(f"🏷 {signal.get('title')}")
+    lines.append(f"📊 {signal['symbol']}")
+    lines.append(f"🏷 {signal['title']}")
     lines.append("")
 
-    # FİYAT BİLGİSİ
     if signal.get("entry_price"):
-        lines.append(f"🎯 Giriş Fiyatı: {signal.get('entry_price')}")
-    lines.append(f"💰 Canlı Fiyat: {signal.get('price')}")
+        lines.append(f"🎯 Giriş Fiyatı: {signal['entry_price']}")
+    lines.append(f"💰 Canlı Fiyat: {signal['price']}")
 
-    # TEMEL BİLGİLER
-    lines.append(f"⚡ Sinyal: {signal.get('action')}")
-    lines.append(f"🧠 Algo: {signal.get('main_algorithm')}")
-    lines.append(f"📈 Trend: {signal.get('ema_trend')}")
-    lines.append(
-        f"📊 Hacim: {'YÜKSEK' if signal.get('volume_ok') else 'Normal'}"
-    )
+    lines.append(f"⚡ Sinyal: {signal['action']}")
+    lines.append(f"🧠 Algo: {signal['main_algorithm']}")
+    lines.append(f"📈 Trend: {signal['ema_trend']}")
 
-    # MOST DURUMU
-    most_1h = signal.get("most_1h")
-    most_4h = signal.get("most_4h")
-    if most_1h or most_4h:
+    if signal.get("most_1h") or signal.get("most_4h"):
         lines.append("")
-        lines.append("🧭 MOST Durumu:")
-        if most_1h:
-            lines.append(
-                f"• 1H: {'⬆️ YUKARI' if most_1h == 'UP' else '⬇️ AŞAĞI'}"
-            )
-        if most_4h:
-            lines.append(
-                f"• 4H: {'⬆️ YUKARI' if most_4h == 'UP' else '⬇️ AŞAĞI'}"
-            )
+        lines.append("🧭 MOST:")
+        if signal.get("most_1h"):
+            lines.append(f"• 1H: {'⬆️' if signal['most_1h']=='UP' else '⬇️'}")
+        if signal.get("most_4h"):
+            lines.append(f"• 4H: {'⬆️' if signal['most_4h']=='UP' else '⬇️'}")
 
-    # DİRENÇLER
     if signal.get("resistance_1h") or signal.get("resistance_4h"):
         lines.append("")
-        lines.append("🎯 Direnç Seviyeleri:")
+        lines.append("🎯 Dirençler:")
         if signal.get("resistance_1h"):
-            lines.append(f"• 1H: {signal.get('resistance_1h')}")
+            lines.append(f"• 1H: {signal['resistance_1h']}")
         if signal.get("resistance_4h"):
-            lines.append(f"• 4H: {signal.get('resistance_4h')}")
+            lines.append(f"• 4H: {signal['resistance_4h']}")
 
-    # YARDIMCI ONAYLAR
     helpers = signal.get("helpers_detail", [])
     if helpers:
         lines.append("")
-        lines.append("🧩 Yardımcı Onaylar:")
+        lines.append("🧩 Yardımcılar:")
         for h in helpers:
-            lines.append(
-                f"• [{h.get('level')}] {h.get('name')} – {h.get('desc')}"
-            )
+            lines.append(f"• [{h['level']}] {h['name']}")
 
-    # GÜÇ DEĞİŞİMİ
-    power_delta = signal.get("power_delta")
-    if isinstance(power_delta, (int, float)) and power_delta != 0:
+    if signal.get("power_delta"):
         lines.append("")
-        if power_delta > 0:
-            lines.append(f"🔥 Güç Artışı: +{power_delta}")
-        else:
-            lines.append(f"⚠️ Güç Azalışı: {power_delta}")
+        lines.append(
+            f"{'🔥' if signal['power_delta']>0 else '⚠️'} "
+            f"Güç Değişimi: {signal['power_delta']}"
+        )
 
-    # GEÇMİŞ (SON 4)
-    history = signal.get("history", [])
-    if history:
+    if signal.get("history"):
         lines.append("")
-        lines.append("🕒 Sinyal Gelişimi:")
-        for t, msg in history[-4:]:
+        lines.append("🕒 Gelişim:")
+        for t, msg in signal["history"][-4:]:
             lines.append(f"{t} → {msg}")
 
-    # ZAMAN
     lines.append("")
-    lines.append(f"⏰ {signal.get('time')}")
+    lines.append(f"⏰ {signal['time']}")
 
     return "\n".join(lines)
 
+
 # ======================================================
-# BULK
+# BULK PROCESS
 # ======================================================
 
 def process_signals(data):
@@ -819,11 +692,11 @@ def process_signals(data):
 
     for item in data:
         try:
-            # normal sinyaller
+            # Normal sinyaller
             signals = process_symbol_signals(item)
             out.extend(signals)
 
-            # başarı kontrolü (canlı fiyatla)
+            # Başarı kontrolü
             symbol = item["symbol"]
             price = item["current_price"]
 
