@@ -19,6 +19,32 @@ MAX_LOOKBACK = {
 }
 
 # ======================================================
+# YF DATETIME NORMALIZER (KRİTİK)
+# ======================================================
+def normalize_yf_df(df):
+    """
+    yfinance bazen Datetime index verir, bazen Date.
+    Bu fonksiyon her durumda Datetime index üretir.
+    """
+    if df is None or df.empty:
+        return None
+
+    df = df.copy()
+
+    # index datetime değilse çevir
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index, errors="coerce")
+
+    # index adı ne olursa olsun Datetime yap
+    df["Datetime"] = df.index
+    df["Datetime"] = pd.to_datetime(df["Datetime"], utc=True, errors="coerce")
+
+    df = df.dropna(subset=["Datetime"])
+    df = df.set_index("Datetime")
+
+    return df if not df.empty else None
+
+# ======================================================
 # INDICATORS
 # ======================================================
 def compute_ema(series, period):
@@ -61,7 +87,7 @@ def resample_df(df, rule):
         return None
 
 # ======================================================
-# YFINANCE FETCH (SAFE)
+# YFINANCE FETCH (SAFE + FIXED)
 # ======================================================
 def fetch_yf(symbol, interval):
     try:
@@ -87,10 +113,7 @@ def fetch_yf(symbol, interval):
         if not required.issubset(df.columns):
             return None
 
-        df = df.reset_index()
-        df["Datetime"] = pd.to_datetime(df["Datetime"], utc=True)
-        df = df.set_index("Datetime")
-
+        df = normalize_yf_df(df)
         return df
 
     except Exception as e:
@@ -110,7 +133,7 @@ def build_tf_data(symbol, live_price=None):
     close = pd.Series(base_df["Close"]).astype(float)
     volume = pd.Series(base_df["Volume"]).astype(float)
 
-    # 15m NORMAL
+    # 15m
     base_df["ema20"] = compute_ema(close, 20)
     base_df["ema50"] = compute_ema(close, 50)
     base_df["ema200"] = compute_ema(close, 200)
@@ -119,13 +142,12 @@ def build_tf_data(symbol, live_price=None):
     vol_ma = volume.rolling(20).mean()
     base_df["volume_ok"] = volume > (vol_ma * 1.5)
 
-    # 🔥 LIVE EMA (HAYALİ 15M MUM)
     ema20_live = ema50_live = ema200_live = None
     if live_price is not None:
-        hybrid_close = close.tolist() + [float(live_price)]
-        ema20_live = float(compute_ema(hybrid_close, 20).iloc[-1])
-        ema50_live = float(compute_ema(hybrid_close, 50).iloc[-1])
-        ema200_live = float(compute_ema(hybrid_close, 200).iloc[-1])
+        hybrid = close.tolist() + [float(live_price)]
+        ema20_live = float(compute_ema(hybrid, 20).iloc[-1])
+        ema50_live = float(compute_ema(hybrid, 50).iloc[-1])
+        ema200_live = float(compute_ema(hybrid, 200).iloc[-1])
 
     tf = {
         "15m": {
@@ -141,13 +163,12 @@ def build_tf_data(symbol, live_price=None):
         }
     }
 
-    # 1H
     d1h = resample_df(base_df, "1h")
     if d1h is not None:
-        c1 = pd.Series(d1h["Close"]).astype(float)
-        d1h["ema20"] = compute_ema(c1, 20)
-        d1h["ema50"] = compute_ema(c1, 50)
-        d1h["rsi"] = compute_rsi(c1)
+        c = pd.Series(d1h["Close"]).astype(float)
+        d1h["ema20"] = compute_ema(c, 20)
+        d1h["ema50"] = compute_ema(c, 50)
+        d1h["rsi"] = compute_rsi(c)
         tf["1h"] = {
             "ema20": float(d1h["ema20"].iloc[-1]),
             "ema50": float(d1h["ema50"].iloc[-1]),
@@ -155,13 +176,12 @@ def build_tf_data(symbol, live_price=None):
             "df": d1h
         }
 
-    # 4H
     d4h = resample_df(base_df, "4h")
     if d4h is not None:
-        c4 = pd.Series(d4h["Close"]).astype(float)
-        d4h["ema20"] = compute_ema(c4, 20)
-        d4h["ema50"] = compute_ema(c4, 50)
-        d4h["rsi"] = compute_rsi(c4)
+        c = pd.Series(d4h["Close"]).astype(float)
+        d4h["ema20"] = compute_ema(c, 20)
+        d4h["ema50"] = compute_ema(c, 50)
+        d4h["rsi"] = compute_rsi(c)
         tf["4h"] = {
             "ema20": float(d4h["ema20"].iloc[-1]),
             "ema50": float(d4h["ema50"].iloc[-1]),
@@ -169,13 +189,12 @@ def build_tf_data(symbol, live_price=None):
             "df": d4h
         }
 
-    # 1D (ZORUNLU)
     d1d = fetch_yf(symbol, "1d")
     if d1d is not None and len(d1d) >= 3:
-        c1d = pd.Series(d1d["Close"]).astype(float)
-        d1d["ema50"] = compute_ema(c1d, 50)
-        d1d["ema200"] = compute_ema(c1d, 200)
-        d1d["rsi"] = compute_rsi(c1d)
+        c = pd.Series(d1d["Close"]).astype(float)
+        d1d["ema50"] = compute_ema(c, 50)
+        d1d["ema200"] = compute_ema(c, 200)
+        d1d["rsi"] = compute_rsi(c)
         tf["1d"] = {
             "ema50": float(d1d["ema50"].iloc[-1]),
             "ema200": float(d1d["ema200"].iloc[-1]),
