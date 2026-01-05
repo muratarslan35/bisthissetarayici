@@ -520,7 +520,7 @@ def process_symbol_signals(item):
     mark_sent(symbol, algo)
 
     # ======================================================
-    # HISTORY (NEDEN?)
+    # HISTORY
     # ======================================================
     now_h = tr_now().strftime("%H:%M")
     history = prev.get("history", [(now_h, f"{algo} sinyal")])
@@ -558,12 +558,26 @@ def process_symbol_signals(item):
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
     # ======================================================
-    # SIGNAL OBJESİ (DASHBOARD + TELEGRAM)
+    # ENTRY PRICE (SABİT)
+    # ======================================================
+    today = tr_now().date()
+    entry_price = None
+    if (symbol, algo) in SUCCESS_TRACKER.get(today, {}):
+        entry_price = SUCCESS_TRACKER[today][(symbol, algo)].get("entry")
+
+    # ======================================================
+    # SIGNAL OBJESİ
     # ======================================================
     signal = {
         "symbol": symbol,
-        "title": title,
+
+        # 🔒 SABİT
+        "entry_price": fmt(entry_price),
+
+        # 🔄 CANLI
         "price": fmt(price),
+
+        "title": title,
         "action": action,
         "category": category,
         "main_algorithm": algo,
@@ -600,7 +614,8 @@ def process_symbol_signals(item):
     }
 
     register_success_candidate(signal)
-    return [signal]
+    return [signal] 
+
 # ======================================================
 # SUCCESS TRACK
 # ======================================================
