@@ -617,19 +617,71 @@ def register_success_candidate(signal):
         "hit": False
     }
 
+# ======================================================
+# SUCCESS SIGNAL (DETAYLI)
+# ======================================================
+
 def update_success_targets(symbol, price):
+    """
+    Hedefe ulaşan sinyaller için:
+    - başarıyı işaretler
+    - detaylı SUCCESS SIGNAL üretir
+    """
     today = tr_now().date()
-    hits = []
+    success_signals = []
 
-    for (sym, algo), d in SUCCESS_TRACKER.get(today, {}).items():
-        if sym == symbol and not d["hit"] and price >= d["target"]:
+    day_data = SUCCESS_TRACKER.get(today, {})
+    if not day_data:
+        return []
+
+    for (sym, algo), d in day_data.items():
+        if d.get("hit"):
+            continue
+
+        if sym != symbol:
+            continue
+
+        if price >= d["target"]:
             d["hit"] = True
-            hits.append({
-                "symbol": sym,
-                "algorithm": algo
-            })
+            d["hit_price"] = price
+            d["hit_time"] = tr_now().strftime("%H:%M:%S")
 
-    return hits
+            entry = d.get("entry")
+            target = d.get("target")
+
+            # 🎯 SUCCESS SIGNAL OBJESİ
+            success_signal = {
+                "symbol": sym,
+                "title": "🎯 HEDEF GELDİ",
+                "price": fmt(price),
+
+                "action": "BAŞARILI",
+                "category": "success",
+                "main_algorithm": algo,
+
+                # 🎯 başarı detayları
+                "entry_price": fmt(entry),
+                "target_price": fmt(target),
+                "hit_price": fmt(price),
+
+                "gain_pct": (
+                    round(((price - entry) / entry) * 100, 2)
+                    if entry else None
+                ),
+
+                "time": d["hit_time"],
+
+                # dashboard için
+                "history": [
+                    ("ENTRY", f"İlk sinyal fiyatı: {fmt(entry)}"),
+                    ("TARGET", f"Hedef fiyat: {fmt(target)}"),
+                    ("HIT", f"Hedefe ulaşılan fiyat: {fmt(price)}"),
+                ],
+            }
+
+            success_signals.append(success_signal)
+
+    return success_signals
 
 # ======================================================
 # TELEGRAM FORMAT
