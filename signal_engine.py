@@ -690,7 +690,22 @@ def update_success_targets(symbol, price):
 def format_signal_message(signal):
     lines = []
 
-    # ======================================================
+# ======================================================
+# SUCCESS SIGNAL FORMAT
+# ======================================================
+if signal.get("category") == "success":
+    return "\n".join([
+        f"🎯 HEDEF GELDİ",
+        f"📊 {signal['symbol']}",
+        "",
+        f"🎯 Giriş Fiyatı: {signal.get('entry_price')}",
+        f"📈 Hedef Fiyat: {signal.get('target_price')}",
+        f"✅ Gerçekleşen: {signal.get('hit_price')}",
+        "",
+        f"💰 Kazanç: %{signal.get('gain_pct')}",
+        "",
+        f"⏰ {signal.get('time')}",
+    ])# ======================================================
     # BAŞLIK
     # ======================================================
     lines.append(f"📊 {signal['symbol']}")
@@ -784,9 +799,21 @@ def format_signal_message(signal):
 
 def process_signals(data):
     out = []
+
     for item in data:
         try:
-            out.extend(process_symbol_signals(item))
+            # normal sinyaller
+            signals = process_symbol_signals(item)
+            out.extend(signals)
+
+            # başarı kontrolü (canlı fiyatla)
+            symbol = item["symbol"]
+            price = item["current_price"]
+
+            success_hits = update_success_targets(symbol, price)
+            out.extend(success_hits)
+
         except Exception:
             continue
+
     return out
