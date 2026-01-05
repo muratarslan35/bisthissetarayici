@@ -1,5 +1,10 @@
 import requests
 import numpy as np
+import pandas as pd
+
+# ======================================================
+# FALLBACK SYMBOLS
+# ======================================================
 
 FALLBACK_SYMBOLS = [
     "ADESE.IS","ADEL.IS","AEFES.IS","AGHOL.IS","AGLYO.IS","AHGAZ.IS","AHSKY.IS","AKBNK.IS","AKENR.IS",
@@ -30,6 +35,26 @@ FALLBACK_SYMBOLS = [
     "VESPA.IS","VESTL.IS","YEOTK.IS","YGGYO.IS","YKBNK.IS","YONGA.IS","YUNSA.IS","YYAPI.IS","ZEDUR.IS","ZOREN.IS"
 ]
 
+# ======================================================
+# DATETIME NORMALIZER (KRİTİK FIX)
+# ======================================================
+
+def normalize_datetime(df):
+    if df is None or df.empty:
+        return None
+
+    if "Datetime" not in df.columns:
+        if isinstance(df.index, pd.DatetimeIndex):
+            df = df.copy()
+            df["Datetime"] = df.index
+            df.reset_index(drop=True, inplace=True)
+
+    return df
+
+# ======================================================
+# SYMBOL / PRICE
+# ======================================================
+
 def resolve_symbols(data):
     if not data or not isinstance(data, dict):
         return FALLBACK_SYMBOLS
@@ -52,50 +77,71 @@ def fetch_tradingview_price(symbol):
     except Exception:
         return None
 
+# ======================================================
+# SUPPORT / RESISTANCE
+# ======================================================
+
 def nearest_support_resistance_from_history(df, window=50):
+    df = normalize_datetime(df)
+
     if df is None or len(df) < window:
         return []
+
     closes = df["Close"].tail(window).values
     levels = []
+
     for i in range(2, len(closes) - 2):
         if closes[i] > closes[i-1] and closes[i] > closes[i+1]:
             levels.append({"level": closes[i], "strength": 3})
         elif closes[i] < closes[i-1] and closes[i] < closes[i+1]:
             levels.append({"level": closes[i], "strength": 3})
+
     return levels
 
 def detect_support_resistance_break(df):
+    df = normalize_datetime(df)
+
     if df is None or len(df) < 20:
         return None
+
     last = df.iloc[-1]
     prev = df.iloc[-20:-1]
+
     if last["Close"] > prev["High"].max():
         return {"type": "RESISTANCE_BREAK"}
     if last["Close"] < prev["Low"].min():
         return {"type": "SUPPORT_BREAK"}
+
     return None
+
+# ======================================================
+# PATTERN
+# ======================================================
 
 def detect_three_peaks(series):
     if series is None or len(series) < 30:
         return False
+
     peaks = []
     values = series.values if hasattr(series, "values") else series
+
     for i in range(2, len(values) - 2):
         if values[i] > values[i-1] and values[i] > values[i+1]:
             peaks.append(values[i])
+
     return len(peaks) >= 3
-    
+
+# ======================================================
+# LAST RESISTANCE
+# ======================================================
+
 def get_last_resistance(df, min_strength=3):
-    """
-    Verilen timeframe datasından en yakın ÜST direnç seviyesini döndürür
-    """
+    df = normalize_datetime(df)
+
     if df is None or len(df) < 30:
         return None
 
     levels = nearest_support_resistance_from_history(df)
-
-    if not levels:
-        return None
 
     strong_levels = [
         x["level"] for x in levels
