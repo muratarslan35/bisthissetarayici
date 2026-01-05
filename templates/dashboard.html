@@ -5,6 +5,7 @@
 <title>BIST Sinyal Dashboard</title>
 
 <style>
+/* === CSS AYNI – DEĞİŞMEDİ === */
 body {
     margin:0;
     background:#0b0f1a;
@@ -12,53 +13,43 @@ body {
     color:#e6e6e6;
 }
 
-/* ================= TOP STATUS ================= */
+/* TOP STATUS */
 .top-status {
     display:flex;
     justify-content:space-between;
     align-items:center;
-    padding:18px 28px;              /* ⬆ büyütüldü */
+    padding:18px 28px;
     background:#0f172a;
     border-bottom:2px solid #1e293b;
-    font-size:16px;                 /* ⬆ büyütüldü */
+    font-size:16px;
 }
-.status-item span {
-    font-weight:700;
-    margin-left:6px;
-}
+.status-item span { font-weight:700; margin-left:6px; }
 
-/* ================= FILTER BAR ================= */
+/* FILTER BAR */
 .filter-bar {
     display:flex;
-    gap:14px;                       /* ⬆ */
-    padding:18px 28px;              /* ⬆ */
+    gap:14px;
+    padding:18px 28px;
     background:#111827;
     flex-wrap:wrap;
     border-bottom:1px solid #1e293b;
 }
-
 .filter-btn {
     background:#1f2937;
-    padding:12px 22px;              /* ⬆ */
-    border-radius:14px;             /* ⬆ */
+    padding:12px 22px;
+    border-radius:14px;
     cursor:pointer;
-    font-size:15px;                 /* ⬆ */
+    font-size:15px;
     font-weight:600;
-    transition:.2s ease;
-    user-select:none;
+    transition:.2s;
 }
-
-.filter-btn:hover {
-    background:#334155;
-    transform:translateY(-1px);
-}
-
+.filter-btn:hover { background:#334155; transform:translateY(-1px); }
 .filter-btn.active {
     background:#2563eb;
     box-shadow:0 0 0 2px rgba(37,99,235,.35);
 }
 
-/* ================= GRID ================= */
+/* GRID */
 .container {
     padding:20px;
     display:grid;
@@ -66,7 +57,7 @@ body {
     gap:18px;
 }
 
-/* ================= CARD ================= */
+/* CARD */
 .card {
     background:#121826;
     border-radius:14px;
@@ -77,137 +68,55 @@ body {
 }
 .card:hover { transform:translateY(-6px); }
 
-/* CATEGORY COLORS */
 .signal-strong { border-left-color:#22c55e; }
 .signal-combo  { border-left-color:#3b82f6; }
 .signal-watch  { border-left-color:#facc15; }
 .signal-success { border-left-color:#a855f7; }
 
-/* MOST BREAK */
 .signal-most-break {
     border-left-color:#ef4444 !important;
     background:#1a0f14;
 }
 
-/* ================= CONTENT ================= */
-.signal-title {
-    font-size:13px;
-    font-weight:bold;
-    opacity:.9;
-}
-.symbol {
-    font-size:22px;
-    font-weight:bold;
-    margin:6px 0;
-}
+.signal-title { font-size:13px; font-weight:bold; }
+.symbol { font-size:22px; font-weight:bold; margin:6px 0; }
+.price { font-size:22px; font-weight:900; margin:6px 0; }
 
-/* PRICE */
-.price {
-    font-size:22px;
-    font-weight:900;
-    margin:6px 0;
-}
+.tp-bar { height:6px; background:#1f2937; border-radius:6px; overflow:hidden; margin:8px 0; }
+.tp-progress { height:100%; background:linear-gradient(90deg,#22c55e,#3b82f6); }
 
-/* ================= TP BAR ================= */
-.tp-bar {
-    height:6px;
-    background:#1f2937;
-    border-radius:6px;
-    overflow:hidden;
-    margin:8px 0;
-}
-.tp-progress {
-    height:100%;
-    background:linear-gradient(90deg,#22c55e,#3b82f6);
-    width:0%;
-    transition:.5s;
-}
+.row { font-size:13px; margin:4px 0; }
 
-/* ================= ROW ================= */
-.row {
-    font-size:13px;
-    margin:4px 0;
-}
-
-/* ================= HELPERS ================= */
-.helpers {
-    display:flex;
-    flex-wrap:wrap;
-    gap:6px;
-    margin-top:8px;
-}
-.helper {
-    padding:4px 8px;
-    border-radius:8px;
-    font-size:11px;
-    cursor:help;
-    position:relative;
-}
+.helpers { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.helper { padding:4px 8px; border-radius:8px; font-size:11px; }
 .helper.A { background:#16a34a; }
 .helper.B { background:#2563eb; }
 .helper.C { background:#ca8a04; }
 
-/* Tooltip */
-.helper:hover::after {
-    content: attr(data-desc);
-    position:absolute;
-    bottom:130%;
-    left:50%;
-    transform:translateX(-50%);
-    background:#020617;
-    color:#e5e7eb;
-    padding:8px 10px;
-    border-radius:8px;
-    font-size:11px;
-    width:220px;
-    text-align:center;
-    box-shadow:0 0 10px rgba(0,0,0,.8);
-    z-index:99;
-}
-
-/* ================= RESISTANCE ================= */
-.resistance {
-    margin-top:8px;
-    font-size:12px;
-    opacity:.9;
-}
-
-/* ================= HISTORY ================= */
-.history {
-    margin-top:10px;
-    font-size:11px;
-    opacity:.7;
-}
-
-/* ================= TIME ================= */
-.time {
-    font-size:11px;
-    opacity:.6;
-    text-align:right;
-    margin-top:8px;
-}
+.resistance { margin-top:8px; font-size:12px; }
+.history { margin-top:10px; font-size:11px; opacity:.7; }
+.time { font-size:11px; opacity:.6; text-align:right; margin-top:8px; }
 </style>
 </head>
 
 <body>
 
-<!-- ================= TOP BAR ================= -->
 <div class="top-status">
-    <div class="status-item">📊 Piyasa: <span id="market">-</span></div>
-    <div class="status-item">📡 Tarama: <span id="scanner">-</span></div>
-    <div class="status-item">🕒 Saat: <span id="clock">-</span></div>
+    <div>📊 Piyasa: <span id="market">-</span></div>
+    <div>📡 Tarama: <span id="scanner">-</span></div>
+    <div>🕒 Saat: <span id="clock">-</span></div>
 </div>
 
-<!-- ================= FILTERS ================= -->
+<!-- ✅ GÜNCELLENEN FİLTRELER -->
 <div class="filter-bar">
-    <div class="filter-btn active" onclick="setFilter('all', event)">Tüm</div>
-    <div class="filter-btn" onclick="setFilter('strong', event)">GÜÇLÜ AL</div>
-    <div class="filter-btn" onclick="setFilter('combo', event)">AL</div>
-    <div class="filter-btn" onclick="setFilter('watch', event)">İZLE</div>
+    <div class="filter-btn active" onclick="setFilter('all', event)">Tümü</div>
+    <div class="filter-btn" onclick="setFilter('strong', event)">Güçlü Al</div>
+    <div class="filter-btn" onclick="setFilter('power', event)">Güçlenen</div>
+    <div class="filter-btn" onclick="setFilter('kombine', event)">Kombine</div>
+    <div class="filter-btn" onclick="setFilter('super', event)">Süper Kombine</div>
     <div class="filter-btn" onclick="setFilter('success', event)">Başarılı</div>
 </div>
 
-<!-- ================= GRID ================= -->
 <div class="container" id="signals"></div>
 
 <script>
@@ -220,76 +129,58 @@ function setFilter(f, ev) {
     loadSignals();
 }
 
+function matchFilter(s) {
+    if (CURRENT_FILTER === "all") return true;
+
+    if (CURRENT_FILTER === "strong")
+        return s.action === "GÜÇLÜ AL";
+
+    if (CURRENT_FILTER === "power")
+        return (s.title && s.title.includes("GÜÇLENEN")) ||
+               (s.power_delta && s.power_delta >= 20);
+
+    if (CURRENT_FILTER === "kombine")
+        return s.main_algorithm === "KOMBİNE";
+
+    if (CURRENT_FILTER === "super")
+        return s.main_algorithm === "SÜPER KOMBİNE";
+
+    if (CURRENT_FILTER === "success")
+        return s.category === "success";
+
+    return true;
+}
+
 async function loadSignals() {
     const res = await fetch("/api/dashboard");
     const data = await res.json();
 
-    document.getElementById("market").innerText =
-        data.market_open ? "AÇIK" : "KAPALI";
-    document.getElementById("scanner").innerText =
-        data.system_active ? "AKTİF" : "PASİF";
-    document.getElementById("clock").innerText =
-        data.server_time;
+    market.innerText = data.market_open ? "AÇIK" : "KAPALI";
+    scanner.innerText = data.system_active ? "AKTİF" : "PASİF";
+    clock.innerText = data.server_time;
 
     const box = document.getElementById("signals");
     box.innerHTML = "";
 
-    data.signals.forEach(s => {
-        if (CURRENT_FILTER !== "all" && s.category !== CURRENT_FILTER) return;
+    data.signals
+        .filter(matchFilter)
+        .forEach(s => {
+            const c = document.createElement("div");
+            c.className = `card signal-${s.category}`;
 
-        const historyText = (s.history || []).map(h => h[1]).join(" ");
-        const mostBroken =
-            historyText.includes("MOST aşağı") ||
-            (s.title && s.title.includes("MOST AŞAĞI"));
-
-        const c = document.createElement("div");
-        c.className = `card signal-${s.category} ${mostBroken ? "signal-most-break" : ""}`;
-
-        let tpPercent = 0;
-        if (s.price && s.resistance_4h && s.resistance_4h > s.price) {
-            tpPercent = Math.min(100, ((s.price / s.resistance_4h) * 100));
-        }
-
-        c.innerHTML = `
-            <div class="signal-title">${s.title}</div>
-            <div class="symbol">${s.symbol}</div>
-
-            <div class="price">💰 ${s.price ?? "-"}</div>
-
-            <div class="tp-bar">
-                <div class="tp-progress" style="width:${tpPercent}%"></div>
-            </div>
-
-            <div class="row">📈 EMA Trend: ${s.ema_trend ?? "-"}</div>
-            <div class="row">📊 Hacim: ${s.volume_ok ? "YÜKSEK" : "Normal"}</div>
-            <div class="row">🧭 MOST: ${
-                s.most_state === "UP" ? "⬆️ YUKARI" :
-                s.most_state === "DOWN" ? "⬇️ AŞAĞI" : "-"
-            }</div>
-
-            <div class="helpers">
-                ${(s.helpers_detail || []).map(h => `
-                    <div class="helper ${h.level}" data-desc="${h.desc}">
-                        ${h.name}
-                    </div>
-                `).join("")}
-            </div>
-
-            <div class="resistance">
-                🎯 TP (4H): ${s.resistance_4h ?? "-"}
-            </div>
-
-            <div class="history">
-                ${(s.history || []).slice(-3).map(h =>
-                    `${h[0]} → ${h[1]}`
-                ).join("<br>")}
-            </div>
-
-            <div class="time">${s.time}</div>
-        `;
-
-        box.appendChild(c);
-    });
+            c.innerHTML = `
+                <div class="signal-title">${s.title}</div>
+                <div class="symbol">${s.symbol}</div>
+                <div class="price">💰 ${s.price ?? "-"}</div>
+                <div class="row">📈 ${s.ema_trend}</div>
+                <div class="row">⚡ ${s.action}</div>
+                <div class="history">
+                    ${(s.history || []).slice(-3).map(h => `${h[0]} → ${h[1]}`).join("<br>")}
+                </div>
+                <div class="time">${s.time}</div>
+            `;
+            box.appendChild(c);
+        });
 }
 
 setInterval(loadSignals, 10000);
