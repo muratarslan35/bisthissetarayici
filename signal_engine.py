@@ -235,7 +235,88 @@ def detect_most_trend(df):
 # ======================================================
 # YARDIMCI FORMASYONLAR
 # ======================================================
+# ======================================================
+# PROFESYONEL L2 / L3 / L4 SEVİYE ANALİZİ
+# ======================================================
 
+def detect_levels(df, window=120, tolerance=0.003):
+    levels = []
+    closes = df["Close"].values
+    volumes = df["Volume"].values
+
+    for i in range(5, len(closes) - 5):
+        price = closes[i]
+        touches = 0
+
+        for j in range(i-20, i+20):
+            if j < 0 or j >= len(closes):
+                continue
+            if abs(closes[j] - price) / price <= tolerance:
+                touches += 1
+
+        if touches >= 2:
+            levels.append({
+                "level": price,
+                "touches": touches,
+                "index": i,
+                "volume": volumes[i]
+            })
+
+    return levels
+
+
+def confirm_breakout(df, level, lookback=3):
+    last = df.iloc[-1]
+    prev = df.iloc[-lookback:-1]
+
+    vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
+
+    if last["Close"] <= level:
+        return False
+
+    if last["Volume"] < vol_ma:
+        return False
+
+    if any(prev["Close"] < level):
+        return True
+
+    return False
+
+
+def classify_level(df, lvl, tf):
+    touches = lvl["touches"]
+
+    if touches >= 4 and tf in ("4h", "1d"):
+        return ("L4 MAJÖR KIRILIM", 20)
+
+    if touches >= 3:
+        return ("L3 GÜÇLÜ KIRILIM", 12)
+
+    if touches >= 2:
+        return ("L2 KIRILIM", 6)
+
+    return None
+
+
+def detect_l2_l3_l4_pro(df, price, tf):
+    helpers = []
+    levels = detect_levels(df)
+
+    for lvl in levels:
+        level_price = lvl["level"]
+
+        if price <= level_price:
+            continue
+
+        if not confirm_breakout(df, level_price):
+            continue
+
+        res = classify_level(df, lvl, tf)
+        if res:
+            helpers.append(res)
+
+    return helpers
+    
 def detect_order_block(df):
     if df is None or len(df) < 20:
         return False
@@ -296,9 +377,34 @@ def helper_indicators(item):
             helpers.append(("3LÜ TEPE", 8))
         if detect_order_block(df15):
             helpers.append(("ORDER BLOCK", 15))
-        helpers.extend(
-            detect_l2_l3_l4(df15, item["current_price"])
+    # 15m → L2
+    helpers.extend(
+    detect_l2_l3_l4_pro(
+        item["tf"]["15m"]["df"],
+        item["current_price"],
+        tf="15m"
         )
+    )
+   # 1H → L3
+   if item["tf"].get("1h"):
+    helpers.extend(
+        detect_l2_l3_l4_pro(
+            item["tf"]["1h"]["df"],
+            item["current_price"],
+            tf="1h"
+        )
+    )
+
+   # 4H → L4
+   if item["tf"].get("4h"):
+    helpers.extend(
+        detect_l2_l3_l4_pro(
+            item["tf"]["4h"]["df"],
+            item["current_price"],
+            tf="4h"
+        )
+    )
+        
 
     # 1H KIRILIM
     if tf1h and detect_support_resistance_break(tf1h["df"]):
