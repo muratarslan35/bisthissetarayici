@@ -5,7 +5,6 @@ import numpy as np
 from utils import (
     detect_three_peaks,
     detect_support_resistance_break,
-    nearest_support_resistance_from_history,
     get_last_resistance
 )
 
@@ -236,21 +235,24 @@ def detect_most_trend(df):
 # YARDIMCI FORMASYONLAR
 # ======================================================
 # ======================================================
-# PROFESYONEL L2 / L3 / L4 SEVİYE ANALİZİ
+# PROFESYONEL L2 / L3 / L4 SEVİYE ANALİZİ (FINAL)
 # ======================================================
 
-def detect_levels(df, window=120, tolerance=0.003):
+def detect_levels(df, tolerance=0.003):
+    """
+    Profesyonel seviye tespiti:
+    - Aynı fiyat bölgesine tekrar tekrar temas
+    - Gürültü filtresi
+    """
     levels = []
     closes = df["Close"].values
     volumes = df["Volume"].values
 
-    for i in range(5, len(closes) - 5):
+    for i in range(20, len(closes) - 20):
         price = closes[i]
         touches = 0
 
-        for j in range(i-20, i+20):
-            if j < 0 or j >= len(closes):
-                continue
+        for j in range(i - 20, i + 20):
             if abs(closes[j] - price) / price <= tolerance:
                 touches += 1
 
@@ -258,60 +260,59 @@ def detect_levels(df, window=120, tolerance=0.003):
             levels.append({
                 "level": price,
                 "touches": touches,
-                "index": i,
                 "volume": volumes[i]
             })
 
     return levels
 
 
-def confirm_breakout(df, level, lookback=3):
+def confirm_breakout(df, level):
+    """
+    Gerçek kırılım şartları:
+    - Kapanış seviye üstü
+    - Hacim ortalama üstü
+    """
     last = df.iloc[-1]
-    prev = df.iloc[-lookback:-1]
-
     vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
 
-    if last["Close"] <= level:
-        return False
-
-    if last["Volume"] < vol_ma:
-        return False
-
-    if any(prev["Close"] < level):
-        return True
-
-    return False
+    return (
+        last["Close"] > level and
+        last["Volume"] >= vol_ma
+    )
 
 
-def classify_level(df, lvl, tf):
-    touches = lvl["touches"]
+def classify_level(lvl, tf):
+    """
+    Zaman dilimine göre seviye sınıflaması
+    """
+    t = lvl["touches"]
 
-    if touches >= 4 and tf in ("4h", "1d"):
+    if t >= 4 and tf in ("4h", "1d"):
         return ("L4 MAJÖR KIRILIM", 20)
 
-    if touches >= 3:
+    if t >= 3:
         return ("L3 GÜÇLÜ KIRILIM", 12)
 
-    if touches >= 2:
+    if t >= 2:
         return ("L2 KIRILIM", 6)
 
     return None
 
 
 def detect_l2_l3_l4_pro(df, price, tf):
+    """
+    TEK ve GERÇEK L2 / L3 / L4 kaynağı
+    """
     helpers = []
-    levels = detect_levels(df)
 
-    for lvl in levels:
-        level_price = lvl["level"]
-
-        if price <= level_price:
+    for lvl in detect_levels(df):
+        if price <= lvl["level"]:
             continue
 
-        if not confirm_breakout(df, level_price):
+        if not confirm_breakout(df, lvl["level"]):
             continue
 
-        res = classify_level(df, lvl, tf)
+        res = classify_level(lvl, tf)
         if res:
             helpers.append(res)
 
@@ -328,23 +329,6 @@ def detect_order_block(df):
 
     return df.iloc[-1]["Close"] > reds.iloc[-1]["High"]
 
-def detect_l2_l3_l4(df, price):
-    helpers = []
-    levels = nearest_support_resistance_from_history(df)
-
-    for lvl in levels:
-        if price <= lvl["level"]:
-            continue
-
-        s = lvl.get("strength", 0)
-        if s == 4:
-            helpers.append(("L4 MAJÖR KIRILIM", 20))
-        elif s == 3:
-            helpers.append(("L3 GÜÇLÜ KIRILIM", 12))
-        elif s == 2:
-            helpers.append(("L2 KIRILIM", 6))
-
-    return helpers
 
 # ======================================================
 # HELPER INDICATORS (ANA TOPLAMA)
