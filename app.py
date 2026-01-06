@@ -10,9 +10,12 @@ from flask import Flask, jsonify, render_template
 from fetch_bist import fetch_bist_data
 from signal_engine import (
     process_symbol_signals,
-    format_signal_message,
     update_success_targets,
-    SUCCESS_TRACKER,
+    format_signal_message,
+    build_daily_success_report,
+    build_weekly_success_report,
+    reset_daily_success_if_needed,
+    reset_weekly_success_if_needed,
     tr_now
 )
 
@@ -71,7 +74,6 @@ def is_market_open(now=None):
 # ======================================================
 def send_telegram_message(text: str):
     if not TELEGRAM_ENABLED:
-        print("⚠ Telegram kapalı", flush=True)
         return
 
     import requests
@@ -87,133 +89,100 @@ def send_telegram_message(text: str):
                 },
                 timeout=5
             )
-        except Exception as e:
-            print("⚠ Telegram hata:", e, flush=True)
+        except Exception:
+            pass
 
 # ======================================================
 # STARTUP
 # ======================================================
 def send_startup_message():
-    msg = (
-        "🟢 <b>BIST TARAMA SİSTEMİ BAŞLATILDI</b>\n\n"
-        f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}\n"
-        "📡 Scanner aktif"
-    )
-    send_telegram_message(msg)
-
-# ======================================================
-# DAILY REPORT
-# ======================================================
-def daily_success_summary():
-    today = tr_now().date()
-    hits = SUCCESS_TRACKER.get(today, {})
-    lines = [
-        f"{s} – {a} 🎯"
-        for (s, a), d in hits.items()
-        if d.get("hit")
-    ]
-    if not lines:
-        return None
-    return "📊 Gün Sonu Başarı Raporu\n" + "\n".join(lines)
-
-def send_daily_success_report():
-    report = daily_success_summary()
-    if report:
-        send_telegram_message(report)
-
-# ======================================================
-# SIGNAL REPEAT CONTROL (YENİ)
-# ======================================================
-LAST_SENT_SIGNAL = {}
-
-def is_duplicate_signal(signal):
-    key = (
-        signal["symbol"],
-        signal["main_algorithm"],
-        signal["action"]
+    send_telegram_message(
+        "🟢 <b>BIST TARAMA SİSTEMİ BAŞLATILDI</b>\n"
+        f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
     )
 
-    prev = LAST_SENT_SIGNAL.get(key)
-
-    current_power = signal.get("power", 0)
-    current_most = signal.get("most_state")
-
-    if prev:
-        # MOST değiştiyse ENGELLEME
-        if prev.get("most_state") != current_most:
-            pass
-        elif current_power <= prev.get("power", 0):
-            return True
-
-    LAST_SENT_SIGNAL[key] = {
-        "power": current_power,
-        "most_state": current_most,
-        "time": signal.get("time")
-    }
-    return False
 # ======================================================
 # SCANNER LOOP
 # ======================================================
 def scanner_loop():
     send_startup_message()
-    last_report_day = None
+
+    last_daily_report = None
+    last_weekly_report = None
 
     while True:
         now = now_tr()
-        print(f"\n⏱ Döngü tick: {now.strftime('%H:%M:%S')}", flush=True)
+        print(f"\n⏱ Döngü: {now.strftime('%H:%M:%S')}", flush=True)
+
+        # 🔁 RESETLER (signal_engine kontrol eder)
+        reset_daily_success_if_needed()
+        reset_weekly_success_if_needed()
 
         try:
             if not is_market_open(now):
-                print("⏹ Market kapalı – beklemede", flush=True)
+                print("⏹ Market kapalı", flush=True)
 
-                if last_report_day != now.date() and now.time() > BIST_CLOSE:
-                    send_daily_success_report()
-                    last_report_day = now.date()
+                # 🟢 Günlük rapor (kapanış sonrası 1 kere)
+                if (
+                    last_daily_report != now.date()
+                    and now.time() > BIST_CLOSE
+                ):
+                    report = build_daily_success_report()
+                    if report:
+                        send_telegram_message(report)
+                    last_daily_report = now.date()
 
                 time.sleep(30)
                 continue
 
-            print("✅ MARKET AÇIK → TARAMA BAŞLIYOR", flush=True)
+            print("✅ MARKET AÇIK → TARAMA", flush=True)
 
             try:
                 market_data = fetch_bist_data()
             except Exception as e:
-                print("🔥 fetch_bist_data çökmesi:", e, flush=True)
+                print("🔥 fetch_bist_data hata:", e, flush=True)
                 time.sleep(5)
                 continue
 
-            print(f"📈 Taranan hisse: {len(market_data)}", flush=True)
+            print(f"📈 Hisse sayısı: {len(market_data)}", flush=True)
 
             for item in market_data:
                 symbol = item.get("symbol")
+                price = item.get("current_price")
 
                 try:
+                    # 📌 NORMAL SİNYALLER
                     signals = process_symbol_signals(item)
-                    successes = update_success_targets(
-                        symbol, item["current_price"]
-                    )
 
-                    for s in successes:
-                        push_success_signal({
-                            "symbol": symbol,
-                            "algorithm": s["algorithm"],
-                            "time": now.strftime("%H:%M:%S")
-                        })
+                    # 📌 BAŞARI KONTROLÜ (daily + weekly + friday snapshot içerir)
+                    success_hits = update_success_targets(symbol, price)
 
-                    for signal in signals:
-                        if is_duplicate_signal(signal):
-                            continue
-
-                        push_signal(signal)
+                    for s in success_hits:
+                        push_success_signal(s)
                         send_telegram_message(
-                            format_signal_message(signal)
+                            format_signal_message(s)
+                        )
+
+                    for s in signals:
+                        push_signal(s)
+                        send_telegram_message(
+                            format_signal_message(s)
                         )
 
                 except Exception as e:
-                    print(f"⚠ {symbol} işlenirken hata:", e, flush=True)
+                    print(f"⚠ {symbol} hata:", e, flush=True)
 
         except Exception as e:
             print("🔥 Scanner genel hata:", e, flush=True)
+
+        # 📊 HAFTALIK RAPOR (CUMA 18:10 sonrası – 1 kere)
+        if now.weekday() == 4 and now.time() >= dtime(18, 10):
+            week_id = now.strftime("%Y-%W")
+            if last_weekly_report != week_id:
+                report = build_weekly_success_report()
+                if report:
+                    send_telegram_message(report)
+                last_weekly_report = week_id
 
         time.sleep(SCAN_INTERVAL)
 
@@ -241,4 +210,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-    )
+            )
