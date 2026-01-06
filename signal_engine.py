@@ -405,17 +405,30 @@ def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
+    # Günlük / haftalık reset
+    reset_daily_if_needed()
+    reset_weekly_if_needed()
+
+    # --------------------------------------------------
+    # ANA ALGORİTMA
+    # --------------------------------------------------
     main = super_kombine_signal(item) or kombine_signal(item)
     if not main:
         return []
 
     algo = main["main_type"]
 
+    # --------------------------------------------------
+    # HELPERS + POWER
+    # --------------------------------------------------
     helpers = helper_indicators(item)
     helper_map = {h[0]: h[1] for h in helpers}
     helper_names = set(helper_map.keys())
 
-    total_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
+    total_power = sum(
+        v for v in helper_map.values()
+        if isinstance(v, (int, float))
+    )
 
     key = (symbol, algo)
     prev = LAST_SIGNAL_STATE.get(key, {})
@@ -427,6 +440,9 @@ def process_symbol_signals(item):
     added_helpers = list(helper_names - prev_helpers)
     removed_helpers = list(prev_helpers - helper_names)
 
+    # --------------------------------------------------
+    # MOST (1H + 4H)
+    # --------------------------------------------------
     tf1h = item["tf"].get("1h")
     tf4h = item["tf"].get("4h")
 
@@ -434,19 +450,26 @@ def process_symbol_signals(item):
     most_4h = detect_most_trend(tf4h["df"]) if tf4h else None
 
     prev_most_4h = prev.get("most_4h")
+
     most_downgrade = prev_most_4h == "UP" and most_4h == "DOWN"
-    most_upgrade = prev_most_4h == "DOWN" and most_4h == "UP"
+    most_upgrade   = prev_most_4h == "DOWN" and most_4h == "UP"
 
     if most_downgrade:
         helper_names.add("MOST KIRILIMI")
         helper_map["MOST KIRILIMI"] = -50
 
+    # --------------------------------------------------
+    # SEVİYE SAYIMI
+    # --------------------------------------------------
     levels = {"A": 0, "B": 0, "C": 0}
     for h in helper_names:
         lvl = HELPER_LEVELS.get(h)
         if lvl:
             levels[lvl] += 1
 
+    # --------------------------------------------------
+    # AKSİYON
+    # --------------------------------------------------
     if levels["A"] >= 1:
         action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye"
     elif levels["B"] >= 1:
@@ -456,6 +479,28 @@ def process_symbol_signals(item):
     else:
         return []
 
+    # --------------------------------------------------
+    # MOST DOWNGRADE / UPGRADE
+    # --------------------------------------------------
+    if most_downgrade:
+        if action == "GÜÇLÜ AL":
+            action, category = "AL", "combo"
+            title = "⚠️ MOST 4H AŞAĞI – GÜÇ DÜŞÜRÜLDÜ"
+        elif action == "AL":
+            action, category = "İZLE", "watch"
+            title = "⛔ MOST 4H AŞAĞI – İZLE"
+
+    if most_upgrade:
+        if action == "İZLE":
+            action, category = "AL", "combo"
+            title = "✅ MOST 4H YUKARI – TEKRAR AL"
+        elif action == "AL":
+            action, category = "GÜÇLÜ AL", "strong"
+            title = "🚀 MOST 4H YUKARI – GÜÇLÜ AL"
+
+    # --------------------------------------------------
+    # POWER DEĞİŞİMİ
+    # --------------------------------------------------
     strengthened = False
     weakened = False
 
@@ -468,6 +513,9 @@ def process_symbol_signals(item):
             title = "⚠️ ZAYIFLAYAN SİNYAL"
             category = "watch"
 
+    # --------------------------------------------------
+    # REPEAT BLOCK
+    # --------------------------------------------------
     if in_repeat_block(symbol, algo) and not (
         strengthened or weakened or most_upgrade or most_downgrade
     ):
@@ -475,6 +523,9 @@ def process_symbol_signals(item):
 
     mark_sent(symbol, algo)
 
+    # --------------------------------------------------
+    # HISTORY
+    # --------------------------------------------------
     now_h = tr_now().strftime("%H:%M")
     history = prev.get("history", [(now_h, f"{algo} sinyal")])
 
@@ -483,6 +534,19 @@ def process_symbol_signals(item):
     if removed_helpers:
         history.append((now_h, f"Çıktı: {', '.join(removed_helpers)}"))
 
+    if most_downgrade:
+        history.append((now_h, "MOST 4H aşağı – downgrade"))
+    if most_upgrade:
+        history.append((now_h, "MOST 4H yukarı – upgrade"))
+
+    if strengthened:
+        history.append((now_h, f"Güç arttı (+{power_delta})"))
+    if weakened:
+        history.append((now_h, f"Güç düştü ({power_delta})"))
+
+    # --------------------------------------------------
+    # STATE KAYDI
+    # --------------------------------------------------
     LAST_SIGNAL_STATE[key] = {
         "power": total_power,
         "helpers": list(helper_names),
@@ -490,14 +554,25 @@ def process_symbol_signals(item):
         "history": history,
     }
 
+    # --------------------------------------------------
+    # DİRENÇLER
+    # --------------------------------------------------
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
-    today = tr_now().date()
-    entry_price = None
-    if (symbol, algo) in SUCCESS_TRACKER.get(today, {}):
-        entry_price = SUCCESS_TRACKER[today][(symbol, algo)].get("entry")
+    # --------------------------------------------------
+    # ENTRY (SABİT)
+    # --------------------------------------------------
+    t_key = today_key()
+    w_key = week_key()
 
+    entry_price = None
+    if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
+        entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
+
+    # --------------------------------------------------
+    # SIGNAL OBJESİ
+    # --------------------------------------------------
     signal = {
         "symbol": symbol,
         "entry_price": fmt(entry_price),
@@ -506,72 +581,86 @@ def process_symbol_signals(item):
         "action": action,
         "category": category,
         "main_algorithm": algo,
+
         "ema_trend": ema_trend(
             item["tf"]["15m"]["ema20_live"],
             item["tf"]["15m"]["ema50_live"],
             item["tf"]["15m"]["ema200_live"]
         ),
+
         "helpers": list(helper_names),
         "helpers_detail": [
-            {"name": h, "level": HELPER_LEVELS[h], "desc": HELPER_DESCRIPTIONS.get(h, "")}
+            {
+                "name": h,
+                "level": HELPER_LEVELS[h],
+                "desc": HELPER_DESCRIPTIONS.get(h, "")
+            }
             for h in helper_names if h in HELPER_LEVELS
         ],
+
         "history": history,
         "time": tr_now().strftime("%H:%M:%S"),
+
         "resistance_1h": fmt(r1h),
         "resistance_4h": fmt(r4h),
+
         "power": total_power,
         "power_delta": power_delta,
+
         "most_1h": most_1h,
         "most_4h": most_4h,
     }
 
-    register_success_candidate(signal)
+    # --------------------------------------------------
+    # GÜNLÜK + HAFTALIK ENTRY KAYDI
+    # --------------------------------------------------
+    d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
+    w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
+
+    if (symbol, algo) not in d_store:
+        d_store[(symbol, algo)] = {
+            "symbol": symbol,
+            "algo": algo,
+            "helpers": list(helper_names),
+            "entry": price,
+            "target": price * (1 + TARGET_PCT),
+            "hit": False,
+            "entry_time": tr_now().strftime("%H:%M:%S"),
+            "entry_date": tr_now().date(),
+        }
+
+    if (symbol, algo) not in w_store:
+        w_store[(symbol, algo)] = {
+            "symbol": symbol,
+            "algo": algo,
+            "helpers": list(helper_names),
+            "entry": price,
+            "target": price * (1 + TARGET_PCT),
+            "hit": False,
+            "entry_day": tr_now().strftime("%A"),
+            "entry_date": tr_now().date(),
+        }
+
     return [signal]
 
 # ======================================================
-# SUCCESS TRACK (DAILY + WEEKLY ALTYAPI)
-# ======================================================
-
-def register_success_candidate(signal):
-    today = tr_now().date()
-    SUCCESS_TRACKER.setdefault(today, {})
-
-    key = (signal["symbol"], signal["main_algorithm"])
-
-    # Aynı gün aynı sinyal varsa ENTRY overwrite yok
-    if key in SUCCESS_TRACKER[today]:
-        return
-
-    entry_price = signal.get("price")
-    if entry_price is None:
-        return
-
-    SUCCESS_TRACKER[today][key] = {
-        "symbol": signal["symbol"],
-        "algo": signal["main_algorithm"],
-        "helpers": signal.get("helpers", []),
-        "entry": entry_price,
-        "target": entry_price * (1 + TARGET_PCT),
-        "hit": False,
-        "entry_time": tr_now().strftime("%H:%M:%S"),
-        "entry_date": today,
-    }
-
-
-# ======================================================
-# SUCCESS TARGET UPDATE
+# SUCCESS TARGET UPDATE (DAILY + WEEKLY)
 # ======================================================
 
 def update_success_targets(symbol, price):
-    today = tr_now().date()
+    reset_daily_if_needed()
+    reset_weekly_if_needed()
+
+    t_key = today_key()
+    w_key = week_key()
+
     success_signals = []
 
-    day_data = SUCCESS_TRACKER.get(today, {})
-    if not day_data:
-        return []
+    daily = DAILY_SUCCESS_TRACKER.get(t_key, {})
+    weekly = WEEKLY_SUCCESS_TRACKER.get(w_key, {})
 
-    for (sym, algo), d in day_data.items():
+    # ---------- DAILY ----------
+    for (sym, algo), d in daily.items():
         if d["hit"]:
             continue
         if sym != symbol:
@@ -604,7 +693,105 @@ def update_success_targets(symbol, price):
                 ],
             })
 
+    # ---------- WEEKLY ----------
+    for (sym, algo), d in weekly.items():
+        if d["hit"]:
+            continue
+        if sym != symbol:
+            continue
+
+        if price >= d["target"]:
+            d["hit"] = True
+            d["hit_price"] = price
+            d["hit_time"] = tr_now().strftime("%H:%M:%S")
+            d["hit_day"] = tr_now().strftime("%A")
+
     return success_signals
+
+
+# ======================================================
+# DAILY SUCCESS REPORT (TELEGRAM)
+# ======================================================
+
+def build_daily_success_report():
+    t_key = today_key()
+    day_data = DAILY_SUCCESS_TRACKER.get(t_key, {})
+
+    if not day_data:
+        return None
+
+    hits = [d for d in day_data.values() if d.get("hit")]
+    fails = [d for d in day_data.values() if not d.get("hit")]
+
+    lines = []
+    lines.append("📊 GÜNLÜK BAŞARI RAPORU")
+    lines.append(f"📅 {tr_now().strftime('%d.%m.%Y')}")
+    lines.append("")
+    lines.append(f"📡 Toplam Sinyal: {len(day_data)}")
+    lines.append(f"✅ Başarılı: {len(hits)}")
+    lines.append(f"❌ Başarısız: {len(fails)}")
+
+    if hits:
+        lines.append("")
+        lines.append("🎯 BAŞARILI:")
+        for d in hits:
+            gain = round(((d["hit_price"] - d["entry"]) / d["entry"]) * 100, 2)
+            lines.append(f"• {d['symbol']} | {d['algo']} | %{gain}")
+
+    if fails:
+        lines.append("")
+        lines.append("⛔ HEDEF GELMEYENLER:")
+        for d in fails:
+            lines.append(f"• {d['symbol']} | {d['algo']}")
+
+    lines.append("")
+    lines.append(f"🕒 {tr_now().strftime('%H:%M')}")
+
+    return "\n".join(lines)
+
+
+# ======================================================
+# WEEKLY SUCCESS REPORT (CUMA)
+# ======================================================
+
+def build_weekly_success_report():
+    w_key = week_key()
+    week_data = WEEKLY_SUCCESS_TRACKER.get(w_key, {})
+
+    if not week_data:
+        return None
+
+    hits = [d for d in week_data.values() if d.get("hit")]
+    fails = [d for d in week_data.values() if not d.get("hit")]
+
+    lines = []
+    lines.append("📅 HAFTALIK BAŞARI RAPORU")
+    lines.append(f"📆 Hafta: {w_key}")
+    lines.append("")
+    lines.append(f"📡 Toplam: {len(week_data)}")
+    lines.append(f"✅ Başarılı: {len(hits)}")
+    lines.append(f"❌ Başarısız: {len(fails)}")
+
+    if hits:
+        lines.append("")
+        lines.append("🎯 BAŞARILI SİNYALLER:")
+        for d in hits:
+            gain = round(((d["hit_price"] - d["entry"]) / d["entry"]) * 100, 2)
+            lines.append(
+                f"• {d['symbol']} | {d['algo']} | "
+                f"{d['entry_day']} → {d['hit_day']} | %{gain}"
+            )
+
+    if fails:
+        lines.append("")
+        lines.append("⛔ HEDEF GELMEYENLER:")
+        for d in fails:
+            lines.append(f"• {d['symbol']} | {d['algo']}")
+
+    lines.append("")
+    lines.append(f"🕒 {tr_now().strftime('%d.%m.%Y %H:%M')}")
+
+    return "\n".join(lines)
 
 
 # ======================================================
@@ -612,7 +799,7 @@ def update_success_targets(symbol, price):
 # ======================================================
 
 def format_signal_message(signal):
-    # ---------------- SUCCESS ----------------
+    # ---------- SUCCESS ----------
     if signal.get("category") == "success":
         return "\n".join([
             "🎯 HEDEF GELDİ",
@@ -627,18 +814,17 @@ def format_signal_message(signal):
             f"⏰ {signal['time']}",
         ])
 
-    # ---------------- NORMAL ----------------
+    # ---------- NORMAL ----------
     lines = []
     lines.append(f"📊 {signal['symbol']}")
     lines.append(f"🏷 {signal['title']}")
     lines.append("")
 
     if signal.get("entry_price"):
-        lines.append(f"🎯 Giriş Fiyatı: {signal['entry_price']}")
-    lines.append(f"💰 Canlı Fiyat: {signal['price']}")
+        lines.append(f"🎯 Giriş: {signal['entry_price']}")
+    lines.append(f"💰 Canlı: {signal['price']}")
 
-    lines.append(f"⚡ Sinyal: {signal['action']}")
-    lines.append(f"🧠 Algo: {signal['main_algorithm']}")
+    lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
 
     if signal.get("most_1h") or signal.get("most_4h"):
@@ -649,19 +835,10 @@ def format_signal_message(signal):
         if signal.get("most_4h"):
             lines.append(f"• 4H: {'⬆️' if signal['most_4h']=='UP' else '⬇️'}")
 
-    if signal.get("resistance_1h") or signal.get("resistance_4h"):
-        lines.append("")
-        lines.append("🎯 Dirençler:")
-        if signal.get("resistance_1h"):
-            lines.append(f"• 1H: {signal['resistance_1h']}")
-        if signal.get("resistance_4h"):
-            lines.append(f"• 4H: {signal['resistance_4h']}")
-
-    helpers = signal.get("helpers_detail", [])
-    if helpers:
+    if signal.get("helpers_detail"):
         lines.append("")
         lines.append("🧩 Yardımcılar:")
-        for h in helpers:
+        for h in signal["helpers_detail"]:
             lines.append(f"• [{h['level']}] {h['name']}")
 
     if signal.get("power_delta"):
@@ -692,11 +869,9 @@ def process_signals(data):
 
     for item in data:
         try:
-            # Normal sinyaller
             signals = process_symbol_signals(item)
             out.extend(signals)
 
-            # Başarı kontrolü
             symbol = item["symbol"]
             price = item["current_price"]
 
@@ -707,78 +882,3 @@ def process_signals(data):
             continue
 
     return out
-# ======================================================
-# DAILY SUCCESS REPORT
-# ======================================================
-
-def build_daily_success_report():
-    today = tr_now().date()
-    day_data = SUCCESS_TRACKER.get(today, {})
-
-    if not day_data:
-        return "📊 BUGÜN BAŞARI RAPORU\n\n❌ Bugün takip edilen sinyal yok."
-
-    total = len(day_data)
-    hits = [d for d in day_data.values() if d.get("hit")]
-    fails = [d for d in day_data.values() if not d.get("hit")]
-
-    hit_count = len(hits)
-    fail_count = len(fails)
-
-    # Kazanç hesapları
-    gains = []
-    for d in hits:
-        entry = d.get("entry")
-        hit_price = d.get("hit_price")
-        if entry and hit_price:
-            gains.append(((hit_price - entry) / entry) * 100)
-
-    avg_gain = round(sum(gains) / len(gains), 2) if gains else 0
-    max_gain = round(max(gains), 2) if gains else 0
-
-    # Algoritma istatistiği
-    algo_stats = {}
-    for d in hits:
-        algo = d.get("algo")
-        algo_stats[algo] = algo_stats.get(algo, 0) + 1
-
-    lines = []
-    lines.append("📊 GÜNLÜK BAŞARI RAPORU")
-    lines.append(f"📅 Tarih: {today}")
-    lines.append("")
-    lines.append(f"📡 Toplam Sinyal: {total}")
-    lines.append(f"✅ Başarılı: {hit_count}")
-    lines.append(f"❌ Başarısız: {fail_count}")
-    lines.append("")
-    lines.append(f"📈 Ortalama Kazanç: %{avg_gain}")
-    lines.append(f"🚀 Maksimum Kazanç: %{max_gain}")
-
-    if algo_stats:
-        lines.append("")
-        lines.append("🧠 Algoritma Başarıları:")
-        for algo, cnt in algo_stats.items():
-            lines.append(f"• {algo}: {cnt} adet")
-
-    if hits:
-        lines.append("")
-        lines.append("🎯 BAŞARILI SİNYALLER:")
-        for d in hits:
-            entry = d.get("entry")
-            hit_price = d.get("hit_price")
-            gain = round(((hit_price - entry) / entry) * 100, 2)
-            lines.append(
-                f"• {d['symbol']} | {d['algo']} | %{gain}"
-            )
-
-    if fails:
-        lines.append("")
-        lines.append("⛔ HEDEFE ULAŞMAYANLAR:")
-        for d in fails:
-            lines.append(
-                f"• {d['symbol']} | {d['algo']}"
-            )
-
-    lines.append("")
-    lines.append("🕒 Rapor saati: " + tr_now().strftime("%H:%M"))
-
-    return "\n".join(lines)
