@@ -108,7 +108,7 @@ HELPER_DESCRIPTIONS = {
     "3LÜ TEPE": "Zayıf yapı",
     "L2 KIRILIM": "Zayıf kırılım",
     "MOST KIRILIMI": "MOST aşağı – risk",
-    "L4 MAJÖR KIRILIM" = "Kurumsal majör seviye kırılımı",
+    "L4 MAJÖR KIRILIM": "Kurumsal majör seviye kırılımı",
 }
 
 # ======================================================
@@ -335,7 +335,6 @@ def detect_order_block(df):
 # ======================================================
 # HELPER INDICATORS (ANA TOPLAMA)
 # ======================================================
-
 def helper_indicators(item):
     helpers = []
 
@@ -356,7 +355,7 @@ def helper_indicators(item):
     if tf15.get("volume_ok"):
         helpers.append(("GÜÇLÜ HACİM", 10))
 
-    # ORDER BLOCK / L2-L3
+    # ORDER BLOCK + FORMASYON
     df15 = tf15.get("df")
     if df15 is not None:
         if detect_three_peaks(df15["Close"]):
@@ -364,40 +363,40 @@ def helper_indicators(item):
         if detect_order_block(df15):
             helpers.append(("ORDER BLOCK", 15))
 
-    helpers.extend(
-    detect_l2_l3_l4_pro(
-        item["tf"]["15m"]["df"],
-        item["current_price"],
-        tf="15m"
-    )
-)
-
-# 1H → L3
-if item["tf"].get("1h"):
+    # L2 – 15m
     helpers.extend(
         detect_l2_l3_l4_pro(
-            item["tf"]["1h"]["df"],
+            tf15["df"],
             item["current_price"],
-            tf="1h"
+            tf="15m"
         )
     )
 
-# 4H → L4
-if item["tf"].get("4h"):
-    helpers.extend(
-        detect_l2_l3_l4_pro(
-            item["tf"]["4h"]["df"],
-            item["current_price"],
-            tf="4h"
+    # L3 – 1H
+    if tf1h:
+        helpers.extend(
+            detect_l2_l3_l4_pro(
+                tf1h["df"],
+                item["current_price"],
+                tf="1h"
+            )
         )
-    )
-        
 
-    # 1H KIRILIM
+    # L4 – 4H
+    if tf4h:
+        helpers.extend(
+            detect_l2_l3_l4_pro(
+                tf4h["df"],
+                item["current_price"],
+                tf="4h"
+            )
+        )
+
+    # 1H YAPISAL KIRILIM
     if tf1h and detect_support_resistance_break(tf1h["df"]):
         helpers.append(("1H YAPISAL KIRILIM", 20))
 
-    # 4H KIRILIM + SIKIŞMA
+    # 4H TREND + SIKIŞMA
     if tf4h:
         if detect_support_resistance_break(tf4h["df"]):
             helpers.append(("4H TREND KIRILIMI", 25))
