@@ -77,6 +77,7 @@ HELPER_LEVELS = {
     "4H TREND KIRILIMI": "A",
     "4H SIKIŞMA KIRILIMI (ONAYLI)": "A",
     "MOST 4H YUKARI": "A",
+    "L4 MAJÖR KIRILIM": "A", 
 
     "ÇOKLU ZAMAN EMA ONAYI": "B",
     "GOLDEN CROSS": "B",
@@ -107,6 +108,7 @@ HELPER_DESCRIPTIONS = {
     "3LÜ TEPE": "Zayıf yapı",
     "L2 KIRILIM": "Zayıf kırılım",
     "MOST KIRILIMI": "MOST aşağı – risk",
+    "L4 MAJÖR KIRILIM" = "Kurumsal majör seviye kırılımı",
 }
 
 # ======================================================
@@ -361,16 +363,17 @@ def helper_indicators(item):
             helpers.append(("3LÜ TEPE", 8))
         if detect_order_block(df15):
             helpers.append(("ORDER BLOCK", 15))
-    # 15m → L2
+
     helpers.extend(
     detect_l2_l3_l4_pro(
         item["tf"]["15m"]["df"],
         item["current_price"],
         tf="15m"
-        )
     )
-   # 1H → L3
-   if item["tf"].get("1h"):
+)
+
+# 1H → L3
+if item["tf"].get("1h"):
     helpers.extend(
         detect_l2_l3_l4_pro(
             item["tf"]["1h"]["df"],
@@ -379,8 +382,8 @@ def helper_indicators(item):
         )
     )
 
-   # 4H → L4
-   if item["tf"].get("4h"):
+# 4H → L4
+if item["tf"].get("4h"):
     helpers.extend(
         detect_l2_l3_l4_pro(
             item["tf"]["4h"]["df"],
