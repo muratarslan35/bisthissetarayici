@@ -1,3 +1,109 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>BIST Sinyal Dashboard</title>
+
+<style>
+body {
+    margin:0;
+    background:#0b0f1a;
+    font-family:Segoe UI, Arial;
+    color:#e6e6e6;
+}
+
+/* TOP STATUS */
+.top-status {
+    display:flex;
+    justify-content:space-between;
+    padding:16px 24px;
+    background:#0f172a;
+    border-bottom:1px solid #1e293b;
+}
+.status-item span { font-weight:bold; }
+
+/* FILTER BAR */
+.filter-bar {
+    display:flex;
+    gap:10px;
+    padding:14px 24px;
+    background:#111827;
+    border-bottom:1px solid #1e293b;
+}
+.filter-btn {
+    background:#1f2937;
+    padding:10px 18px;
+    border-radius:12px;
+    cursor:pointer;
+    font-size:14px;
+}
+.filter-btn.active { background:#2563eb; }
+
+/* GRID */
+.container {
+    padding:20px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(380px,1fr));
+    gap:16px;
+}
+
+/* CARD */
+.card {
+    background:#121826;
+    border-radius:14px;
+    padding:16px;
+    border-left:5px solid #64748b;
+}
+.signal-strong { border-left-color:#22c55e; }
+.signal-combo { border-left-color:#3b82f6; }
+.signal-watch { border-left-color:#facc15; }
+.signal-success { border-left-color:#a855f7; }
+
+.signal-title { font-size:13px; font-weight:bold; }
+.symbol { font-size:22px; font-weight:bold; margin:6px 0; }
+.price { font-size:20px; font-weight:bold; }
+.row { font-size:13px; margin-top:4px; }
+.history { font-size:11px; opacity:.8; margin-top:8px; }
+.time { font-size:11px; text-align:right; opacity:.6 }
+
+/* WEEKLY PANEL */
+#weeklyPanel {
+    display:none;
+    background:#0f172a;
+    margin:20px;
+    padding:18px;
+    border-radius:14px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- STATUS -->
+<div class="top-status">
+    <div class="status-item">📊 Piyasa: <span id="market">-</span></div>
+    <div class="status-item">📡 Tarama: <span id="scanner">-</span></div>
+    <div class="status-item">🕒 Saat: <span id="clock">-</span></div>
+</div>
+
+<!-- FILTERS -->
+<div class="filter-bar">
+    <div class="filter-btn active" onclick="setFilter('all',event)">Tümü</div>
+    <div class="filter-btn" onclick="setFilter('strong',event)">Güçlü Al</div>
+    <div class="filter-btn" onclick="setFilter('power',event)">Güçlenen</div>
+    <div class="filter-btn" onclick="setFilter('kombine',event)">Kombine</div>
+    <div class="filter-btn" onclick="setFilter('super',event)">Süper Kombine</div>
+    <div class="filter-btn" onclick="setFilter('success',event)">Başarılı</div>
+    <div class="filter-btn" onclick="setFilter('weekly',event)">Haftalık</div>
+</div>
+
+<!-- WEEKLY REPORT -->
+<div id="weeklyPanel"></div>
+
+<!-- SIGNALS -->
+<div class="container" id="signals"></div>
+
+<!-- ================= SCRIPT ================= -->
 <script>
 let CURRENT_FILTER="all";
 
@@ -23,17 +129,16 @@ async function loadSignals(){
     const res = await fetch("/api/dashboard");
     const data = await res.json();
 
-    market.innerText=data.market_open?"AÇIK":"KAPALI";
-    scanner.innerText=data.system_active?"AKTİF":"PASİF";
-    clock.innerText=data.server_time;
+    market.innerText = data.market_open ? "AÇIK" : "KAPALI";
+    scanner.innerText = data.system_active ? "AKTİF" : "PASİF";
+    clock.innerText = data.server_time;
 
-    const box=document.getElementById("signals");
-    const weekly=document.getElementById("weeklyPanel");
+    const box = document.getElementById("signals");
+    const weekly = document.getElementById("weeklyPanel");
 
     box.innerHTML="";
     weekly.style.display="none";
 
-    // === WEEKLY REPORT ===
     if(CURRENT_FILTER==="weekly"){
         weekly.style.display="block";
         weekly.innerHTML = `
@@ -45,7 +150,6 @@ ${data.weekly_report?.text ?? "Rapor yok"}
         return;
     }
 
-    // === SIGNAL CARDS ===
     data.signals.filter(matchFilter).forEach(s=>{
         const c=document.createElement("div");
         c.className=`card signal-${s.category}`;
@@ -67,3 +171,6 @@ ${data.weekly_report?.text ?? "Rapor yok"}
 setInterval(loadSignals,10000);
 loadSignals();
 </script>
+
+</body>
+</html>
