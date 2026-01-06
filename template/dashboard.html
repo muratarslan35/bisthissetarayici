@@ -1,0 +1,69 @@
+<script>
+let CURRENT_FILTER="all";
+
+function setFilter(f,e){
+    CURRENT_FILTER=f;
+    document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadSignals();
+}
+
+function matchFilter(s){
+    if(CURRENT_FILTER==="weekly") return false;
+    if(CURRENT_FILTER==="all") return true;
+    if(CURRENT_FILTER==="strong") return s.action==="GÜÇLÜ AL";
+    if(CURRENT_FILTER==="power") return s.power_delta>=20;
+    if(CURRENT_FILTER==="kombine") return s.main_algorithm==="KOMBİNE";
+    if(CURRENT_FILTER==="super") return s.main_algorithm==="SÜPER KOMBİNE";
+    if(CURRENT_FILTER==="success") return s.category==="success";
+    return true;
+}
+
+async function loadSignals(){
+    const res = await fetch("/api/dashboard");
+    const data = await res.json();
+
+    market.innerText=data.market_open?"AÇIK":"KAPALI";
+    scanner.innerText=data.system_active?"AKTİF":"PASİF";
+    clock.innerText=data.server_time;
+
+    const box=document.getElementById("signals");
+    const weekly=document.getElementById("weeklyPanel");
+
+    box.innerHTML="";
+    weekly.style.display="none";
+
+    // === WEEKLY REPORT ===
+    if(CURRENT_FILTER==="weekly"){
+        weekly.style.display="block";
+        weekly.innerHTML = `
+            <h2>📅 Haftalık Başarı Raporu</h2>
+            <pre style="white-space:pre-wrap;font-size:13px;">
+${data.weekly_report?.text ?? "Rapor yok"}
+            </pre>
+        `;
+        return;
+    }
+
+    // === SIGNAL CARDS ===
+    data.signals.filter(matchFilter).forEach(s=>{
+        const c=document.createElement("div");
+        c.className=`card signal-${s.category}`;
+        c.innerHTML=`
+            <div class="signal-title">${s.title??""}</div>
+            <div class="symbol">${s.symbol}</div>
+            ${s.entry_price?`<div class="row">🎯 Giriş: ${s.entry_price}</div>`:""}
+            <div class="price">💰 ${s.price??"-"}</div>
+            <div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
+            <div class="history">
+                ${(s.history||[]).slice(-3).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
+            </div>
+            <div class="time">${s.time}</div>
+        `;
+        box.appendChild(c);
+    });
+}
+
+setInterval(loadSignals,10000);
+loadSignals();
+</script>
