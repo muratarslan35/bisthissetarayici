@@ -3,7 +3,13 @@ from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
 import requests
 
-from signal_engine import build_weekly_success_report, week_key
+# signal_engine verileri
+from signal_engine import (
+    build_weekly_success_report,
+    week_key,
+    WEEKLY_SUCCESS_TRACKER,
+    FRIDAY_CLOSE_PRICES
+)
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -48,6 +54,90 @@ def push_success_signal(signal):
     del SUCCESS_SIGNALS[MAX_SUCCESS_SIGNALS:]
 
 # ======================================================
+# WEEKLY TABLE DATA (YENİ + GÜVENLİ)
+# ======================================================
+
+TR_DAYS = {
+    "Monday": "Pazartesi",
+    "Tuesday": "Salı",
+    "Wednesday": "Çarşamba",
+    "Thursday": "Perşembe",
+    "Friday": "Cuma"
+}
+
+def build_weekly_table_data():
+    """
+    Dashboard haftalık tablo verisi üretir
+    - Başarılı
+    - Başarısız
+    - Özet
+    """
+    w_key = week_key()
+    week_data = WEEKLY_SUCCESS_TRACKER.get(w_key, {})
+
+    success = []
+    failed = []
+
+    for d in week_data.values():
+        symbol = d.get("symbol")
+        entry = d.get("entry")
+        algo = d.get("algo")
+        helpers = d.get("helpers", [])
+
+        friday_price = FRIDAY_CLOSE_PRICES.get(symbol)
+        current_price = d.get("hit_price") or friday_price
+
+        # ---------- GÜVENLİK FIX #1 ----------
+        entry_day_raw = d.get("entry_day")
+        entry_day = (
+            TR_DAYS.get(entry_day_raw, entry_day_raw)
+            if entry_day_raw else None
+        )
+
+        hit_day_raw = d.get("hit_day")
+        hit_day = (
+            TR_DAYS.get(hit_day_raw, hit_day_raw)
+            if hit_day_raw else None
+        )
+
+        # ---------- GÜVENLİK FIX #2 ----------
+        gain_pct = None
+        if isinstance(current_price, (int, float)) and isinstance(entry, (int, float)):
+            gain_pct = round(((current_price - entry) / entry) * 100, 2)
+
+        row = {
+            "symbol": symbol,
+            "algorithm": algo,
+            "entry_price": round(entry, 2) if isinstance(entry, (int, float)) else None,
+            "current_price": round(current_price, 2)
+                if isinstance(current_price, (int, float))
+                else None,
+            "entry_day": entry_day,
+            "hit_day": hit_day,
+            "gain_pct": gain_pct,
+            "helpers": helpers,
+            "entry_date": str(d.get("entry_date")) if d.get("entry_date") else None,
+            "hit_time": d.get("hit_time"),
+        }
+
+        if d.get("hit"):
+            success.append(row)
+        else:
+            failed.append(row)
+
+    summary = {
+        "total": len(week_data),
+        "success": len(success),
+        "failed": len(failed)
+    }
+
+    return {
+        "success": success,
+        "failed": failed,
+        "summary": summary
+    }
+
+# ======================================================
 # API
 # ======================================================
 
@@ -78,9 +168,16 @@ def dashboard_api():
         "market_open": market_open,
         "system_active": system_active,
         "server_time": now.strftime("%H:%M:%S"),
+
+        # Günlük + başarılı sinyaller
         "signals": SUCCESS_SIGNALS + SIGNALS,
+
+        # Haftalık metin raporu
         "weekly_report": {
             "week_id": week_key(),
             "text": weekly_text
-        } if weekly_text else None
+        } if weekly_text else None,
+
+        # Haftalık tablo (dashboard için)
+        "weekly_table": build_weekly_table_data()
     })
