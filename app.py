@@ -97,7 +97,7 @@ def send_telegram_message(text: str):
 # ======================================================
 def send_startup_message():
     send_telegram_message(
-        "🟢 <b>BIST TARAMA SİSTEMİ BAŞLATILDI</b>\n"
+        "🟢 <b>DUYGULARDAN ARINDIRILMIŞ HAS ADANALI BOT BAŞLATILDI😎</b>\n"
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
     )
 
