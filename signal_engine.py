@@ -658,55 +658,100 @@ def process_symbol_signals(item):
     }
 
     # --------------------------------------------------
-    # DİRENÇLER
-    # --------------------------------------------------
-    r1h = get_last_resistance(tf1h["df"]) if tf1h else None
-    r4h = get_last_resistance(tf4h["df"]) if tf4h else None
+# DİRENÇLER
+# --------------------------------------------------
+r1h = get_last_resistance(tf1h["df"]) if tf1h else None
+r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
-    # --------------------------------------------------
-    # ENTRY (SABİT)
-    # --------------------------------------------------
-    t_key = today_key()
-    w_key = week_key()
+r1h_dist_pct = round(((r1h - price) / price) * 100, 2) if r1h else None
+r4h_dist_pct = round(((r4h - price) / price) * 100, 2) if r4h else None
 
-    entry_price = None
-    if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
-        entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
+# --------------------------------------------------
+# MOST SEVİYELERİ (GERÇEK)
+# --------------------------------------------------
+most_1h_level = None
+most_4h_level = None
 
-    # --------------------------------------------------
-    # SIGNAL OBJESİ
-    # --------------------------------------------------
-    signal = {
-        "symbol": symbol,
-        "entry_price": fmt(entry_price),
-        "price": fmt(price),
-        "title": title,
-        "action": action,
-        "category": category,
-        "main_algorithm": algo,
-        "ema_trend": ema_trend(
-            item["tf"]["15m"]["ema20_live"],
-            item["tf"]["15m"]["ema50_live"],
-            item["tf"]["15m"]["ema200_live"]
-        ),
-        "helpers": list(helper_names),
-        "helpers_detail": [
-            {
-                "name": h,
-                "level": HELPER_LEVELS[h],
-                "desc": HELPER_DESCRIPTIONS.get(h, "")
-            }
-            for h in helper_names if h in HELPER_LEVELS
-        ],
-        "history": history,
-        "time": tr_now().strftime("%H:%M:%S"),
-        "resistance_1h": fmt(r1h),
-        "resistance_4h": fmt(r4h),
-        "power": total_power,
-        "power_delta": power_delta,
-        "most_1h": most_1h,
-        "most_4h": most_4h,
-    }
+if tf1h:
+    m1 = calculate_most(tf1h["df"])
+    if m1:
+        most_1h_level = round(m1["level"], 2)
+
+if tf4h:
+    m4 = calculate_most(tf4h["df"])
+    if m4:
+        most_4h_level = round(m4["level"], 2)
+
+# --------------------------------------------------
+# ENTRY (SABİT)
+# --------------------------------------------------
+t_key = today_key()
+w_key = week_key()
+
+entry_price = None
+if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
+    entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
+
+# --------------------------------------------------
+# TP HESAPLARI
+# --------------------------------------------------
+tp1 = round(entry_price * 1.015, 2) if entry_price else None
+tp2 = round(entry_price * 1.03, 2) if entry_price else None
+tp3 = round(entry_price * 1.05, 2) if entry_price else None
+
+# --------------------------------------------------
+# SIGNAL OBJESİ
+# --------------------------------------------------
+signal = {
+    "symbol": symbol,
+    "entry_price": fmt(entry_price),
+    "price": fmt(price),
+
+    "title": title,
+    "action": action,
+    "category": category,
+    "main_algorithm": algo,
+
+    "ema_trend": ema_trend(
+        item["tf"]["15m"]["ema20_live"],
+        item["tf"]["15m"]["ema50_live"],
+        item["tf"]["15m"]["ema200_live"]
+    ),
+
+    "helpers": list(helper_names),
+    "helpers_detail": [
+        {
+            "name": h,
+            "level": HELPER_LEVELS[h],
+            "desc": HELPER_DESCRIPTIONS.get(h, "")
+        }
+        for h in helper_names if h in HELPER_LEVELS
+    ],
+
+    "history": history,
+    "time": tr_now().strftime("%H:%M:%S"),
+
+    # --- DİRENÇ ---
+    "resistance_1h": fmt(r1h),
+    "resistance_4h": fmt(r4h),
+    "resistance_1h_pct": r1h_dist_pct,
+    "resistance_4h_pct": r4h_dist_pct,
+
+    # --- TP ---
+    "tp1": tp1,
+    "tp2": tp2,
+    "tp3": tp3,
+
+    # --- MOST ---
+    "most_1h": most_1h,
+    "most_4h": most_4h,
+    "most_1h_level": most_1h_level,
+    "most_4h_level": most_4h_level,
+
+    # --- GÜÇ ---
+    "power": total_power,
+    "power_delta": power_delta,
+}
 
     # --------------------------------------------------
     # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
@@ -954,33 +999,74 @@ def format_signal_message(signal):
             f"⏰ {signal['time']}",
         ])
 
-    # ---------- NORMAL ----------
     lines = []
+
+    # ---------- HEADER ----------
     lines.append(f"📊 {signal['symbol']}")
     lines.append(f"🏷 {signal['title']}")
     lines.append("")
 
-    if signal.get("entry_price"):
-        lines.append(f"🎯 Giriş: {signal['entry_price']}")
-    lines.append(f"💰 Canlı: {signal['price']}")
+    entry = signal.get("entry_price")
+    price = signal.get("price")
+
+    if entry:
+        lines.append(f"🎯 Giriş: {entry}")
+    lines.append(f"💰 Canlı: {price}")
 
     lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
 
+    # ---------- TP LEVELS ----------
+    if entry:
+        tp1 = round(entry * 1.015, 2)
+        tp2 = round(entry * 1.03, 2)
+        tp3 = round(entry * 1.05, 2)
+
+        lines.append("")
+        lines.append("🎯 TP Seviyeleri:")
+        lines.append(f"• TP1 (%1.5): {tp1}")
+        lines.append(f"• TP2 (%3): {tp2}")
+        lines.append(f"• TP3 (%5): {tp3}")
+
+    # ---------- RESISTANCES ----------
+    r1h = signal.get("resistance_1h")
+    r4h = signal.get("resistance_4h")
+
+    if price and (r1h or r4h):
+        lines.append("")
+        lines.append("🧱 Dirençler:")
+
+        if r1h:
+            pct = round(((r1h - price) / price) * 100, 2)
+            lines.append(f"• 1H Direnç: {r1h} (%{pct} kalan)")
+
+        if r4h:
+            pct = round(((r4h - price) / price) * 100, 2)
+            lines.append(f"• 4H Direnç: {r4h} (%{pct} kalan)")
+
+    # ---------- MOST ----------
     if signal.get("most_1h") or signal.get("most_4h"):
         lines.append("")
         lines.append("🧭 MOST:")
-        if signal.get("most_1h"):
-            lines.append(f"• 1H: {'⬆️' if signal['most_1h']=='UP' else '⬇️'}")
-        if signal.get("most_4h"):
-            lines.append(f"• 4H: {'⬆️' if signal['most_4h']=='UP' else '⬇️'}")
 
+        if signal.get("most_1h"):
+            lvl = signal.get("most_1h_level")
+            arrow = "⬆️" if signal["most_1h"] == "UP" else "⬇️"
+            lines.append(f"• 1H MOST ({lvl}): {arrow}" if lvl else f"• 1H MOST: {arrow}")
+
+        if signal.get("most_4h"):
+            lvl = signal.get("most_4h_level")
+            arrow = "⬆️" if signal["most_4h"] == "UP" else "⬇️"
+            lines.append(f"• 4H MOST ({lvl}): {arrow}" if lvl else f"• 4H MOST: {arrow}")
+
+    # ---------- HELPERS ----------
     if signal.get("helpers_detail"):
         lines.append("")
         lines.append("🧩 Yardımcılar:")
         for h in signal["helpers_detail"]:
             lines.append(f"• [{h['level']}] {h['name']}")
 
+    # ---------- POWER ----------
     if signal.get("power_delta"):
         lines.append("")
         lines.append(
@@ -988,6 +1074,7 @@ def format_signal_message(signal):
             f"Güç Değişimi: {signal['power_delta']}"
         )
 
+    # ---------- HISTORY ----------
     if signal.get("history"):
         lines.append("")
         lines.append("🕒 Gelişim:")
