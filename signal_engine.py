@@ -660,24 +660,24 @@ def process_symbol_signals(item):
     # --------------------------------------------------
 # DİRENÇLER
 # --------------------------------------------------
-r1h = get_last_resistance(tf1h["df"]) if tf1h else None
-r4h = get_last_resistance(tf4h["df"]) if tf4h else None
+    r1h = get_last_resistance(tf1h["df"]) if tf1h else None
+    r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
-r1h_dist_pct = round(((r1h - price) / price) * 100, 2) if r1h else None
-r4h_dist_pct = round(((r4h - price) / price) * 100, 2) if r4h else None
+    r1h_dist_pct = round(((r1h - price) / price) * 100, 2) if r1h else None
+    r4h_dist_pct = round(((r4h - price) / price) * 100, 2) if r4h else None
 
 # --------------------------------------------------
 # MOST SEVİYELERİ (GERÇEK)
 # --------------------------------------------------
-most_1h_level = None
-most_4h_level = None
+    most_1h_level = None
+    most_4h_level = None
 
-if tf1h:
+    if tf1h:
     m1 = calculate_most(tf1h["df"])
     if m1:
         most_1h_level = round(m1["level"], 2)
-
-if tf4h:
+    
+    if tf4h:
     m4 = calculate_most(tf4h["df"])
     if m4:
         most_4h_level = round(m4["level"], 2)
@@ -685,24 +685,24 @@ if tf4h:
 # --------------------------------------------------
 # ENTRY (SABİT)
 # --------------------------------------------------
-t_key = today_key()
-w_key = week_key()
+    t_key = today_key()
+    w_key = week_key()
 
-entry_price = None
-if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
+    entry_price = None
+    if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
     entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
 
 # --------------------------------------------------
 # TP HESAPLARI
 # --------------------------------------------------
-tp1 = round(entry_price * 1.015, 2) if entry_price else None
-tp2 = round(entry_price * 1.03, 2) if entry_price else None
-tp3 = round(entry_price * 1.05, 2) if entry_price else None
+    tp1 = round(entry_price * 1.015, 2) if entry_price else None
+    tp2 = round(entry_price * 1.03, 2) if entry_price else None
+    tp3 = round(entry_price * 1.05, 2) if entry_price else None
 
 # --------------------------------------------------
     # SIGNAL OBJESİ
     # --------------------------------------------------
-signal = {
+    signal = {
         "symbol": symbol,
         "entry_price": fmt(entry_price),
         "price": fmt(price),
@@ -756,8 +756,8 @@ signal = {
         # --------------------------------------------------
         # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
         # --------------------------------------------------
-        d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
-        w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
+    d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
+    w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
         if (symbol, algo) not in d_store:
         d_store[(symbol, algo)] = {
