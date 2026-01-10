@@ -702,7 +702,7 @@ tp3 = round(entry_price * 1.05, 2) if entry_price else None
 # --------------------------------------------------
     # SIGNAL OBJESİ
     # --------------------------------------------------
-    signal = {
+signal = {
         "symbol": symbol,
         "entry_price": fmt(entry_price),
         "price": fmt(price),
