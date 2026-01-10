@@ -759,7 +759,7 @@ signal = {
 d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
 w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
-    if (symbol, algo) not in d_store:
+if (symbol, algo) not in d_store:
         d_store[(symbol, algo)] = {
             "symbol": symbol,
             "algo": algo,
@@ -771,7 +771,7 @@ w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
             "entry_date": tr_now().date(),
         }
 
-    if (symbol, algo) not in w_store:
+if (symbol, algo) not in w_store:
         w_store[(symbol, algo)] = {
             "symbol": symbol,
             "algo": algo,
@@ -783,7 +783,7 @@ w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
             "entry_date": tr_now().date(),
         }
 
-    return [signal]
+return [signal]
 
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
