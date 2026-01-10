@@ -759,29 +759,29 @@ signal = {
 d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
 w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
-    if (symbol, algo) not in d_store:
-        d_store[(symbol, algo)] = {
-            "symbol": symbol,
-            "algo": algo,
-            "helpers": list(helper_names),
-            "entry": price,
-            "target": price * (1 + TARGET_PCT),
-            "hit": False,
-            "entry_time": tr_now().strftime("%H:%M:%S"),
-            "entry_date": tr_now().date(),
-        }
+if (symbol, algo) not in d_store:
+    d_store[(symbol, algo)] = {
+        "symbol": symbol,
+        "algo": algo,
+        "helpers": list(helper_names),
+        "entry": price,
+        "target": price * (1 + TARGET_PCT),
+        "hit": False,
+        "entry_time": tr_now().strftime("%H:%M:%S"),
+        "entry_date": tr_now().date(),
+    }
 
-    if (symbol, algo) not in w_store:
-        w_store[(symbol, algo)] = {
-            "symbol": symbol,
-            "algo": algo,
-            "helpers": list(helper_names),
-            "entry": price,
-            "target": price * (1 + TARGET_PCT),
-            "hit": False,
-            "entry_day": tr_now().strftime("%A"),
-            "entry_date": tr_now().date(),
-        }
+if (symbol, algo) not in w_store:
+    w_store[(symbol, algo)] = {
+        "symbol": symbol,
+        "algo": algo,
+        "helpers": list(helper_names),
+        "entry": price,
+        "target": price * (1 + TARGET_PCT),
+        "hit": False,
+        "entry_day": tr_now().strftime("%A"),
+        "entry_date": tr_now().date(),
+    }
 
     return [signal]
 
