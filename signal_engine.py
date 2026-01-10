@@ -700,58 +700,58 @@ tp2 = round(entry_price * 1.03, 2) if entry_price else None
 tp3 = round(entry_price * 1.05, 2) if entry_price else None
 
 # --------------------------------------------------
-# SIGNAL OBJESİ
-# --------------------------------------------------
-signal = {
-    "symbol": symbol,
-    "entry_price": fmt(entry_price),
-    "price": fmt(price),
+    # SIGNAL OBJESİ
+    # --------------------------------------------------
+    signal = {
+        "symbol": symbol,
+        "entry_price": fmt(entry_price),
+        "price": fmt(price),
 
-    "title": title,
-    "action": action,
-    "category": category,
-    "main_algorithm": algo,
+        "title": title,
+        "action": action,
+        "category": category,
+        "main_algorithm": algo,
 
-    "ema_trend": ema_trend(
-        item["tf"]["15m"]["ema20_live"],
-        item["tf"]["15m"]["ema50_live"],
-        item["tf"]["15m"]["ema200_live"]
-    ),
+        "ema_trend": ema_trend(
+            item["tf"]["15m"]["ema20_live"],
+            item["tf"]["15m"]["ema50_live"],
+            item["tf"]["15m"]["ema200_live"]
+        ),
 
-    "helpers": list(helper_names),
-    "helpers_detail": [
-        {
-            "name": h,
-            "level": HELPER_LEVELS[h],
-            "desc": HELPER_DESCRIPTIONS.get(h, "")
-        }
-        for h in helper_names if h in HELPER_LEVELS
-    ],
+        "helpers": list(helper_names),
+        "helpers_detail": [
+            {
+                "name": h,
+                "level": HELPER_LEVELS[h],
+                "desc": HELPER_DESCRIPTIONS.get(h, "")
+            }
+            for h in helper_names if h in HELPER_LEVELS
+        ],
 
-    "history": history,
-    "time": tr_now().strftime("%H:%M:%S"),
+        "history": history,
+        "time": tr_now().strftime("%H:%M:%S"),
 
-    # --- DİRENÇ ---
-    "resistance_1h": fmt(r1h),
-    "resistance_4h": fmt(r4h),
-    "resistance_1h_pct": r1h_dist_pct,
-    "resistance_4h_pct": r4h_dist_pct,
+        # --- DİRENÇ ---
+        "resistance_1h": fmt(r1h),
+        "resistance_4h": fmt(r4h),
+        "resistance_1h_pct": r1h_dist_pct,
+        "resistance_4h_pct": r4h_dist_pct,
 
-    # --- TP ---
-    "tp1": tp1,
-    "tp2": tp2,
-    "tp3": tp3,
+        # --- TP ---
+        "tp1": tp1,
+        "tp2": tp2,
+        "tp3": tp3,
 
-    # --- MOST ---
-    "most_1h": most_1h,
-    "most_4h": most_4h,
-    "most_1h_level": most_1h_level,
-    "most_4h_level": most_4h_level,
+        # --- MOST ---
+        "most_1h": most_1h,
+        "most_4h": most_4h,
+        "most_1h_level": most_1h_level,
+        "most_4h_level": most_4h_level,
 
-    # --- GÜÇ ---
-    "power": total_power,
-    "power_delta": power_delta,
-}
+        # --- GÜÇ ---
+        "power": total_power,
+        "power_delta": power_delta,
+    }
 
     # --------------------------------------------------
     # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
