@@ -555,7 +555,7 @@ def process_symbol_signals(item):
     prev_most_4h = prev.get("most_4h")
 
     most_downgrade = prev_most_4h == "UP" and most_4h == "DOWN"
-    most_upgrade   = prev_most_4h == "DOWN" and most_4h == "UP"
+    most_upgrade = prev_most_4h == "DOWN" and most_4h == "UP"
 
     if most_downgrade:
         helper_names.add("MOST KIRILIMI")
@@ -658,48 +658,48 @@ def process_symbol_signals(item):
     }
 
     # --------------------------------------------------
-# DİRENÇLER
-# --------------------------------------------------
+    # DİRENÇLER
+    # --------------------------------------------------
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
     r1h_dist_pct = round(((r1h - price) / price) * 100, 2) if r1h else None
     r4h_dist_pct = round(((r4h - price) / price) * 100, 2) if r4h else None
 
-# --------------------------------------------------
-# MOST SEVİYELERİ (GERÇEK)
-# --------------------------------------------------
+    # --------------------------------------------------
+    # MOST SEVİYELERİ (GERÇEK)
+    # --------------------------------------------------
     most_1h_level = None
     most_4h_level = None
 
     if tf1h:
-    m1 = calculate_most(tf1h["df"])
-    if m1:
-        most_1h_level = round(m1["level"], 2)
-    
-    if tf4h:
-    m4 = calculate_most(tf4h["df"])
-    if m4:
-        most_4h_level = round(m4["level"], 2)
+        m1 = calculate_most(tf1h["df"])
+        if m1:
+            most_1h_level = round(m1["level"], 2)
 
-# --------------------------------------------------
-# ENTRY (SABİT)
-# --------------------------------------------------
+    if tf4h:
+        m4 = calculate_most(tf4h["df"])
+        if m4:
+            most_4h_level = round(m4["level"], 2)
+
+    # --------------------------------------------------
+    # ENTRY (SABİT)
+    # --------------------------------------------------
     t_key = today_key()
     w_key = week_key()
 
     entry_price = None
     if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
-    entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
+        entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
 
-# --------------------------------------------------
-# TP HESAPLARI
-# --------------------------------------------------
+    # --------------------------------------------------
+    # TP HESAPLARI
+    # --------------------------------------------------
     tp1 = round(entry_price * 1.015, 2) if entry_price else None
     tp2 = round(entry_price * 1.03, 2) if entry_price else None
     tp3 = round(entry_price * 1.05, 2) if entry_price else None
 
-# --------------------------------------------------
+    # --------------------------------------------------
     # SIGNAL OBJESİ
     # --------------------------------------------------
     signal = {
@@ -731,35 +731,31 @@ def process_symbol_signals(item):
         "history": history,
         "time": tr_now().strftime("%H:%M:%S"),
 
-        # --- DİRENÇ ---
         "resistance_1h": fmt(r1h),
         "resistance_4h": fmt(r4h),
         "resistance_1h_pct": r1h_dist_pct,
         "resistance_4h_pct": r4h_dist_pct,
 
-        # --- TP ---
         "tp1": tp1,
         "tp2": tp2,
         "tp3": tp3,
 
-        # --- MOST ---
         "most_1h": most_1h,
         "most_4h": most_4h,
         "most_1h_level": most_1h_level,
         "most_4h_level": most_4h_level,
 
-        # --- GÜÇ ---
         "power": total_power,
         "power_delta": power_delta,
-        }
+    }
 
-        # --------------------------------------------------
-        # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
-        # --------------------------------------------------
+    # --------------------------------------------------
+    # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
+    # --------------------------------------------------
     d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
     w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
-        if (symbol, algo) not in d_store:
+    if (symbol, algo) not in d_store:
         d_store[(symbol, algo)] = {
             "symbol": symbol,
             "algo": algo,
@@ -771,7 +767,7 @@ def process_symbol_signals(item):
             "entry_date": tr_now().date(),
         }
 
-        if (symbol, algo) not in w_store:
+    if (symbol, algo) not in w_store:
         w_store[(symbol, algo)] = {
             "symbol": symbol,
             "algo": algo,
@@ -783,7 +779,7 @@ def process_symbol_signals(item):
             "entry_date": tr_now().date(),
         }
 
-        return [signal]
+    return [signal]
 
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
