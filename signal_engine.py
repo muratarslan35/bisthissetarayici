@@ -1,12 +1,49 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import numpy as np
+import json
+import os
 
 from utils import (
     detect_three_peaks,
     detect_support_resistance_break,
     get_last_resistance
 )
+
+# ======================================================
+# PERSIST CONFIG (HAFTALIK + CUMA)
+# ======================================================
+
+DATA_DIR = "data"
+WEEKLY_STATE_FILE = os.path.join(DATA_DIR, "weekly_state.json")
+
+def load_weekly_state():
+    if not os.path.exists(WEEKLY_STATE_FILE):
+        return {}, {}
+
+    try:
+        with open(WEEKLY_STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return (
+                data.get("weekly", {}),
+                data.get("friday_prices", {})
+            )
+    except Exception:
+        return {}, {}
+
+def save_weekly_state():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WEEKLY_STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "weekly": WEEKLY_SUCCESS_TRACKER,
+                "friday_prices": FRIDAY_CLOSE_PRICES,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+            default=str
+        )
 
 # ======================================================
 # GLOBALS
@@ -19,11 +56,11 @@ POWER_STRENGTH_THRESHOLD = 20
 LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
 
-# 🔹 GÜNLÜK BAŞARI (HER SABAH SIFIRLANIR)
+# 🔹 GÜNLÜK (RAM – ORİJİNAL DAVRANIŞ)
 DAILY_SUCCESS_TRACKER = {}
 
-# 🔹 HAFTALIK TAKİP (PAZARTESİ BAŞLAR – CUMA RAPOR)
-WEEKLY_SUCCESS_TRACKER = {}
+# 🔹 HAFTALIK + CUMA (DISK – KALICI)
+WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -51,7 +88,7 @@ def fmt(v):
 
 def reset_daily_success_if_needed():
     """
-    Her yeni günde DAILY_SUCCESS_TRACKER sıfırlanır
+    Her yeni günde DAILY_SUCCESS_TRACKER sıfırlanır (RAM)
     """
     key = today_key()
     if key not in DAILY_SUCCESS_TRACKER:
@@ -60,12 +97,14 @@ def reset_daily_success_if_needed():
 
 def reset_weekly_success_if_needed():
     """
-    Pazartesi itibariyle WEEKLY_SUCCESS_TRACKER sıfırlanır
+    Pazartesi itibariyle WEEKLY_SUCCESS_TRACKER sıfırlanır (DISK)
     """
     key = week_key()
     if key not in WEEKLY_SUCCESS_TRACKER:
         WEEKLY_SUCCESS_TRACKER.clear()
         WEEKLY_SUCCESS_TRACKER[key] = {}
+        FRIDAY_CLOSE_PRICES.clear()
+        save_weekly_state()
 
 # ======================================================
 # HELPER SEVİYELERİ
@@ -77,7 +116,7 @@ HELPER_LEVELS = {
     "4H TREND KIRILIMI": "A",
     "4H SIKIŞMA KIRILIMI (ONAYLI)": "A",
     "MOST 4H YUKARI": "A",
-    "L4 MAJÖR KIRILIM": "A", 
+    "L4 MAJÖR KIRILIM": "A",
 
     "ÇOKLU ZAMAN EMA ONAYI": "B",
     "GOLDEN CROSS": "B",
