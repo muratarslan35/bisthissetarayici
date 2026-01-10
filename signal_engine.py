@@ -754,10 +754,10 @@ signal = {
 }
 
 # --------------------------------------------------
-    # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
-    # --------------------------------------------------
-    d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
-    w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
+# ENTRY KAYDI (GÜNLÜK + HAFTALIK)
+# --------------------------------------------------
+d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
+w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
     if (symbol, algo) not in d_store:
         d_store[(symbol, algo)] = {
