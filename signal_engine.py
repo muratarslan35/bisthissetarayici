@@ -807,16 +807,17 @@ def process_symbol_signals(item):
         }
 
     if (symbol, algo) not in w_store:
-        w_store[(symbol, algo)] = {
-            "symbol": symbol,
-            "algo": algo,
-            "helpers": list(helper_names),
-            "entry": price,
-            "target": price * (1 + TARGET_PCT),
-            "hit": False,
-            "entry_day": tr_now().strftime("%A"),
-            "entry_date": tr_now().date(),
-        }
+    w_store[(symbol, algo)] = {
+        "symbol": symbol,
+        "algo": algo,
+        "helpers": list(helper_names),
+        "entry": price,
+        "target": price * (1 + TARGET_PCT),
+        "hit": False,
+        "entry_day": tr_now().strftime("%A"),
+        "entry_date": tr_now().date(),
+    }
+    save_weekly_state()
 
     return [signal]
 
@@ -870,7 +871,7 @@ def update_success_targets(symbol, price):
             d["hit"] = True
             d["hit_price"] = price
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
-
+            
             entry = d["entry"]
 
             success_signals.append({
@@ -980,7 +981,7 @@ def build_weekly_success_report():
         lines.append("")
         lines.append("🎯 BAŞARILI SİNYALLER:")
         for d in hits:
-            base_gain = round(((d["hit_price"] - d["entry"]) / d["entry"]) * 100, 2)
+            & = round(((d["hit_price"] - d["entry"]) / d["entry"]) * 100, 2)
 
             friday_price = FRIDAY_CLOSE_PRICES.get(d["symbol"])
             friday_gain = None
