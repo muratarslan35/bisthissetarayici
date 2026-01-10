@@ -783,7 +783,7 @@ if (symbol, algo) not in w_store:
         "entry_date": tr_now().date(),
     }
 
-    return [signal]
+return [signal]
 
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
