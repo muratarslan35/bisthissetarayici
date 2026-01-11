@@ -110,54 +110,61 @@ def scanner_loop():
     last_daily_report = None
     last_weekly_report = None
     last_close_snapshot_date = None
-    
+
     while True:
         now = now_tr()
         print(f"\n⏱ Döngü: {now.strftime('%H:%M:%S')}", flush=True)
 
-        # 🔁 RESETLER (signal_engine kontrol eder)
+        # 🔁 RESETLER
         reset_daily_success_if_needed()
         reset_weekly_success_if_needed()
 
         try:
+            # ==================================================
+            # MARKET KAPALI
+            # ==================================================
             if not is_market_open(now):
-    print("⏹ Market kapalı", flush=True)
+                print("⏹ Market kapalı", flush=True)
 
-    # 🔒 TEK SEFERLİK KAPANIŞ SNAPSHOT (18:10 sonrası)
-    if (
-        now.time() >= dtime(18, 10)
-        and last_close_snapshot_date != now.date()
-    ):
-        try:
-            print("📌 Kapanış snapshot alınıyor...", flush=True)
+                # 🔒 TEK SEFERLİK KAPANIŞ SNAPSHOT (18:10+)
+                if (
+                    now.time() >= dtime(18, 10)
+                    and last_close_snapshot_date != now.date()
+                ):
+                    try:
+                        print("📌 Kapanış snapshot alınıyor...", flush=True)
+                        market_data = fetch_bist_data()
+
+                        for item in market_data:
+                            symbol = item["symbol"]
+                            price = item["current_price"]
+                            update_success_targets(symbol, price)
+
+                        last_close_snapshot_date = now.date()
+                        print("✅ Kapanış snapshot tamamlandı", flush=True)
+
+                    except Exception as e:
+                        print("🔥 Kapanış snapshot hatası:", e, flush=True)
+
+                # 🟢 GÜNLÜK RAPOR (1 KERE)
+                if (
+                    last_daily_report != now.date()
+                    and now.time() > BIST_CLOSE
+                ):
+                    report = build_daily_success_report()
+                    if report:
+                        send_telegram_message(report)
+                    last_daily_report = now.date()
+
+                time.sleep(30)
+                continue
+
+            # ==================================================
+            # MARKET AÇIK
+            # ==================================================
+            print("✅ MARKET AÇIK → TARAMA", flush=True)
+
             market_data = fetch_bist_data()
-
-            for item in market_data:
-                symbol = item["symbol"]
-                price = item["current_price"]
-
-                # ⬇️ BURASI KRİTİK
-                update_success_targets(symbol, price)
-
-            last_close_snapshot_date = now.date()
-            print("✅ Kapanış snapshot tamamlandı", flush=True)
-
-        except Exception as e:
-            print("🔥 Kapanış snapshot hatası:", e, flush=True)
-
-    # 🟢 Günlük rapor (kapanış sonrası 1 kere)
-    if (
-        last_daily_report != now.date()
-        and now.time() > BIST_CLOSE
-    ):
-        report = build_daily_success_report()
-        if report:
-            send_telegram_message(report)
-        last_daily_report = now.date()
-
-    time.sleep(30)
-    continue
-
             print(f"📈 Hisse sayısı: {len(market_data)}", flush=True)
 
             for item in market_data:
@@ -165,10 +172,7 @@ def scanner_loop():
                 price = item.get("current_price")
 
                 try:
-                    # 📌 NORMAL SİNYALLER
                     signals = process_symbol_signals(item)
-
-                    # 📌 BAŞARI KONTROLÜ (daily + weekly + friday snapshot içerir)
                     success_hits = update_success_targets(symbol, price)
 
                     for s in success_hits:
@@ -189,7 +193,9 @@ def scanner_loop():
         except Exception as e:
             print("🔥 Scanner genel hata:", e, flush=True)
 
-        # 📊 HAFTALIK RAPOR (CUMA 18:10 sonrası – 1 kere)
+        # ==================================================
+        # HAFTALIK RAPOR (CUMA 18:10+ / 1 KERE)
+        # ==================================================
         if now.weekday() == 4 and now.time() >= dtime(18, 10):
             week_id = now.strftime("%Y-%W")
             if last_weekly_report != week_id:
@@ -224,4 +230,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.getenv("PORT", "5000")),
         debug=False
-            )
+    )
