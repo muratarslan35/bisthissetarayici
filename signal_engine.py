@@ -9,6 +9,8 @@ from utils import (
     detect_support_resistance_break,
     get_last_resistance
 )
+from threading import Lock
+_STORE_LOCK = Lock()
 
 # ======================================================
 # PERSIST CONFIG (HAFTALIK + CUMA)
@@ -795,25 +797,27 @@ def process_symbol_signals(item):
     }
 
     # --------------------------------------------------
-    # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
-    # --------------------------------------------------
-    d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
-    w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
+# ENTRY KAYDI (GÜNLÜK + HAFTALIK)
+# --------------------------------------------------
+d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
+w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
-    if (symbol, algo) not in d_store:
-        d_store[(symbol, algo)] = {
-            "symbol": symbol,
-            "algo": algo,
-            "helpers": list(helper_names),
-            "entry": price,
-            "target": price * (1 + TARGET_PCT),
-            "hit": False,
-            "entry_time": tr_now().strftime("%H:%M:%S"),
-            "entry_date": tr_now().date(),
-        }
+# ---- DAILY (RAM) ----
+if (symbol, algo) not in d_store:
+    d_store[(symbol, algo)] = {
+        "symbol": symbol,
+        "algo": algo,
+        "helpers": list(helper_names),
+        "entry": price,
+        "target": price * (1 + TARGET_PCT),
+        "hit": False,
+        "entry_time": tr_now().strftime("%H:%M:%S"),
+        "entry_date": tr_now().date(),
+    }
 
-    if (symbol, algo) not in w_store:
-        w_store[(symbol, algo)] = {
+# ---- WEEKLY (DISK) ----
+if (symbol, algo) not in w_store:
+    w_store[(symbol, algo)] = {
         "symbol": symbol,
         "algo": algo,
         "helpers": list(helper_names),
@@ -825,7 +829,7 @@ def process_symbol_signals(item):
     }
     save_weekly_state()
 
-    return [signal]
+return [signal]
 
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
@@ -935,8 +939,8 @@ def build_daily_success_report():
     # 🔥 KAPANIŞTA GELEN HEDEFLERİ ZORLA KONTROL ET
     
     for d in day_data.values():
-        if d.get("hit"):
-            continue
+    if d.get("hit"):
+        continue
 
     close_price = DAILY_CLOSE_PRICES.get(d["symbol"])
     if not close_price:
