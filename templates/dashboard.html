@@ -186,6 +186,27 @@ body {
     </table>
 </div>
 <script>
+
+function matchFilter(s){
+    if(CURRENT_FILTER==="all") return true;
+
+    if(CURRENT_FILTER==="strong")
+        return s.action === "GÜÇLÜ AL";
+
+    if(CURRENT_FILTER==="power")
+        return (s.power_delta || 0) >= 20;
+
+    if(CURRENT_FILTER==="kombine")
+        return s.main_algorithm === "KOMBİNE";
+
+    if(CURRENT_FILTER==="super")
+        return s.main_algorithm === "SÜPER KOMBİNE";
+
+    if(CURRENT_FILTER==="success")
+        return s.category === "success";
+
+    return true;
+}
 let CURRENT_FILTER="all";
 
 function setFilter(f,e){
@@ -240,7 +261,7 @@ async function loadSignals(){
     weekly.style.display="none";
     box.style.display="grid";
 
-    (data.signals||[]).forEach(s=>{
+    (data.signals||[]).filter(matchFilter).forEach(s=>{
         const price=parseFloat(s.price);
         const entry=parseFloat(s.entry_price||price);
 
