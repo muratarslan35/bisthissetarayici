@@ -33,17 +33,19 @@ def load_weekly_state():
 
 def save_weekly_state():
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(WEEKLY_STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "weekly": WEEKLY_SUCCESS_TRACKER,
-                "friday_prices": FRIDAY_CLOSE_PRICES,
-            },
-            f,
-            ensure_ascii=False,
-            indent=2,
-            default=str
-        )
+
+    with _STORE_LOCK:
+        with open(WEEKLY_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "weekly": WEEKLY_SUCCESS_TRACKER,
+                    "friday_prices": FRIDAY_CLOSE_PRICES,
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+                default=str
+            )
 
 # ======================================================
 # GLOBALS
@@ -829,8 +831,6 @@ def process_symbol_signals(item):
 # FRIDAY CLOSE SNAPSHOT
 # ======================================================
 
-FRIDAY_CLOSE_PRICES = {}
-
 def capture_friday_close(symbol, price):
     """
     Cuma günü 18:05–18:10 arasında son fiyatı yakalar
@@ -935,8 +935,8 @@ def build_daily_success_report():
     # 🔥 KAPANIŞTA GELEN HEDEFLERİ ZORLA KONTROL ET
     
     for d in day_data.values():
-    if d.get("hit"):
-        continue
+        if d.get("hit"):
+            continue
 
     close_price = DAILY_CLOSE_PRICES.get(d["symbol"])
     if not close_price:
