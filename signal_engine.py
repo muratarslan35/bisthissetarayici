@@ -811,7 +811,7 @@ def process_symbol_signals(item):
         }
 
     if (symbol, algo) not in w_store:
-    w_store[(symbol, algo)] = {
+        w_store[(symbol, algo)] = {
         "symbol": symbol,
         "algo": algo,
         "helpers": list(helper_names),
