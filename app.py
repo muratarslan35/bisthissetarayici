@@ -120,37 +120,27 @@ def scanner_loop():
         reset_weekly_success_if_needed()
 
         try:
-            # ==================================================
-            # MARKET KAPALI
-            # ==================================================
+            # ================= MARKET KAPALI =================
             if not is_market_open(now):
                 print("⏹ Market kapalı", flush=True)
 
-                # 🔒 TEK SEFERLİK KAPANIŞ SNAPSHOT (18:10+)
-                if (
-                    now.time() >= dtime(18, 10)
-                    and last_close_snapshot_date != now.date()
-                ):
+                # 🔒 KAPANIŞ SNAPSHOT (tek sefer)
+                if now.time() >= dtime(18, 10) and last_close_snapshot_date != now.date():
                     try:
                         print("📌 Kapanış snapshot alınıyor...", flush=True)
                         market_data = fetch_bist_data()
-
                         for item in market_data:
-                            symbol = item["symbol"]
-                            price = item["current_price"]
-                            update_success_targets(symbol, price)
-
+                            update_success_targets(
+                                item["symbol"],
+                                item["current_price"]
+                            )
                         last_close_snapshot_date = now.date()
                         print("✅ Kapanış snapshot tamamlandı", flush=True)
-
                     except Exception as e:
                         print("🔥 Kapanış snapshot hatası:", e, flush=True)
 
-                # 🟢 GÜNLÜK RAPOR (1 KERE)
-                if (
-                    last_daily_report != now.date()
-                    and now.time() > BIST_CLOSE
-                ):
+                # 🟢 GÜNLÜK RAPOR (1 kere)
+                if last_daily_report != now.date() and now.time() > BIST_CLOSE:
                     report = build_daily_success_report()
                     if report:
                         send_telegram_message(report)
@@ -159,50 +149,43 @@ def scanner_loop():
                 time.sleep(30)
                 continue
 
-            # ==================================================
-            # MARKET AÇIK
-            # ==================================================
+            # ================= MARKET AÇIK =================
             print("✅ MARKET AÇIK → TARAMA", flush=True)
-
             market_data = fetch_bist_data()
             print(f"📈 Hisse sayısı: {len(market_data)}", flush=True)
 
             for item in market_data:
                 symbol = item.get("symbol")
                 price = item.get("current_price")
-
                 try:
                     signals = process_symbol_signals(item)
                     success_hits = update_success_targets(symbol, price)
 
                     for s in success_hits:
                         push_success_signal(s)
-                        send_telegram_message(
-                            format_signal_message(s)
-                        )
+                        send_telegram_message(format_signal_message(s))
 
                     for s in signals:
                         push_signal(s)
-                        send_telegram_message(
-                            format_signal_message(s)
-                        )
-
+                        send_telegram_message(format_signal_message(s))
                 except Exception as e:
                     print(f"⚠ {symbol} hata:", e, flush=True)
 
         except Exception as e:
             print("🔥 Scanner genel hata:", e, flush=True)
 
-        # ==================================================
-        # HAFTALIK RAPOR (CUMA 18:10+ / 1 KERE)
-        # ==================================================
-        if now.weekday() == 4 and now.time() >= dtime(18, 10):
-            week_id = now.strftime("%Y-%W")
-            if last_weekly_report != week_id:
-                report = build_weekly_success_report()
-                if report:
-                    send_telegram_message(report)
-                last_weekly_report = week_id
+        time.sleep(SCAN_INTERVAL)
+
+# ==================================================
+# HAFTALIK RAPOR (CUMA 18:10+ / 1 KERE)
+# ==================================================
+if now.weekday() == 4 and now.time() >= dtime(18, 10):
+        week_id = now.strftime("%Y-%W")
+if last_weekly_report != week_id:
+        report = build_weekly_success_report()
+if report:
+        send_telegram_message(report)
+        last_weekly_report = week_id
 
         time.sleep(SCAN_INTERVAL)
 
