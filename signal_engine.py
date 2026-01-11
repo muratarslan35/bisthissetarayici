@@ -838,7 +838,7 @@ def capture_friday_close(symbol, price):
 
     if now.hour == 18 and 5 <= now.minute <= 10:
         FRIDAY_CLOSE_PRICES.setdefault(symbol, price)
-
+        save_weekly_state()
 
 # ======================================================
 # SUCCESS TARGET UPDATE (DAILY + WEEKLY)
@@ -906,7 +906,7 @@ def update_success_targets(symbol, price):
             d["hit_price"] = price
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
             d["hit_day"] = tr_now().strftime("%A")
-
+            save_weekly_state()
     return success_signals
 
 
