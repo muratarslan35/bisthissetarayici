@@ -59,7 +59,6 @@ body {
     overflow: hidden;
 }
 
-/* SOL BAR */
 .card::before {
     content:"";
     position:absolute;
@@ -70,25 +69,14 @@ body {
     background:#475569;
 }
 
-.signal-strong::before {
-    background: linear-gradient(180deg,#dc2626,#7f1d1d);
-    box-shadow: 0 0 22px rgba(220,38,38,.65);
-}
-.signal-combo::before {
-    background: linear-gradient(180deg,#2563eb,#1e3a8a);
-}
-.signal-watch::before {
-    background: linear-gradient(180deg,#f59e0b,#92400e);
-}
-.signal-success::before {
-    background: linear-gradient(180deg,#a855f7,#6b21a8);
-    box-shadow: 0 0 20px rgba(168,85,247,.55);
-}
+.signal-strong::before { background:#dc2626; }
+.signal-combo::before { background:#2563eb; }
+.signal-watch::before { background:#f59e0b; }
+.signal-success::before { background:#a855f7; }
 
 .signal-title { font-size:13px; font-weight:700; opacity:.85; }
 .symbol { font-size:24px; font-weight:900; margin:6px 0; }
 .price { font-size:22px; font-weight:800; margin-top:4px; }
-
 .row { font-size:13px; margin-top:6px; line-height:1.45; }
 
 .block {
@@ -97,6 +85,25 @@ body {
     background:rgba(255,255,255,0.05);
     border-radius:12px;
     font-size:13px;
+}
+
+/* ================= TP ================= */
+.tp-box {
+    margin-top:10px;
+    padding:10px 12px;
+    background:rgba(16,185,129,0.08);
+    border:1px solid rgba(16,185,129,0.25);
+    border-radius:12px;
+    font-size:13px;
+}
+.tp-row {
+    display:flex;
+    justify-content:space-between;
+    margin-top:4px;
+}
+.tp-price {
+    font-weight:800;
+    color:#10b981;
 }
 
 .history {
@@ -113,35 +120,32 @@ body {
     margin-top:8px;
 }
 
-/* ================= TRADINGVIEW HOVER ================= */
-.tv-link {
-    position:absolute;
-    top:14px;
-    right:14px;
-    font-size:16px;
-    cursor:pointer;
+/* ================= WEEKLY TABLE ================= */
+#weekly-section {
+    display:none;
+    padding:22px;
 }
 
-.tv-hover {
-    display:none;
-    position:absolute;
-    top:36px;
-    right:0;
-    width:360px;
-    height:220px;
-    background:#000;
+#weekly-table {
+    width:100%;
+    border-collapse:collapse;
+    background:#0f172a;
     border-radius:12px;
     overflow:hidden;
-    z-index:20;
-    box-shadow:0 10px 30px rgba(0,0,0,.8);
+    font-size:13px;
 }
 
-.tv-link:hover .tv-hover {
-    display:block;
+#weekly-table th,
+#weekly-table td {
+    padding:10px 8px;
+    border-bottom:1px solid #1e293b;
+    text-align:left;
 }
+
+.weekly-success { color:#22c55e; }
+.weekly-failed { color:#ef4444; }
 </style>
 </head>
-
 <body>
 
 <div class="top-status">
@@ -162,6 +166,25 @@ body {
 
 <div class="container" id="signals"></div>
 
+<div id="weekly-section">
+    <h2>📅 Haftalık Performans</h2>
+    <div id="weekly-summary"></div>
+
+    <table id="weekly-table">
+        <thead>
+            <tr>
+                <th>Hisse</th>
+                <th>Algoritma</th>
+                <th>Giriş</th>
+                <th>Fiyat</th>
+                <th>Gün</th>
+                <th>Getiri %</th>
+                <th>Yardımcılar</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
 <script>
 let CURRENT_FILTER="all";
 
@@ -170,21 +193,6 @@ function setFilter(f,e){
     document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
     e.target.classList.add("active");
     loadSignals();
-}
-
-function matchFilter(s){
-    if(CURRENT_FILTER==="weekly") return false;
-    if(CURRENT_FILTER==="all") return true;
-    if(CURRENT_FILTER==="strong") return s.action==="GÜÇLÜ AL";
-    if(CURRENT_FILTER==="power") return (s.power_delta||0)>=20;
-    if(CURRENT_FILTER==="kombine") return s.main_algorithm==="KOMBİNE";
-    if(CURRENT_FILTER==="super") return s.main_algorithm==="SÜPER KOMBİNE";
-    if(CURRENT_FILTER==="success") return s.category==="success";
-    return true;
-}
-
-function pctRemain(price, level){
-    return (((level-price)/price)*100).toFixed(2);
 }
 
 async function loadSignals(){
@@ -196,55 +204,86 @@ async function loadSignals(){
     clock.innerText=data.server_time;
 
     const box=document.getElementById("signals");
-    box.innerHTML="";
+    const weekly=document.getElementById("weekly-section");
+    const tbody=document.querySelector("#weekly-table tbody");
+    const summary=document.getElementById("weekly-summary");
 
-    (data.signals||[]).filter(matchFilter).forEach(s=>{
+    box.innerHTML="";
+    tbody.innerHTML="";
+
+    if(CURRENT_FILTER==="weekly"){
+        box.style.display="none";
+        weekly.style.display="block";
+
+        const wt=data.weekly_table;
+        if(wt){
+            summary.innerHTML=`📡 ${wt.summary.total} | ✅ ${wt.summary.success} | ❌ ${wt.summary.failed}`;
+
+            [...wt.success,...wt.failed].forEach(r=>{
+                const tr=document.createElement("tr");
+                tr.className=r.gain_pct>=0?"weekly-success":"weekly-failed";
+                tr.innerHTML=`
+                    <td>${r.symbol}</td>
+                    <td>${r.algorithm}</td>
+                    <td>${r.entry_price ?? "-"}</td>
+                    <td>${r.current_price ?? "-"}</td>
+                    <td>${r.entry_day ?? "-"}</td>
+                    <td>${r.gain_pct ?? "-"}</td>
+                    <td>${(r.helpers||[]).join(", ")}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        return;
+    }
+
+    weekly.style.display="none";
+    box.style.display="grid";
+
+    (data.signals||[]).forEach(s=>{
         const price=parseFloat(s.price);
         const entry=parseFloat(s.entry_price||price);
+
         const tp1=(entry*1.015).toFixed(2);
         const tp2=(entry*1.03).toFixed(2);
         const tp3=(entry*1.05).toFixed(2);
 
-        const tvSymbol = s.symbol.replace(".IS","");
-
         const c=document.createElement("div");
         c.className=`card signal-${s.category||"watch"}`;
         c.innerHTML=`
-            <div class="tv-link">
-                📈
-                <div class="tv-hover">
-                    <iframe src="https://www.tradingview.com/widgetembed/?symbol=BIST:${tvSymbol}&interval=240&theme=dark&style=1"
-                        width="100%" height="100%" frameborder="0"></iframe>
-                </div>
-            </div>
-
             <div class="signal-title">${s.title||""}</div>
             <div class="symbol">${s.symbol}</div>
 
             ${s.entry_price?`<div class="row">🎯 Giriş: ${s.entry_price}</div>`:""}
             <div class="price">💰 ${s.price}</div>
-
             <div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
 
-            ${s.resistance_1h?`<div class="row">🧱 1H Direnç: ${s.resistance_1h} (%${pctRemain(price,s.resistance_1h)} kalan)</div>`:""}
-            ${s.resistance_4h?`<div class="row">🧱 4H Direnç: ${s.resistance_4h} (%${pctRemain(price,s.resistance_4h)} kalan)</div>`:""}
-
-            <div class="block">
-                🎯 TP1 (%1.5): ${tp1}<br>
-                🎯 TP2 (%3): ${tp2}<br>
-                🎯 TP3 (%5): ${tp3}
-            </div>
+            ${s.resistance_1h?`<div class="row">🧱 1H Direnç: ${s.resistance_1h} (%${s.resistance_1h_pct})</div>`:""}
+            ${s.resistance_4h?`<div class="row">🧱 4H Direnç: ${s.resistance_4h} (%${s.resistance_4h_pct})</div>`:""}
 
             ${(s.most_1h||s.most_4h)?`
             <div class="block">
-                🧭 MOST:<br>
-                ${s.most_1h?`1H: ${s.most_1h==="UP"?"⬆️":"⬇️"}`:""}<br>
-                ${s.most_4h?`4H: ${s.most_4h==="UP"?"⬆️":"⬇️"}`:""}
+                🧭 MOST<br>
+                ${s.most_1h?`1H: ${s.most_1h==="UP"?"⬆️":"⬇️"} (${s.most_1h_level})`:""}<br>
+                ${s.most_4h?`4H: ${s.most_4h==="UP"?"⬆️":"⬇️"} (${s.most_4h_level})`:""}
             </div>`:""}
 
-            <div class="history">
-                ${(s.history||[]).slice(-3).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
+            <div class="tp-box">
+                <div class="tp-row"><div>TP1 %1.5</div><div class="tp-price">${tp1}</div></div>
+                <div class="tp-row"><div>TP2 %3</div><div class="tp-price">${tp2}</div></div>
+                <div class="tp-row"><div>TP3 %5</div><div class="tp-price">${tp3}</div></div>
             </div>
+
+            ${(s.helpers && s.helpers.length)?`
+            <div class="block">
+                🧩 Yardımcılar:<br>
+                ${(s.helpers||[]).map(h=>`• ${h}`).join("<br>")}
+            </div>`:""}
+
+            ${(s.history && s.history.length)?`
+            <div class="history">
+                ${(s.history||[]).slice(-4).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
+            </div>`:""}
 
             <div class="time">${s.time}</div>
         `;
