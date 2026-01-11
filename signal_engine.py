@@ -58,7 +58,8 @@ LAST_SIGNAL_STATE = {}
 
 # 🔹 GÜNLÜK (RAM – ORİJİNAL DAVRANIŞ)
 DAILY_SUCCESS_TRACKER = {}
-
+# 🔹 GÜNLÜK KAPANIŞ SNAPSHOT
+DAILY_CLOSE_PRICES = {}
 # 🔹 HAFTALIK + CUMA (DISK – KALICI)
 WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
 
@@ -82,6 +83,9 @@ def week_key():
 def fmt(v):
     return round(v, 2) if isinstance(v, (int, float)) else None
 
+def is_market_close_final_window():
+    now = tr_now()
+    return now.hour == 18 and now.minute >= 10
 # ======================================================
 # RESET MEKANİZMALARI
 # ======================================================
@@ -839,12 +843,19 @@ def capture_friday_close(symbol, price):
     if now.hour == 18 and 5 <= now.minute <= 10:
         FRIDAY_CLOSE_PRICES.setdefault(symbol, price)
         save_weekly_state()
+        
+def capture_daily_close(symbol, price):
+    if not is_market_close_final_window():
+        return
 
+    DAILY_CLOSE_PRICES.setdefault(symbol, price)
 # ======================================================
 # SUCCESS TARGET UPDATE (DAILY + WEEKLY)
 # ======================================================
 
 def update_success_targets(symbol, price):
+    # Günlük kapanış snapshot
+    capture_daily_close(symbol, price)
     # app.py scanner loop her turda çağırıyor
     reset_daily_success_if_needed()
     reset_weekly_success_if_needed()
@@ -920,6 +931,20 @@ def build_daily_success_report():
 
     if not day_data:
         return None
+
+    # 🔥 KAPANIŞTA GELEN HEDEFLERİ ZORLA KONTROL ET
+    for d in day_data.values():
+        if d.get("hit"):
+           continue
+
+    close_price = DAILY_CLOSE_PRICES.get(d["symbol"])
+    if not close_price:
+        continue
+
+    if close_price >= d["target"]:
+        d["hit"] = True
+        d["hit_price"] = close_price
+        d["hit_time"] = "18:10"
 
     hits = [d for d in day_data.values() if d.get("hit")]
     fails = [d for d in day_data.values() if not d.get("hit")]
