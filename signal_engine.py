@@ -933,9 +933,10 @@ def build_daily_success_report():
         return None
 
     # 🔥 KAPANIŞTA GELEN HEDEFLERİ ZORLA KONTROL ET
+    
     for d in day_data.values():
-        if d.get("hit"):
-           continue
+    if d.get("hit"):
+        continue
 
     close_price = DAILY_CLOSE_PRICES.get(d["symbol"])
     if not close_price:
