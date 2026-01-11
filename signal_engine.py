@@ -1006,7 +1006,7 @@ def build_weekly_success_report():
         lines.append("")
         lines.append("🎯 BAŞARILI SİNYALLER:")
         for d in hits:
-            & = round(((d["hit_price"] - d["entry"]) / d["entry"]) * 100, 2)
+            base_gain = round(((d["hit_price"] - d["entry"]) / d["entry"]) * 100, 2)
 
             friday_price = FRIDAY_CLOSE_PRICES.get(d["symbol"])
             friday_gain = None
