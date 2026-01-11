@@ -109,7 +109,8 @@ def scanner_loop():
 
     last_daily_report = None
     last_weekly_report = None
-
+    last_close_snapshot_date = None
+    
     while True:
         now = now_tr()
         print(f"\n⏱ Döngü: {now.strftime('%H:%M:%S')}", flush=True)
@@ -120,29 +121,42 @@ def scanner_loop():
 
         try:
             if not is_market_open(now):
-                print("⏹ Market kapalı", flush=True)
+    print("⏹ Market kapalı", flush=True)
 
-                # 🟢 Günlük rapor (kapanış sonrası 1 kere)
-                if (
-                    last_daily_report != now.date()
-                    and now.time() > BIST_CLOSE
-                ):
-                    report = build_daily_success_report()
-                    if report:
-                        send_telegram_message(report)
-                    last_daily_report = now.date()
+    # 🔒 TEK SEFERLİK KAPANIŞ SNAPSHOT (18:10 sonrası)
+    if (
+        now.time() >= dtime(18, 10)
+        and last_close_snapshot_date != now.date()
+    ):
+        try:
+            print("📌 Kapanış snapshot alınıyor...", flush=True)
+            market_data = fetch_bist_data()
 
-                time.sleep(30)
-                continue
+            for item in market_data:
+                symbol = item["symbol"]
+                price = item["current_price"]
 
-            print("✅ MARKET AÇIK → TARAMA", flush=True)
+                # ⬇️ BURASI KRİTİK
+                update_success_targets(symbol, price)
 
-            try:
-                market_data = fetch_bist_data()
-            except Exception as e:
-                print("🔥 fetch_bist_data hata:", e, flush=True)
-                time.sleep(5)
-                continue
+            last_close_snapshot_date = now.date()
+            print("✅ Kapanış snapshot tamamlandı", flush=True)
+
+        except Exception as e:
+            print("🔥 Kapanış snapshot hatası:", e, flush=True)
+
+    # 🟢 Günlük rapor (kapanış sonrası 1 kere)
+    if (
+        last_daily_report != now.date()
+        and now.time() > BIST_CLOSE
+    ):
+        report = build_daily_success_report()
+        if report:
+            send_telegram_message(report)
+        last_daily_report = now.date()
+
+    time.sleep(30)
+    continue
 
             print(f"📈 Hisse sayısı: {len(market_data)}", flush=True)
 
