@@ -937,19 +937,18 @@ def build_daily_success_report():
         return None
 
     # 🔥 KAPANIŞTA GELEN HEDEFLERİ ZORLA KONTROL ET
-    
     for d in day_data.values():
         if d.get("hit"):
             continue
 
-    close_price = DAILY_CLOSE_PRICES.get(d["symbol"])
+        close_price = DAILY_CLOSE_PRICES.get(d["symbol"])
         if not close_price:
             continue
 
-    if close_price >= d["target"]:
-        d["hit"] = True
-        d["hit_price"] = close_price
-        d["hit_time"] = "18:10"
+        if close_price >= d["target"]:
+            d["hit"] = True
+            d["hit_price"] = close_price
+            d["hit_time"] = "18:10"
 
     hits = [d for d in day_data.values() if d.get("hit")]
     fails = [d for d in day_data.values() if not d.get("hit")]
@@ -967,17 +966,13 @@ def build_daily_success_report():
         lines.append("🎯 BAŞARILI:")
         for d in hits:
             gain = round(((d["hit_price"] - d["entry"]) / d["entry"]) * 100, 2)
-            lines.append(
-                f"• {d['symbol']} | {d['algo']} | %{gain}"
-            )
+            lines.append(f"• {d['symbol']} | {d['algo']} | %{gain}")
 
     if fails:
         lines.append("")
         lines.append("⛔ HEDEF GELMEYENLER:")
         for d in fails:
-            lines.append(
-                f"• {d['symbol']} | {d['algo']}"
-            )
+            lines.append(f"• {d['symbol']} | {d['algo']}")
 
     lines.append("")
     lines.append(f"🕒 {tr_now().strftime('%H:%M')}")
