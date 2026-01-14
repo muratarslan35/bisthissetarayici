@@ -337,8 +337,7 @@ ${r.gain_pct !== null ? `
         return;
     }
 
-    weekly.style.display="none";
-box.weekly.style.display = "none";
+    weekly.style.display = "none";
 box.style.display = "grid";
 
 (data.signals || []).filter(matchFilter).forEach(s => {
@@ -349,108 +348,60 @@ box.style.display = "grid";
     const tp2 = (entry * 1.03).toFixed(2);
     const tp3 = (entry * 1.05).toFixed(2);
 
-    const c = document.createElement("div");
-
     const visualCategory =
-        s.category === "success" ? "success" :            // 🟣 hedef geldi
-        s.action === "GÜÇLÜ AL" ? "strong" :               // 🔴 güçlü
-        (s.main_algorithm === "KOMBİNE" ||
-         s.main_algorithm === "SÜPER KOMBİNE") ? "combo" :// 🔵 kombine + süper
-        s.weakened === true ? "watch" :                    // 🟡 zayıflayan
-        "watch";                                          // 🟡 varsayılan
+        s.category === "success" ? "success" :
+        s.action === "GÜÇLÜ AL" ? "strong" :
+        (s.main_algorithm === "KOMBİNE" || s.main_algorithm === "SÜPER KOMBİNE") ? "combo" :
+        s.weakened === true ? "watch" :
+        "watch";
 
+    const c = document.createElement("div");
     c.className = `card signal-${visualCategory}`;
 
     c.innerHTML = `
         <div class="signal-title">${s.title || ""}</div>
         <div class="symbol">${s.symbol}</div>
 
-        ${s.entry_price
-            ? `<div class="row">🎯 Giriş: ${s.entry_price}</div>`
-            : ""
-        }
-    `;
-    
-    box.appendChild(c);
-});
+        ${s.entry_price ? `<div class="row">🎯 Giriş: ${s.entry_price}</div>` : ""}
 
         <div class="price">💰 ${s.price}</div>
 
-        ${s.live_gain_pct !== undefined ? `
+        ${s.live_gain_pct !== null && s.live_gain_pct !== undefined ? `
         <div class="row">
             📊 Canlı:
             <span class="stock-arrow ${s.live_gain_pct >= 0 ? 'up' : 'down'}">
-            ${s.live_gain_pct}%
-        </span>
-        </div>
-`       : ""}
+                ${s.live_gain_pct}%
+            </span>
+        </div>` : ""}
 
         <div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
 
-        ${s.resistance_1h
-            ? `<div class="row">🧱 1H Direnç: ${s.resistance_1h} (%${s.resistance_1h_pct})</div>`
-            : ""
-        }
+        ${s.resistance_1h ? `<div class="row">🧱 1H Direnç: ${s.resistance_1h} (%${s.resistance_1h_pct})</div>` : ""}
+        ${s.resistance_4h ? `<div class="row">🧱 4H Direnç: ${s.resistance_4h} (%${s.resistance_4h_pct})</div>` : ""}
 
-        ${s.resistance_4h
-            ? `<div class="row">🧱 4H Direnç: ${s.resistance_4h} (%${s.resistance_4h_pct})</div>`
-            : ""
-        }
-
-        ${(s.most_1h || s.most_4h)
-            ? `
-            <div class="block">
-                🧭 MOST<br>
-                ${s.most_1h
-                    ? `1H: ${s.most_1h==="UP"?"⬆️":"⬇️"} (${s.most_1h_level})`
-                    : ""
-                }<br>
-                ${s.most_4h
-                    ? `4H: ${s.most_4h==="UP"?"⬆️":"⬇️"} (${s.most_4h_level})`
-                    : ""
-                }
-            </div>
-            `
-            : ""
-        }
+        ${(s.most_1h || s.most_4h) ? `
+        <div class="block">
+            🧭 MOST<br>
+            ${s.most_1h ? `1H: ${s.most_1h === "UP" ? "⬆️" : "⬇️"} (${s.most_1h_level})<br>` : ""}
+            ${s.most_4h ? `4H: ${s.most_4h === "UP" ? "⬆️" : "⬇️"} (${s.most_4h_level})` : ""}
+        </div>` : ""}
 
         <div class="tp-box">
-    <div class="tp-row">
-        <div>TP1 %1.5</div>
-        <div class="tp-price">${tp1}</div>
-    </div>
-    <div class="tp-row">
-        <div>TP2 %3</div>
-        <div class="tp-price">${tp2}</div>
-    </div>
-    <div class="tp-row">
-        <div>TP3 %5</div>
-        <div class="tp-price">${tp3}</div>
-    </div>
-</div>
+            <div class="tp-row"><div>TP1 %1.5</div><div class="tp-price">${tp1}</div></div>
+            <div class="tp-row"><div>TP2 %3</div><div class="tp-price">${tp2}</div></div>
+            <div class="tp-row"><div>TP3 %5</div><div class="tp-price">${tp3}</div></div>
+        </div>
 
-${(s.helpers && s.helpers.length)
-    ? `
-    <div class="block">
-        🧩 Yardımcılar:<br>
-        ${s.helpers.map(h=>`• ${h}`).join("<br>")}
-    </div>
-    `
-    : ""
-}
+        ${(s.helpers && s.helpers.length) ? `
+        <div class="block">🧩 Yardımcılar:<br>${s.helpers.map(h => `• ${h}`).join("<br>")}</div>` : ""}
 
-${(s.history && s.history.length)
-    ? `
-    <div class="history">
-        ${s.history.slice(-4).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
-    </div>
-    `
-    : ""
-}
+        ${(s.history && s.history.length) ? `
+        <div class="history">${s.history.slice(-4).map(h => `${h[0]} → ${h[1]}`).join("<br>")}</div>` : ""}
 
-<div class="time">${s.time}</div>
-`;
-box.appendChild(c);
+        <div class="time">${s.time}</div>
+    `;
+
+    box.appendChild(c);
 });
 
 setInterval(loadSignals,10000);
