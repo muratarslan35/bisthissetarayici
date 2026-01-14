@@ -8,7 +8,9 @@ from signal_engine import (
     build_weekly_success_report,
     week_key,
     WEEKLY_SUCCESS_TRACKER,
-    FRIDAY_CLOSE_PRICES
+    FRIDAY_CLOSE_PRICES,
+    DAILY_SUCCESS_TRACKER,
+    today_key
 )
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -87,7 +89,6 @@ def build_weekly_table_data():
         friday_price = FRIDAY_CLOSE_PRICES.get(symbol)
         current_price = d.get("hit_price") or friday_price
 
-        # ---------- GÜVENLİK FIX #1 ----------
         entry_day_raw = d.get("entry_day")
         entry_day = (
             TR_DAYS.get(entry_day_raw, entry_day_raw)
@@ -100,7 +101,6 @@ def build_weekly_table_data():
             if hit_day_raw else None
         )
 
-        # ---------- GÜVENLİK FIX #2 ----------
         gain_pct = None
         if isinstance(current_price, (int, float)) and isinstance(entry, (int, float)):
             gain_pct = round(((current_price - entry) / entry) * 100, 2)
@@ -162,6 +162,26 @@ def dashboard_api():
     except Exception:
         pass
 
+    # ==================================================
+    # 🔥 GÜNLÜK BAŞARILI SİNYALLER (GERÇEK KAYNAK)
+    # ==================================================
+    daily_success = []
+    t_key = today_key()
+
+    for d in DAILY_SUCCESS_TRACKER.get(t_key, {}).values():
+        if d.get("hit"):
+            daily_success.append({
+                "symbol": d.get("symbol"),
+                "price": d.get("hit_price"),
+                "entry_price": d.get("entry"),
+                "category": "success",
+                "action": "BAŞARILI",
+                "main_algorithm": d.get("algo"),
+                "time": d.get("hit_time"),
+                "helpers": d.get("helpers", []),
+                "title": "🎯 HEDEF GELDİ",
+            })
+
     weekly_text = build_weekly_success_report()
 
     return jsonify({
@@ -169,8 +189,8 @@ def dashboard_api():
         "system_active": system_active,
         "server_time": now.strftime("%H:%M:%S"),
 
-        # Günlük + başarılı sinyaller
-        "signals": SUCCESS_SIGNALS + SIGNALS,
+        # Günlük + başarılı + normal sinyaller
+        "signals": daily_success + SUCCESS_SIGNALS + SIGNALS,
 
         # Haftalık metin raporu
         "weekly_report": {
