@@ -754,9 +754,9 @@ def process_symbol_signals(item):
     # --------------------------------------------------
     live_gain_pct = None
     if entry_price and price:
-    try:
+        try:
         live_gain_pct = round(((price - entry_price) / entry_price) * 100, 2)
-    except Exception:
+        except Exception:
         live_gain_pct = None
 
     # --------------------------------------------------
