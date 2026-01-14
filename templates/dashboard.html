@@ -333,6 +333,16 @@ box.style.display="grid";
         }
 
         <div class="price">💰 ${s.price}</div>
+
+        ${s.live_gain_pct !== undefined ? `
+        <div class="row">
+            📊 Canlı:
+            <span class="stock-arrow ${s.live_gain_pct >= 0 ? 'up' : 'down'}">
+            ${s.live_gain_pct}%
+        </span>
+        </div>
+`       : ""}
+
         <div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
 
         ${s.resistance_1h
