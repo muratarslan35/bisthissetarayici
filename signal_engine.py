@@ -750,13 +750,13 @@ def process_symbol_signals(item):
     tp3 = round(entry_price * 1.05, 2) if entry_price else None
 
     # --------------------------------------------------
-    # CANLI GETİRİ % (DASHBOARD + OKLAR)
-    # --------------------------------------------------
-    live_gain_pct = None
-    if entry_price and price:
-        try:
+# CANLI GETİRİ % (DASHBOARD + OKLAR)
+# --------------------------------------------------
+live_gain_pct = None
+if entry_price and price:
+    try:
         live_gain_pct = round(((price - entry_price) / entry_price) * 100, 2)
-        except Exception:
+    except Exception:
         live_gain_pct = None
 
     # --------------------------------------------------
