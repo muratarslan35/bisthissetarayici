@@ -246,19 +246,31 @@ function hourChip(time){
     return "c";
 }
 function matchFilter(s){
-    if(CURRENT_FILTER==="all") return true;
+    /* TÜMÜ */
+    if (CURRENT_FILTER === "all") return true;
 
-    if(CURRENT_FILTER==="strong")
-        return s.action === "GÜÇLÜ AL" && !s.weakened;
+    /* GÜÇLÜ AL (zayıflayanlar hariç) */
+    if (CURRENT_FILTER === "strong")
+        return s.action === "GÜÇLÜ AL" && s.weakened !== true;
 
-    if(CURRENT_FILTER==="power")
-    return (s.power_delta || 0) >= 20 && !s.weakened;
+    /* GÜÇLENEN */
+    if (CURRENT_FILTER === "power")
+        return (s.power_delta || 0) >= 20 && s.weakened !== true;
 
-    if(CURRENT_FILTER==="success")
+    /* KOMBİNE */
+    if (CURRENT_FILTER === "kombine")
+        return s.main_algorithm === "KOMBİNE";
+
+    /* SÜPER KOMBİNE */
+    if (CURRENT_FILTER === "super")
+        return s.main_algorithm === "SÜPER KOMBİNE";
+
+    /* GÜNLÜK BAŞARILI */
+    if (CURRENT_FILTER === "success")
         return s.category === "success";
 
     return true;
-}
+        }
 
 function setFilter(f,e){
     CURRENT_FILTER=f;
@@ -337,7 +349,13 @@ box.style.display="grid";
     const tp3=(entry*1.05).toFixed(2);
 
     const c=document.createElement("div");
-    c.className=`card signal-${s.category||"watch"}`;
+    const visualCategory =
+    s.category ||
+    (s.main_algorithm === "SÜPER KOMBİNE" ? "success" :
+     s.main_algorithm === "KOMBİNE" ? "combo" :
+     s.action === "GÜÇLÜ AL" ? "strong" : "watch");
+
+c.className = `card signal-${visualCategory}`;
     c.innerHTML=`
         <div class="signal-title">${s.title||""}</div>
         <div class="symbol">${s.symbol}</div>
