@@ -151,6 +151,30 @@ def build_weekly_table_data():
     }
 
 # ======================================================
+# LIVE GAIN % (HER API ÇAĞRISINDA HESAPLANIR)
+# ======================================================
+
+def enrich_live_gain(signals):
+    enriched = []
+
+    for s in signals:
+        entry = s.get("entry_price")
+        price = s.get("price")
+
+        live_gain_pct = None
+        if isinstance(entry, (int, float)) and isinstance(price, (int, float)):
+            try:
+                live_gain_pct = round(((price - entry) / entry) * 100, 2)
+            except Exception:
+                pass
+
+        s = dict(s)
+        s["live_gain_pct"] = live_gain_pct
+        enriched.append(s)
+
+    return enriched
+
+# ======================================================
 # API
 # ======================================================
 
@@ -176,7 +200,7 @@ def dashboard_api():
         pass
 
     # ==================================================
-    # 🔥 GÜNLÜK BAŞARILI SİNYALLER (DASHBOARD + SUCCESS)
+    # 🔥 GÜNLÜK BAŞARILI SİNYALLER
     # ==================================================
     daily_success = []
     t_key = today_key()
@@ -185,7 +209,6 @@ def dashboard_api():
         if not d.get("hit"):
             continue
 
-        # ---- süre hesapla ----
         entry_time = d.get("entry_time")
         hit_time = d.get("hit_time")
 
@@ -225,20 +248,20 @@ def dashboard_api():
 
     weekly_text = build_weekly_success_report()
 
+    all_signals = daily_success + SUCCESS_SIGNALS + SIGNALS
+
     return jsonify({
         "market_open": market_open,
         "system_active": system_active,
         "server_time": now.strftime("%H:%M:%S"),
 
-        # 🔥 Dashboard kartları için TAM veri
-        "signals": daily_success + SUCCESS_SIGNALS + SIGNALS,
+        # ✅ CANLI % HER SEFERİNDE YENİDEN HESAPLANIR
+        "signals": enrich_live_gain(all_signals),
 
-        # Haftalık metin raporu
         "weekly_report": {
             "week_id": week_key(),
             "text": weekly_text
         } if weekly_text else None,
 
-        # Haftalık tablo (gelişmiş)
         "weekly_table": build_weekly_table_data()
     })
