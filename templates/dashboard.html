@@ -242,7 +242,7 @@ const clock   = document.getElementById("clock");
     
 let CURRENT_FILTER="all";
 
-function hourChip(time)
+function hourChip(time){
     if(!time) return "c";
     const h=parseInt(time.split(":")[0]);
     if(h>=10 && h<=11) return "a";
@@ -337,7 +337,7 @@ ${r.gain_pct !== null ? `
                 `;
                 tbody.appendChild(tr);
             });
-        }
+        
         return;
 }
 
