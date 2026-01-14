@@ -157,6 +157,40 @@ body {
 
 .weekly-success { color:#22c55e; }
 .weekly-failed { color:#ef4444; }
+/* ================= REAL STOCK ARROWS ================= */
+.stock-arrow {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-weight:700;
+    font-size:13px;
+}
+
+.stock-arrow.up {
+    color:#16a34a; /* borsa yeşili */
+}
+
+.stock-arrow.down {
+    color:#dc2626; /* borsa kırmızısı */
+}
+
+.stock-arrow.up::before {
+    content:"";
+    width:0;
+    height:0;
+    border-left:6px solid transparent;
+    border-right:6px solid transparent;
+    border-bottom:10px solid #16a34a;
+}
+
+.stock-arrow.down::before {
+    content:"";
+    width:0;
+    height:0;
+    border-left:6px solid transparent;
+    border-right:6px solid transparent;
+    border-top:10px solid #dc2626;
+}
 </style>
 </head>
 <body>
@@ -189,9 +223,9 @@ body {
                 <th>Hisse</th>
                 <th>Algoritma</th>
                 <th>Giriş</th>
-                <th>Fiyat</th>
+                <th>Canlı Fiyat</th>
                 <th>Gün / Saat</th>
-                <th>Getiri %</th>
+                <th>Güncel Getiri %</th>
                 <th>Süre</th>
                 <th>Yardımcılar</th>
             </tr>
@@ -256,7 +290,13 @@ async function loadSignals(){
                             ${r.entry_time ?? ""}
                         </span>
                     </td>
-                    <td>${r.gain_pct ?? "-"}</td>
+                    <td>
+${r.gain_pct !== null ? `
+  <span class="stock-arrow ${r.gain_pct >= 0 ? 'up' : 'down'}">
+    ${r.gain_pct}%
+  </span>
+` : "-"}
+</td>
                     <td>
                         ${r.duration_label
                             ? `<span class="helper-chip a">${r.duration_label}</span>`
@@ -336,6 +376,14 @@ box.style.display="grid";
                 <div class="tp-price">${tp3}</div>
             </div>
         </div>
+        ${s.live_gain_pct !== undefined ? `
+<div class="row">
+    📊 Canlı:
+    <span class="stock-arrow ${s.live_gain_pct >= 0 ? 'up' : 'down'}">
+        ${s.live_gain_pct}%
+    </span>
+</div>
+` : ""}
 
         ${(s.helpers && s.helpers.length)
             ? `
