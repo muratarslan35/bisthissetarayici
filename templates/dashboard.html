@@ -299,48 +299,48 @@ async function loadSignals(){
     box.innerHTML="";
     tbody.innerHTML="";
 
-    if(CURRENT_FILTER==="weekly"){
-        box.style.display="none";
-        weekly.style.display="block";
+    if (CURRENT_FILTER === "weekly"){
+    box.style.display = "none";
+    weekly.style.display = "block";
 
-        const wt=data.weekly_table;
-        if(wt){
-            summary.innerHTML=`📡 ${wt.summary.total} | ✅ ${wt.summary.success} | ❌ ${wt.summary.failed}`;
+    const wt = data.weekly_table;
+    if (wt) {
+        summary.innerHTML = `📡 ${wt.summary.total} | ✅ ${wt.summary.success} | ❌ ${wt.summary.failed}`;
 
-            [...wt.success,...wt.failed].forEach(r=>{
-                const tr=document.createElement("tr");
-                tr.className=r.gain_pct>=0?"weekly-success":"weekly-failed";
-                tr.innerHTML=`
-                    <td>${r.symbol}</td>
-                    <td>${r.algorithm}</td>
-                    <td>${r.entry_price ?? "-"}</td>
-                    <td>${r.current_price ?? "-"}</td>
-                    <td>
-                        ${r.entry_day ?? "-"}<br>
-                        <span class="helper-chip ${hourChip(r.entry_time)}">
-                            ${r.entry_time ?? ""}
-                        </span>
-                    </td>
-                    <td>
-${r.gain_pct !== null ? `
-  <span class="stock-arrow ${r.gain_pct >= 0 ? 'up' : 'down'}">
-    ${r.gain_pct}%
-  </span>
-` : "-"}
-</td>
-                    <td>
-                        ${r.duration_label
-                            ? `<span class="helper-chip a">${r.duration_label}</span>`
-                            : `<span class="helper-chip c">Açık</span>`}
-                    </td>
-                    <td>${(r.helpers||[]).join(", ")}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-        return;
+        [...wt.success, ...wt.failed].forEach(r => {
+            const tr = document.createElement("tr");
+            tr.className = r.gain_pct >= 0 ? "weekly-success" : "weekly-failed";
+
+            const gainHtml = r.gain_pct !== null
+                ? `<span class="stock-arrow ${r.gain_pct >= 0 ? "up" : "down"}">${r.gain_pct}%</span>`
+                : "-";
+
+            tr.innerHTML = `
+                <td>${r.symbol}</td>
+                <td>${r.algorithm}</td>
+                <td>${r.entry_price ?? "-"}</td>
+                <td>${r.current_price ?? "-"}</td>
+                <td>
+                    ${r.entry_day ?? "-"}<br>
+                    <span class="helper-chip ${hourChip(r.entry_time)}">
+                        ${r.entry_time ?? ""}
+                    </span>
+                </td>
+                <td>${gainHtml}</td>
+                <td>
+                    ${r.duration_label
+                        ? `<span class="helper-chip a">${r.duration_label}</span>`
+                        : `<span class="helper-chip c">Açık</span>`}
+                </td>
+                <td>${(r.helpers || []).join(", ")}</td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    return;
 }
-
     weekly.style.display = "none";
 box.style.display = "grid";
 
