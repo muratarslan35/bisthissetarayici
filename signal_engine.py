@@ -666,8 +666,11 @@ def process_symbol_signals(item):
     # --------------------------------------------------
     # REPEAT BLOCK
     # --------------------------------------------------
-    if in_repeat_block(symbol, algo) and not (
-        strengthened or weakened or most_upgrade or most_downgrade
+    # 🔑 İLK SİNYAL ASLA SUSTURULMAZ
+    is_first_entry = (symbol, algo) not in LAST_SIGNAL_STATE
+
+    if not is_first_entry and in_repeat_block(symbol, algo) and not (
+    strengthened or weakened or most_upgrade or most_downgrade
     ):
         return []
 
