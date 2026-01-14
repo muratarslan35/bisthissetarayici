@@ -56,7 +56,7 @@ def push_success_signal(signal):
     del SUCCESS_SIGNALS[MAX_SUCCESS_SIGNALS:]
 
 # ======================================================
-# WEEKLY TABLE DATA (YENİ + GÜVENLİ)
+# WEEKLY TABLE DATA
 # ======================================================
 
 TR_DAYS = {
@@ -68,12 +68,6 @@ TR_DAYS = {
 }
 
 def build_weekly_table_data():
-    """
-    Dashboard haftalık tablo verisi üretir
-    - Başarılı
-    - Başarısız
-    - Özet
-    """
     w_key = week_key()
     week_data = WEEKLY_SUCCESS_TRACKER.get(w_key, {})
 
@@ -90,34 +84,53 @@ def build_weekly_table_data():
         current_price = d.get("hit_price") or friday_price
 
         entry_day_raw = d.get("entry_day")
-        entry_day = (
-            TR_DAYS.get(entry_day_raw, entry_day_raw)
-            if entry_day_raw else None
-        )
+        entry_day = TR_DAYS.get(entry_day_raw, entry_day_raw)
 
         hit_day_raw = d.get("hit_day")
-        hit_day = (
-            TR_DAYS.get(hit_day_raw, hit_day_raw)
-            if hit_day_raw else None
-        )
+        hit_day = TR_DAYS.get(hit_day_raw, hit_day_raw)
 
         gain_pct = None
         if isinstance(current_price, (int, float)) and isinstance(entry, (int, float)):
             gain_pct = round(((current_price - entry) / entry) * 100, 2)
 
+        # --------------------------------------------------
+        # ⏱ SİNYAL SÜRESİ (ENTRY → HIT)
+        # --------------------------------------------------
+        entry_time = d.get("entry_time")
+        hit_time = d.get("hit_time")
+
+        duration_minutes = None
+        duration_label = None
+
+        if entry_time and hit_time:
+            try:
+                et = datetime.strptime(entry_time, "%H:%M:%S")
+                ht = datetime.strptime(hit_time, "%H:%M:%S")
+                diff = (ht - et).total_seconds() / 60
+                if diff < 0:
+                    diff += 24 * 60
+                duration_minutes = int(diff)
+                if duration_minutes < 60:
+                    duration_label = f"{duration_minutes} dk"
+                else:
+                    duration_label = f"{duration_minutes//60}s {duration_minutes%60}dk"
+            except Exception:
+                pass
+
         row = {
             "symbol": symbol,
             "algorithm": algo,
             "entry_price": round(entry, 2) if isinstance(entry, (int, float)) else None,
-            "current_price": round(current_price, 2)
-                if isinstance(current_price, (int, float))
-                else None,
+            "current_price": round(current_price, 2) if isinstance(current_price, (int, float)) else None,
             "entry_day": entry_day,
             "hit_day": hit_day,
             "gain_pct": gain_pct,
             "helpers": helpers,
             "entry_date": str(d.get("entry_date")) if d.get("entry_date") else None,
-            "hit_time": d.get("hit_time"),
+            "entry_time": entry_time,
+            "hit_time": hit_time,
+            "duration_minutes": duration_minutes,
+            "duration_label": duration_label,
         }
 
         if d.get("hit"):
@@ -163,24 +176,52 @@ def dashboard_api():
         pass
 
     # ==================================================
-    # 🔥 GÜNLÜK BAŞARILI SİNYALLER (GERÇEK KAYNAK)
+    # 🔥 GÜNLÜK BAŞARILI SİNYALLER (DASHBOARD + SUCCESS)
     # ==================================================
     daily_success = []
     t_key = today_key()
 
     for d in DAILY_SUCCESS_TRACKER.get(t_key, {}).values():
-        if d.get("hit"):
-            daily_success.append({
-                "symbol": d.get("symbol"),
-                "price": d.get("hit_price"),
-                "entry_price": d.get("entry"),
-                "category": "success",
-                "action": "BAŞARILI",
-                "main_algorithm": d.get("algo"),
-                "time": d.get("hit_time"),
-                "helpers": d.get("helpers", []),
-                "title": "🎯 HEDEF GELDİ",
-            })
+        if not d.get("hit"):
+            continue
+
+        # ---- süre hesapla ----
+        entry_time = d.get("entry_time")
+        hit_time = d.get("hit_time")
+
+        duration_minutes = None
+        duration_label = None
+
+        if entry_time and hit_time:
+            try:
+                et = datetime.strptime(entry_time, "%H:%M:%S")
+                ht = datetime.strptime(hit_time, "%H:%M:%S")
+                diff = (ht - et).total_seconds() / 60
+                if diff < 0:
+                    diff += 24 * 60
+                duration_minutes = int(diff)
+                if duration_minutes < 60:
+                    duration_label = f"{duration_minutes} dk"
+                else:
+                    duration_label = f"{duration_minutes//60}s {duration_minutes%60}dk"
+            except Exception:
+                pass
+
+        daily_success.append({
+            "symbol": d.get("symbol"),
+            "price": d.get("hit_price"),
+            "entry_price": d.get("entry"),
+            "category": "success",
+            "action": "BAŞARILI",
+            "main_algorithm": d.get("algo"),
+            "time": d.get("hit_time"),
+            "helpers": d.get("helpers", []),
+            "title": "🎯 HEDEF GELDİ",
+            "entry_time": entry_time,
+            "hit_time": hit_time,
+            "duration_minutes": duration_minutes,
+            "duration_label": duration_label,
+        })
 
     weekly_text = build_weekly_success_report()
 
@@ -189,7 +230,7 @@ def dashboard_api():
         "system_active": system_active,
         "server_time": now.strftime("%H:%M:%S"),
 
-        # Günlük + başarılı + normal sinyaller
+        # 🔥 Dashboard kartları için TAM veri
         "signals": daily_success + SUCCESS_SIGNALS + SIGNALS,
 
         # Haftalık metin raporu
@@ -198,6 +239,6 @@ def dashboard_api():
             "text": weekly_text
         } if weekly_text else None,
 
-        # Haftalık tablo (dashboard için)
+        # Haftalık tablo (gelişmiş)
         "weekly_table": build_weekly_table_data()
     })
