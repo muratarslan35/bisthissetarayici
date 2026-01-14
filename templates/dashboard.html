@@ -208,8 +208,8 @@ body {
     <div class="filter-btn" onclick="setFilter('power',event)">Güçlenen</div>
     <div class="filter-btn" onclick="setFilter('kombine',event)">Kombine</div>
     <div class="filter-btn" onclick="setFilter('super',event)">Süper Kombine</div>
-    <div class="filter-btn" onclick="setFilter('success',event)">Başarılı</div>
-    <div class="filter-btn" onclick="setFilter('weekly',event)">Haftalık</div>
+    <div class="filter-btn" onclick="setFilter('success',event)">Günlük Başarı</div>
+    <div class="filter-btn" onclick="setFilter('weekly',event)">Haftalık Başarı</div>
 </div>
 
 <div class="container" id="signals"></div>
@@ -244,6 +244,20 @@ function hourChip(time){
     if(h>=10 && h<=11) return "a";
     if(h>=12 && h<=14) return "b";
     return "c";
+}
+function matchFilter(s){
+    if(CURRENT_FILTER==="all") return true;
+
+    if(CURRENT_FILTER==="strong")
+        return s.action === "GÜÇLÜ AL" && !s.weakened;
+
+    if(CURRENT_FILTER==="power")
+    return (s.power_delta || 0) >= 20 && !s.weakened;
+
+    if(CURRENT_FILTER==="success")
+        return s.category === "success";
+
+    return true;
 }
 
 function setFilter(f,e){
@@ -314,7 +328,7 @@ ${r.gain_pct !== null ? `
     weekly.style.display="none";
 box.style.display="grid";
 
-(data.signals||[]).forEach(s=>{
+(data.signals||[]).filter(matchFilter).forEach(s=>{
     const price=parseFloat(s.price);
     const entry=parseFloat(s.entry_price||price);
 
@@ -374,50 +388,42 @@ box.style.display="grid";
         }
 
         <div class="tp-box">
-            <div class="tp-row">
-                <div>TP1 %1.5</div>
-                <div class="tp-price">${tp1}</div>
-            </div>
-            <div class="tp-row">
-                <div>TP2 %3</div>
-                <div class="tp-price">${tp2}</div>
-            </div>
-            <div class="tp-row">
-                <div>TP3 %5</div>
-                <div class="tp-price">${tp3}</div>
-            </div>
-        </div>
-        ${s.live_gain_pct !== undefined ? `
-<div class="row">
-    📊 Canlı:
-    <span class="stock-arrow ${s.live_gain_pct >= 0 ? 'up' : 'down'}">
-        ${s.live_gain_pct}%
-    </span>
+    <div class="tp-row">
+        <div>TP1 %1.5</div>
+        <div class="tp-price">${tp1}</div>
+    </div>
+    <div class="tp-row">
+        <div>TP2 %3</div>
+        <div class="tp-price">${tp2}</div>
+    </div>
+    <div class="tp-row">
+        <div>TP3 %5</div>
+        <div class="tp-price">${tp3}</div>
+    </div>
 </div>
-` : ""}
 
-        ${(s.helpers && s.helpers.length)
-            ? `
-            <div class="block">
-                🧩 Yardımcılar:<br>
-                ${s.helpers.map(h=>`• ${h}`).join("<br>")}
-            </div>
-            `
-            : ""
-        }
+${(s.helpers && s.helpers.length)
+    ? `
+    <div class="block">
+        🧩 Yardımcılar:<br>
+        ${s.helpers.map(h=>`• ${h}`).join("<br>")}
+    </div>
+    `
+    : ""
+}
 
-        ${(s.history && s.history.length)
-            ? `
-            <div class="history">
-                ${s.history.slice(-4).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
-            </div>
-            `
-            : ""
-        }
+${(s.history && s.history.length)
+    ? `
+    <div class="history">
+        ${s.history.slice(-4).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
+    </div>
+    `
+    : ""
+}
 
-        <div class="time">${s.time}</div>
-    `;
-    box.appendChild(c);
+<div class="time">${s.time}</div>
+`;
+box.appendChild(c);
 });
 
 setInterval(loadSignals,10000);
