@@ -236,9 +236,13 @@ body {
 </div>
 
 <script>
+const market  = document.getElementById("market");
+const scanner = document.getElementById("scanner");
+const clock   = document.getElementById("clock");
+    
 let CURRENT_FILTER="all";
 
-function hourChip(time){
+function hourChip(time)
     if(!time) return "c";
     const h=parseInt(time.split(":")[0]);
     if(h>=10 && h<=11) return "a";
@@ -335,7 +339,7 @@ ${r.gain_pct !== null ? `
             });
         }
         return;
-    }
+}
 
     weekly.style.display = "none";
 box.style.display = "grid";
