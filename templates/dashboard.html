@@ -120,6 +120,19 @@ body {
     margin-top:8px;
 }
 
+/* ================= CHIPS ================= */
+.helper-chip {
+    display:inline-block;
+    padding:3px 8px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:700;
+    margin-top:4px;
+}
+.helper-chip.a { background:#14532d; color:#22c55e; }
+.helper-chip.b { background:#1e3a8a; color:#93c5fd; }
+.helper-chip.c { background:#78350f; color:#fbbf24; }
+
 /* ================= WEEKLY TABLE ================= */
 #weekly-section {
     display:none;
@@ -177,37 +190,26 @@ body {
                 <th>Algoritma</th>
                 <th>Giriş</th>
                 <th>Fiyat</th>
-                <th>Gün</th>
+                <th>Gün / Saat</th>
                 <th>Getiri %</th>
+                <th>Süre</th>
                 <th>Yardımcılar</th>
             </tr>
         </thead>
         <tbody></tbody>
     </table>
 </div>
+
 <script>
-
-function matchFilter(s){
-    if(CURRENT_FILTER==="all") return true;
-
-    if(CURRENT_FILTER==="strong")
-        return s.action === "GÜÇLÜ AL";
-
-    if(CURRENT_FILTER==="power")
-        return (s.power_delta || 0) >= 20;
-
-    if(CURRENT_FILTER==="kombine")
-        return s.main_algorithm === "KOMBİNE";
-
-    if(CURRENT_FILTER==="super")
-        return s.main_algorithm === "SÜPER KOMBİNE";
-
-    if(CURRENT_FILTER==="success")
-        return s.category === "success";
-
-    return true;
-}
 let CURRENT_FILTER="all";
+
+function hourChip(time){
+    if(!time) return "c";
+    const h=parseInt(time.split(":")[0]);
+    if(h>=10 && h<=11) return "a";
+    if(h>=12 && h<=14) return "b";
+    return "c";
+}
 
 function setFilter(f,e){
     CURRENT_FILTER=f;
@@ -248,8 +250,18 @@ async function loadSignals(){
                     <td>${r.algorithm}</td>
                     <td>${r.entry_price ?? "-"}</td>
                     <td>${r.current_price ?? "-"}</td>
-                    <td>${r.entry_day ?? "-"}</td>
+                    <td>
+                        ${r.entry_day ?? "-"}<br>
+                        <span class="helper-chip ${hourChip(r.entry_time)}">
+                            ${r.entry_time ?? ""}
+                        </span>
+                    </td>
                     <td>${r.gain_pct ?? "-"}</td>
+                    <td>
+                        ${r.duration_label
+                            ? `<span class="helper-chip a">${r.duration_label}</span>`
+                            : `<span class="helper-chip c">Açık</span>`}
+                    </td>
                     <td>${(r.helpers||[]).join(", ")}</td>
                 `;
                 tbody.appendChild(tr);
@@ -259,58 +271,95 @@ async function loadSignals(){
     }
 
     weekly.style.display="none";
-    box.style.display="grid";
+box.style.display="grid";
 
-    (data.signals||[]).filter(matchFilter).forEach(s=>{
-        const price=parseFloat(s.price);
-        const entry=parseFloat(s.entry_price||price);
+(data.signals||[]).forEach(s=>{
+    const price=parseFloat(s.price);
+    const entry=parseFloat(s.entry_price||price);
 
-        const tp1=(entry*1.015).toFixed(2);
-        const tp2=(entry*1.03).toFixed(2);
-        const tp3=(entry*1.05).toFixed(2);
+    const tp1=(entry*1.015).toFixed(2);
+    const tp2=(entry*1.03).toFixed(2);
+    const tp3=(entry*1.05).toFixed(2);
 
-        const c=document.createElement("div");
-        c.className=`card signal-${s.category||"watch"}`;
-        c.innerHTML=`
-            <div class="signal-title">${s.title||""}</div>
-            <div class="symbol">${s.symbol}</div>
+    const c=document.createElement("div");
+    c.className=`card signal-${s.category||"watch"}`;
+    c.innerHTML=`
+        <div class="signal-title">${s.title||""}</div>
+        <div class="symbol">${s.symbol}</div>
 
-            ${s.entry_price?`<div class="row">🎯 Giriş: ${s.entry_price}</div>`:""}
-            <div class="price">💰 ${s.price}</div>
-            <div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
+        ${s.entry_price
+            ? `<div class="row">🎯 Giriş: ${s.entry_price}</div>`
+            : ""
+        }
 
-            ${s.resistance_1h?`<div class="row">🧱 1H Direnç: ${s.resistance_1h} (%${s.resistance_1h_pct})</div>`:""}
-            ${s.resistance_4h?`<div class="row">🧱 4H Direnç: ${s.resistance_4h} (%${s.resistance_4h_pct})</div>`:""}
+        <div class="price">💰 ${s.price}</div>
+        <div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
 
-            ${(s.most_1h||s.most_4h)?`
+        ${s.resistance_1h
+            ? `<div class="row">🧱 1H Direnç: ${s.resistance_1h} (%${s.resistance_1h_pct})</div>`
+            : ""
+        }
+
+        ${s.resistance_4h
+            ? `<div class="row">🧱 4H Direnç: ${s.resistance_4h} (%${s.resistance_4h_pct})</div>`
+            : ""
+        }
+
+        ${(s.most_1h || s.most_4h)
+            ? `
             <div class="block">
                 🧭 MOST<br>
-                ${s.most_1h?`1H: ${s.most_1h==="UP"?"⬆️":"⬇️"} (${s.most_1h_level})`:""}<br>
-                ${s.most_4h?`4H: ${s.most_4h==="UP"?"⬆️":"⬇️"} (${s.most_4h_level})`:""}
-            </div>`:""}
-
-            <div class="tp-box">
-                <div class="tp-row"><div>TP1 %1.5</div><div class="tp-price">${tp1}</div></div>
-                <div class="tp-row"><div>TP2 %3</div><div class="tp-price">${tp2}</div></div>
-                <div class="tp-row"><div>TP3 %5</div><div class="tp-price">${tp3}</div></div>
+                ${s.most_1h
+                    ? `1H: ${s.most_1h==="UP"?"⬆️":"⬇️"} (${s.most_1h_level})`
+                    : ""
+                }<br>
+                ${s.most_4h
+                    ? `4H: ${s.most_4h==="UP"?"⬆️":"⬇️"} (${s.most_4h_level})`
+                    : ""
+                }
             </div>
+            `
+            : ""
+        }
 
-            ${(s.helpers && s.helpers.length)?`
+        <div class="tp-box">
+            <div class="tp-row">
+                <div>TP1 %1.5</div>
+                <div class="tp-price">${tp1}</div>
+            </div>
+            <div class="tp-row">
+                <div>TP2 %3</div>
+                <div class="tp-price">${tp2}</div>
+            </div>
+            <div class="tp-row">
+                <div>TP3 %5</div>
+                <div class="tp-price">${tp3}</div>
+            </div>
+        </div>
+
+        ${(s.helpers && s.helpers.length)
+            ? `
             <div class="block">
                 🧩 Yardımcılar:<br>
-                ${(s.helpers||[]).map(h=>`• ${h}`).join("<br>")}
-            </div>`:""}
+                ${s.helpers.map(h=>`• ${h}`).join("<br>")}
+            </div>
+            `
+            : ""
+        }
 
-            ${(s.history && s.history.length)?`
+        ${(s.history && s.history.length)
+            ? `
             <div class="history">
-                ${(s.history||[]).slice(-4).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
-            </div>`:""}
+                ${s.history.slice(-4).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}
+            </div>
+            `
+            : ""
+        }
 
-            <div class="time">${s.time}</div>
-        `;
-        box.appendChild(c);
-    });
-}
+        <div class="time">${s.time}</div>
+    `;
+    box.appendChild(c);
+});
 
 setInterval(loadSignals,10000);
 loadSignals();
