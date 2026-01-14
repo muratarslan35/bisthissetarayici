@@ -338,32 +338,41 @@ ${r.gain_pct !== null ? `
     }
 
     weekly.style.display="none";
-box.style.display="grid";
+box.weekly.style.display = "none";
+box.style.display = "grid";
 
-(data.signals||[]).filter(matchFilter).forEach(s=>{
-    const price=parseFloat(s.price);
-    const entry=parseFloat(s.entry_price||price);
+(data.signals || []).filter(matchFilter).forEach(s => {
+    const price = parseFloat(s.price);
+    const entry = parseFloat(s.entry_price || price);
 
-    const tp1=(entry*1.015).toFixed(2);
-    const tp2=(entry*1.03).toFixed(2);
-    const tp3=(entry*1.05).toFixed(2);
+    const tp1 = (entry * 1.015).toFixed(2);
+    const tp2 = (entry * 1.03).toFixed(2);
+    const tp3 = (entry * 1.05).toFixed(2);
 
-    const c=document.createElement("div");
+    const c = document.createElement("div");
+
     const visualCategory =
-    s.category ||
-    (s.main_algorithm === "SÜPER KOMBİNE" ? "success" :
-     s.main_algorithm === "KOMBİNE" ? "combo" :
-     s.action === "GÜÇLÜ AL" ? "strong" : "watch");
+        s.category === "success" ? "success" :            // 🟣 hedef geldi
+        s.action === "GÜÇLÜ AL" ? "strong" :               // 🔴 güçlü
+        (s.main_algorithm === "KOMBİNE" ||
+         s.main_algorithm === "SÜPER KOMBİNE") ? "combo" :// 🔵 kombine + süper
+        s.weakened === true ? "watch" :                    // 🟡 zayıflayan
+        "watch";                                          // 🟡 varsayılan
 
-c.className = `card signal-${visualCategory}`;
-    c.innerHTML=`
-        <div class="signal-title">${s.title||""}</div>
+    c.className = `card signal-${visualCategory}`;
+
+    c.innerHTML = `
+        <div class="signal-title">${s.title || ""}</div>
         <div class="symbol">${s.symbol}</div>
 
         ${s.entry_price
             ? `<div class="row">🎯 Giriş: ${s.entry_price}</div>`
             : ""
         }
+    `;
+    
+    box.appendChild(c);
+});
 
         <div class="price">💰 ${s.price}</div>
 
