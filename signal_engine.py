@@ -125,7 +125,7 @@ def reset_daily_success_if_needed():
     if key not in DAILY_SUCCESS_TRACKER:
         DAILY_SUCCESS_TRACKER.clear()
         DAILY_SUCCESS_TRACKER[key] = {}
-
+        save_daily_state()
 def reset_weekly_success_if_needed():
     """
     Pazartesi itibariyle WEEKLY_SUCCESS_TRACKER sıfırlanır (DISK)
@@ -834,7 +834,7 @@ def process_symbol_signals(item):
         "power": total_power,
         "power_delta": power_delta,
     }
-
+    
     # --------------------------------------------------
     # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
     # --------------------------------------------------
@@ -853,7 +853,7 @@ def process_symbol_signals(item):
             "entry_time": tr_now().strftime("%H:%M:%S"),
             "entry_date": tr_now().date(),
         }
-
+        save_daily_state()
     # ---- WEEKLY (DISK) ----
     if (symbol, algo) not in w_store:
         w_store[(symbol, algo)] = {
@@ -925,7 +925,7 @@ def update_success_targets(symbol, price):
             d["hit"] = True
             d["hit_price"] = price
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
-            
+            save_daily_state()
             entry = d["entry"]
 
             success_signals.append({
