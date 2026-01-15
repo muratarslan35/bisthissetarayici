@@ -89,6 +89,8 @@ DAILY_SUCCESS_TRACKER = {}
 DAILY_CLOSE_PRICES = {}
 # 🔹 HAFTALIK + CUMA (DISK – KALICI)
 WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
+# 🔹 GÜNLÜK (DISK + RAM)
+DAILY_SUCCESS_TRACKER = load_daily_state()
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -988,6 +990,7 @@ def build_daily_success_report():
             d["hit"] = True
             d["hit_price"] = close_price
             d["hit_time"] = "18:10"
+            save_daily_state()
 
     hits = [d for d in day_data.values() if d.get("hit")]
     fails = [d for d in day_data.values() if not d.get("hit")]
