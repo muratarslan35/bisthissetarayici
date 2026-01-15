@@ -38,8 +38,10 @@ def reset_dashboard_if_needed(now):
     if LAST_DASHBOARD_RESET_DATE == now.date():
         return
 
-    SIGNALS.clear()
+    # 🔒 SADECE GÜNLÜKLERİ SIFIRLA
     SUCCESS_SIGNALS.clear()
+    SIGNALS.clear()
+
     LAST_DASHBOARD_RESET_DATE = now.date()
 
 # ======================================================
@@ -181,8 +183,13 @@ def enrich_live_gain(signals):
 @dashboard_bp.route("/api/dashboard")
 def dashboard_api():
     now = datetime.now(TR_TZ)
-    reset_dashboard_if_needed(now)
 
+    # 🔑 SADECE RAM BOŞSA hydrate et
+    if not SIGNALS and not SUCCESS_SIGNALS:
+        hydrate_dashboard_from_engine()
+
+    reset_dashboard_if_needed(now)
+    
     market_open = False
     system_active = False
 
