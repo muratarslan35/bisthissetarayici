@@ -6,7 +6,7 @@ import requests
 # signal_engine verileri
 from signal_engine import (
     build_weekly_success_report,
-    week_key,
+    week_key,load_weekly_state,
     WEEKLY_SUCCESS_TRACKER,
     FRIDAY_CLOSE_PRICES,
     DAILY_SUCCESS_TRACKER,
@@ -183,6 +183,12 @@ def enrich_live_gain(signals):
 @dashboard_bp.route("/api/dashboard")
 def dashboard_api():
     now = datetime.now(TR_TZ)
+
+    # 🔑 WEEKLY RAM BOŞSA DISKTEN YÜKLE
+    if not WEEKLY_SUCCESS_TRACKER:
+        weekly, friday = load_weekly_state()
+        WEEKLY_SUCCESS_TRACKER.update(weekly)
+        FRIDAY_CLOSE_PRICES.update(friday)
 
     reset_dashboard_if_needed(now)
     
