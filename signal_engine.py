@@ -50,7 +50,28 @@ def save_weekly_state():
                 indent=2,
                 default=str
             )
+def load_daily_state():
+    if not os.path.exists(DAILY_STATE_FILE):
+        return {}
 
+    try:
+        with open(DAILY_STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_daily_state():
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    with _STORE_LOCK:
+        with open(DAILY_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(
+                DAILY_SUCCESS_TRACKER,
+                f,
+                ensure_ascii=False,
+                indent=2,
+                default=str
+            )
 # ======================================================
 # GLOBALS
 # ======================================================
