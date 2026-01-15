@@ -17,6 +17,8 @@ _STORE_LOCK = Lock()
 # ======================================================
 
 DATA_DIR = "data"
+
+DAILY_STATE_FILE = os.path.join(DATA_DIR, "daily_state.json")
 WEEKLY_STATE_FILE = os.path.join(DATA_DIR, "weekly_state.json")
 
 def load_weekly_state():
