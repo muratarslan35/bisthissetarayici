@@ -862,12 +862,23 @@ def process_symbol_signals(item):
             "symbol": symbol,
             "algo": algo,
             "helpers": list(helper_names),
+
+            # fiyatlar
             "entry": price,
             "target": price * (1 + TARGET_PCT),
+
+            # durum
             "hit": False,
+            "hit_price": None,
+            "hit_time": None,
+            "hit_day": None,
+
+            # zaman (dashboard için ZORUNLU)
             "entry_day": tr_now().strftime("%A"),
             "entry_date": tr_now().date(),
+            "entry_time": tr_now().strftime("%H:%M:%S"),
         }
+    
         save_weekly_state()
 
     return [signal]
