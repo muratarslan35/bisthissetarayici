@@ -184,10 +184,6 @@ def enrich_live_gain(signals):
 def dashboard_api():
     now = datetime.now(TR_TZ)
 
-    # 🔑 SADECE RAM BOŞSA hydrate et
-    if not SIGNALS and not SUCCESS_SIGNALS:
-        hydrate_dashboard_from_engine()
-
     reset_dashboard_if_needed(now)
     
     market_open = False
