@@ -38,12 +38,12 @@ def reset_dashboard_if_needed(now):
     if LAST_DASHBOARD_RESET_DATE == now.date():
         return
 
-    # 🔒 SADECE GÜNLÜKLERİ SIFIRLA
-    SUCCESS_SIGNALS.clear()
+    # ❗ SADECE GÜNLÜK GÖRÜNÜMÜ TEMİZLE
     SIGNALS.clear()
+    SUCCESS_SIGNALS.clear()
 
+    # ❌ WEEKLY_SUCCESS_TRACKER'a ASLA DOKUNMA
     LAST_DASHBOARD_RESET_DATE = now.date()
-
 # ======================================================
 # PUSH
 # ======================================================
