@@ -129,15 +129,16 @@ def reset_daily_success_if_needed():
         DAILY_SUCCESS_TRACKER[key] = {}
         save_daily_state()
 def reset_weekly_success_if_needed():
-    """
-    Pazartesi itibariyle WEEKLY_SUCCESS_TRACKER sıfırlanır (DISK)
-    """
     key = week_key()
-    if key not in WEEKLY_SUCCESS_TRACKER:
-        WEEKLY_SUCCESS_TRACKER.clear()
-        WEEKLY_SUCCESS_TRACKER[key] = {}
-        FRIDAY_CLOSE_PRICES.clear()
-        save_weekly_state()
+
+    # ⛔️ EĞER DISKTE VERİ VARSA ASLA RESETLEME
+    if WEEKLY_SUCCESS_TRACKER:
+        return
+
+    # ⛔️ SADECE PAZARTESİ SABAHI VE GERÇEKTEN YENİ HAFTAYSA
+    WEEKLY_SUCCESS_TRACKER[key] = {}
+    FRIDAY_CLOSE_PRICES.clear()
+    save_weekly_state()
 
 # ======================================================
 # HELPER SEVİYELERİ
