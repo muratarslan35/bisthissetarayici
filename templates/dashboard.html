@@ -217,13 +217,13 @@ body {
             <tr>
                 <th>Hisse</th>
                 <th>Algoritma</th>
-                <th>Giriş</th>
-                <th>Canlı</th>
-                <th>Satış</th>
+                <th>Giriş Fiyat</th>
+                <th>Canlı Fiyat</th>
+                <th>Satış Fiyat</th>
+                <th>Satış Kar %</th>
                 <th>Canlı %</th>
-                <th>Satış %</th>
                 <th>Gün / Saat</th>
-                <th>Süre</th>
+                <th>Hedef Süre</th>
                 <th>Yardımcılar</th>
             </tr>
         </thead>
@@ -316,8 +316,8 @@ document.addEventListener("DOMContentLoaded", () => {
 <td>${r.entry_price ?? "-"}</td>
 <td>${r.current_price ?? "-"}</td>
 <td>${r.sell_price ?? "<span class='helper-chip c'>Açık</span>"}</td>
-<td>${r.live_gain_pct !== null ? `<span class="stock-arrow ${r.live_gain_pct >= 0 ? "up" : "down"}">${r.live_gain_pct}%</span>` : "-"}</td>
 <td>${r.sell_gain_pct !== null ? `<span class="stock-arrow ${r.sell_gain_pct >= 0 ? "up" : "down"}">${r.sell_gain_pct}%</span>` : "-"}</td>
+<td>${r.live_gain_pct !== null ? `<span class="stock-arrow ${r.live_gain_pct >= 0 ? "up" : "down"}">${r.live_gain_pct}%</span>` : "-"}</td>
 <td>${r.entry_day ?? "-"}<br><span class="helper-chip ${hourChip(r.entry_time)}">${r.entry_time ?? ""}</span></td>
 <td>${r.duration_label ? `<span class="helper-chip a">${r.duration_label}</span>` : `<span class="helper-chip c">Açık</span>`}</td>
 <td>${(r.helpers || []).join(", ")}</td>
