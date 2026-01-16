@@ -313,7 +313,9 @@ def detect_most_trend(df):
 # PROFESYONEL L2 / L3 / L4 SEVİYE ANALİZİ (FINAL)
 # ======================================================
 
-def detect_levels(df, tolerance=0.003):
+def detect_levels(df, tf, tolerance=None):
+    if tolerance is None:
+        tolerance = 0.006 if tf == "4h" else 0.004
     """
     Profesyonel seviye tespiti:
     - Aynı fiyat bölgesine tekrar tekrar temas
@@ -362,8 +364,8 @@ def classify_level(lvl, tf):
     """
     t = lvl["touches"]
 
-    if t >= 4 and tf in ("4h", "1d"):
-        return ("L4 MAJÖR KIRILIM", 20)
+    if t >= 3 and tf in ("4h", "1d"):
+        return ("L4 MAJÖR KIRILIM", 18)
 
     if t >= 3:
         return ("L3 GÜÇLÜ KIRILIM", 12)
