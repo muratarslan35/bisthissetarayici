@@ -1217,8 +1217,6 @@ def process_signals(data):
             symbol = item["symbol"]
             price = item["current_price"]
 
-            success_hits = update_success_targets(symbol, price)
-            out.extend(success_hits)
 
         except Exception:
             continue
