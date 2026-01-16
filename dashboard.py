@@ -78,12 +78,18 @@ def build_weekly_table_data():
 
     for d in week_data.values():
         symbol = d.get("symbol")
-        entry = d.get("entry")
         algo = d.get("algo")
+        entry = d.get("entry")
         helpers = d.get("helpers", [])
 
         friday_price = FRIDAY_CLOSE_PRICES.get(symbol)
-        current_price = d.get("hit_price") or friday_price
+        sell_price = d.get("hit_price")  # hedef geldiğinde
+
+        current_price = (
+            sell_price if isinstance(sell_price, (int, float))
+            else friday_price if isinstance(friday_price, (int, float))
+            else None
+        )
 
         entry_day_raw = d.get("entry_day")
         entry_day = TR_DAYS.get(entry_day_raw, entry_day_raw)
@@ -91,13 +97,17 @@ def build_weekly_table_data():
         hit_day_raw = d.get("hit_day")
         hit_day = TR_DAYS.get(hit_day_raw, hit_day_raw)
 
-        gain_pct = None
-        if isinstance(current_price, (int, float)) and isinstance(entry, (int, float)):
-            gain_pct = round(((current_price - entry) / entry) * 100, 2)
+        sell_gain_pct = None
+        live_gain_pct = None
 
-        # --------------------------------------------------
-        # ⏱ SİNYAL SÜRESİ (ENTRY → HIT)
-        # --------------------------------------------------
+        if isinstance(entry, (int, float)):
+            if isinstance(sell_price, (int, float)):
+                sell_gain_pct = round(((sell_price - entry) / entry) * 100, 2)
+
+            if isinstance(current_price, (int, float)):
+                live_gain_pct = round(((current_price - entry) / entry) * 100, 2)
+
+        # ⏱ SÜRE
         entry_time = d.get("entry_time")
         hit_time = d.get("hit_time")
 
@@ -110,29 +120,37 @@ def build_weekly_table_data():
                 ht = datetime.strptime(hit_time, "%H:%M:%S")
                 diff = (ht - et).total_seconds() / 60
                 if diff < 0:
-                    diff += 24 * 60
+                    diff += 1440
                 duration_minutes = int(diff)
-                if duration_minutes < 60:
-                    duration_label = f"{duration_minutes} dk"
-                else:
-                    duration_label = f"{duration_minutes//60}s {duration_minutes%60}dk"
+                duration_label = (
+                    f"{duration_minutes} dk"
+                    if duration_minutes < 60
+                    else f"{duration_minutes//60}s {duration_minutes%60}dk"
+                )
             except Exception:
                 pass
 
         row = {
             "symbol": symbol,
             "algorithm": algo,
+
             "entry_price": round(entry, 2) if isinstance(entry, (int, float)) else None,
             "current_price": round(current_price, 2) if isinstance(current_price, (int, float)) else None,
+
+            "sell_price": round(sell_price, 2) if isinstance(sell_price, (int, float)) else None,
+            "sell_gain_pct": sell_gain_pct,
+            "live_gain_pct": live_gain_pct,
+            "gain_pct": sell_gain_pct,  # frontend uyumu
+
             "entry_day": entry_day,
             "hit_day": hit_day,
-            "gain_pct": gain_pct,
-            "helpers": helpers,
-            "entry_date": str(d.get("entry_date")) if d.get("entry_date") else None,
             "entry_time": entry_time,
             "hit_time": hit_time,
+
             "duration_minutes": duration_minutes,
             "duration_label": duration_label,
+
+            "helpers": helpers,
         }
 
         if d.get("hit"):
@@ -143,13 +161,13 @@ def build_weekly_table_data():
     summary = {
         "total": len(week_data),
         "success": len(success),
-        "failed": len(failed)
+        "failed": len(failed),
     }
 
     return {
         "success": success,
         "failed": failed,
-        "summary": summary
+        "summary": summary,
     }
 
 # ======================================================
