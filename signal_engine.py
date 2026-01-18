@@ -82,6 +82,7 @@ POWER_STRENGTH_THRESHOLD = 20
 
 LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
+LAST_PUBLISHED_STATE = {}
 
 # 🔹 GÜNLÜK (RAM – ORİJİNAL DAVRANIŞ)
 DAILY_SUCCESS_TRACKER = {}
@@ -843,15 +844,10 @@ def process_symbol_signals(item):
     # 🔒 YAYIN KONTROLÜ (FINAL – GERÇEK SİNYAL FİLTRESİ)
     # --------------------------------------------------
 
-    is_first_signal = (symbol, algo) not in LAST_SIGNAL_STATE
+    key = (symbol, algo)
+    is_first_published_signal = key not in LAST_PUBLISHED_STATE
 
-    # İlk sinyal değilse ve:
-    # - güçlenme yok
-    # - zayıflama yok
-    # - MOST upgrade/downgrade yok
-    # - repeat block içindeyse
-    # → SUSTUR
-    if not is_first_signal and in_repeat_block(symbol, algo) and not (
+    if not is_first_published_signal and in_repeat_block(symbol, algo) and not (
         strengthened or weakened or most_upgrade or most_downgrade
     ):
         return []
@@ -860,6 +856,7 @@ def process_symbol_signals(item):
     # BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
     # --------------------------------------------------
     signal["published"] = True
+    LAST_PUBLISHED_STATE[key] = tr_now()
     
     # --------------------------------------------------
     # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
