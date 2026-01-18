@@ -692,18 +692,7 @@ def process_symbol_signals(item):
             title = "⚠️ ZAYIFLAYAN SİNYAL"
             category = "watch"
 
-    # --------------------------------------------------
-    # REPEAT BLOCK
-    # --------------------------------------------------
-    # 🔑 İLK SİNYAL ASLA SUSTURULMAZ
-    is_first_entry = (symbol, algo) not in LAST_SIGNAL_STATE
-
-    if not is_first_entry and in_repeat_block(symbol, algo) and not (
-    strengthened or weakened or most_upgrade or most_downgrade
-    ):
-        return []
-
-    mark_sent(symbol, algo)
+    
 
     # --------------------------------------------------
     # HISTORY
