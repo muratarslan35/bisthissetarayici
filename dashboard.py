@@ -112,6 +112,8 @@ def build_weekly_table_data():
         row = {
             "symbol": symbol,
             "algorithm": algo,
+            "signal_type": d.get("signal_type", "primary"),
+            "reentry": d.get("signal_type") == "reentry",
 
             "entry_price": round(entry, 2) if isinstance(entry, (int, float)) else None,
             "current_price": round(current_price, 2) if isinstance(current_price, (int, float)) else None,
@@ -211,10 +213,15 @@ def dashboard_api():
             "main_algorithm": d.get("algo"),
             "time": d.get("hit_time"),
             "helpers": d.get("helpers", []),
-            "title": "🎯 HEDEF GELDİ",
-            "entry_time": d.get("entry_time"),
-            "hit_time": d.get("hit_time"),
-        })
+
+            # 🔽 EKLENECEK
+            "signal_type": d.get("signal_type", "primary"),
+            "reentry": d.get("signal_type") == "reentry",
+
+            "title": "🎯 HEDEF GELDİ (RE-ENTRY)"
+             if d.get("signal_type") == "reentry"
+             else "🎯 HEDEF GELDİ",
+    })
 
     weekly_text = build_weekly_success_report()
     all_signals = daily_success + SUCCESS_SIGNALS + SIGNALS
