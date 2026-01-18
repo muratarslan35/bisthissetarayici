@@ -310,6 +310,7 @@ async function loadSignals(){
     }
 
     weekly.style.display="none";
+    document.getElementById("reentry-section").style.display="none";
     box.style.display="grid";
 
     (data.signals||[]).filter(matchFilter).forEach(s=>{
