@@ -12,7 +12,6 @@ body {
     color:#e6e6e6;
 }
 
-/* ================= TOP STATUS ================= */
 .top-status {
     display:flex;
     justify-content:space-between;
@@ -22,7 +21,6 @@ body {
 }
 .status-item span { font-weight:bold; }
 
-/* ================= FILTER BAR ================= */
 .filter-bar {
     display:flex;
     gap:10px;
@@ -39,7 +37,6 @@ body {
 }
 .filter-btn.active { background:#2563eb; }
 
-/* ================= GRID ================= */
 .container {
     padding:22px;
     display:grid;
@@ -47,7 +44,6 @@ body {
     gap:20px;
 }
 
-/* ================= CARD ================= */
 .card {
     position: relative;
     background: linear-gradient(180deg, #121826, #0f1524);
@@ -62,17 +58,12 @@ body {
 
 .card:hover {
     transform: translateY(-3px);
-    box-shadow:
-        0 0 0 1px rgba(255,255,255,0.05),
-        0 16px 40px rgba(0,0,0,.85);
 }
 
-/* === RE-ENTRY HOVER === */
 .card.reentry:hover {
     box-shadow:
         0 0 0 1px rgba(251,191,36,0.6),
-        0 0 26px rgba(251,191,36,0.35),
-        0 18px 45px rgba(0,0,0,.9);
+        0 0 26px rgba(251,191,36,0.35);
 }
 
 .card::before {
@@ -93,49 +84,17 @@ body {
 .signal-title {
     font-size:13px;
     font-weight:800;
-    opacity:.9;
 }
-
-.signal-title.reentry-title {
-    color:#fbbf24;
-}
+.signal-title.reentry-title { color:#fbbf24; }
 
 .symbol { font-size:24px; font-weight:900; margin:6px 0; }
 .price { font-size:22px; font-weight:800; margin-top:4px; }
 .row { font-size:13px; margin-top:6px; line-height:1.45; }
 
-.block {
-    margin-top:10px;
-    padding:10px 12px;
-    background:rgba(255,255,255,0.05);
-    border-radius:12px;
-    font-size:13px;
-}
-
-/* ================= TP ================= */
-.tp-box {
-    margin-top:10px;
-    padding:10px 12px;
-    background:rgba(16,185,129,0.08);
-    border:1px solid rgba(16,185,129,0.25);
-    border-radius:12px;
-    font-size:13px;
-}
-.tp-row {
-    display:flex;
-    justify-content:space-between;
-    margin-top:4px;
-}
-.tp-price {
-    font-weight:800;
-    color:#10b981;
-}
-
 .history {
     font-size:11px;
     opacity:.75;
     margin-top:10px;
-    line-height:1.45;
 }
 
 .time {
@@ -145,13 +104,13 @@ body {
     margin-top:8px;
 }
 
-/* ================= CHIPS ================= */
 .helper-chip {
     display:inline-block;
     padding:3px 8px;
     border-radius:999px;
     font-size:11px;
     font-weight:700;
+    margin-right:4px;
     margin-top:4px;
 }
 .helper-chip.a { background:#14532d; color:#22c55e; }
@@ -159,61 +118,34 @@ body {
 .helper-chip.c { background:#78350f; color:#fbbf24; }
 .helper-chip.re { background:#f59e0b; color:#000; }
 
-/* ================= WEEKLY TABLE ================= */
-#weekly-section {
-    display:none;
-    padding:22px;
+.tp-box {
+    margin-top:10px;
+    padding:10px;
+    background:rgba(16,185,129,0.08);
+    border:1px solid rgba(16,185,129,0.25);
+    border-radius:12px;
+    font-size:13px;
 }
+.tp-row {
+    display:flex;
+    justify-content:space-between;
+}
+
+#weekly-section { display:none; padding:22px; }
 
 #weekly-table {
     width:100%;
     border-collapse:collapse;
     background:#0f172a;
-    border-radius:12px;
-    overflow:hidden;
     font-size:13px;
 }
-
-#weekly-table th,
-#weekly-table td {
-    padding:10px 8px;
+#weekly-table th, #weekly-table td {
+    padding:10px;
     border-bottom:1px solid #1e293b;
-    text-align:left;
-}
-
-.weekly-success { color:#22c55e; }
-.weekly-failed { color:#ef4444; }
-
-/* ================= REAL STOCK ARROWS ================= */
-.stock-arrow {
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    font-weight:700;
-    font-size:13px;
-}
-.stock-arrow.up { color:#16a34a; }
-.stock-arrow.down { color:#dc2626; }
-
-.stock-arrow.up::before {
-    content:"";
-    width:0;
-    height:0;
-    border-left:6px solid transparent;
-    border-right:6px solid transparent;
-    border-bottom:10px solid #16a34a;
-}
-
-.stock-arrow.down::before {
-    content:"";
-    width:0;
-    height:0;
-    border-left:6px solid transparent;
-    border-right:6px solid transparent;
-    border-top:10px solid #dc2626;
 }
 </style>
 </head>
+
 <body>
 
 <div class="top-status">
@@ -237,19 +169,18 @@ body {
 <div id="weekly-section">
     <h2>📅 Haftalık Performans</h2>
     <div id="weekly-summary"></div>
-
     <table id="weekly-table">
         <thead>
             <tr>
                 <th>Hisse</th>
                 <th>Algoritma</th>
-                <th>Giriş Fiyat</th>
-                <th>Canlı Fiyat</th>
-                <th>Satış Fiyat</th>
-                <th>Satış Kar %</th>
+                <th>Giriş</th>
+                <th>Canlı</th>
+                <th>Satış</th>
+                <th>Satış %</th>
                 <th>Canlı %</th>
-                <th>Gün / Saat</th>
-                <th>Hedef Süre</th>
+                <th>Gün</th>
+                <th>Süre</th>
                 <th>Yardımcılar</th>
             </tr>
         </thead>
@@ -258,132 +189,120 @@ body {
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+let CURRENT_FILTER = "all";
 
-    const market  = document.getElementById("market");
-    const scanner = document.getElementById("scanner");
-    const clock   = document.getElementById("clock");
+function hourChip(time){
+    if(!time) return "c";
+    const h = parseInt(time.split(":")[0]);
+    if(h >= 10 && h <= 11) return "a";
+    if(h >= 12 && h <= 14) return "b";
+    return "c";
+}
 
-    let CURRENT_FILTER = "all";
+function setFilter(f,e){
+    CURRENT_FILTER = f;
+    document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+    e.target.classList.add("active");
+    loadSignals();
+}
 
-    function hourChip(time){
-        if(!time) return "c";
-        const h = parseInt(time.split(":")[0]);
-        if(h >= 10 && h <= 11) return "a";
-        if(h >= 12 && h <= 14) return "b";
-        return "c";
-    }
+function matchFilter(s){
+    if(CURRENT_FILTER==="all") return true;
+    if(CURRENT_FILTER==="strong") return s.action==="GÜÇLÜ AL" && s.signal_type!=="reentry";
+    if(CURRENT_FILTER==="power") return (s.power_delta||0)>=20;
+    if(CURRENT_FILTER==="kombine") return s.main_algorithm==="KOMBİNE";
+    if(CURRENT_FILTER==="super") return s.main_algorithm==="SÜPER KOMBİNE";
+    if(CURRENT_FILTER==="success") return s.category==="success";
+    return true;
+}
 
-    function matchFilter(s){
-        if (CURRENT_FILTER === "all") return true;
-        if (CURRENT_FILTER === "strong")
-            return s.action === "GÜÇLÜ AL";
-        if (CURRENT_FILTER === "power")
-            return (s.power_delta || 0) >= 20;
-        if (CURRENT_FILTER === "kombine")
-            return s.main_algorithm === "KOMBİNE";
-        if (CURRENT_FILTER === "super")
-            return s.main_algorithm === "SÜPER KOMBİNE";
-        if (CURRENT_FILTER === "success")
-            return s.category === "success";
-        return true;
-    }
+async function loadSignals(){
+    const res = await fetch("/api/dashboard");
+    const data = await res.json();
 
-    window.setFilter = function(f, e){
-        CURRENT_FILTER = f;
-        document.querySelectorAll(".filter-btn")
-            .forEach(b => b.classList.remove("active"));
-        e.target.classList.add("active");
-        loadSignals();
-    };
+    market.innerText = data.market_open?"AÇIK":"KAPALI";
+    scanner.innerText = data.system_active?"AKTİF":"PASİF";
+    clock.innerText = data.server_time;
 
-    async function loadSignals(){
-        const res = await fetch("/api/dashboard");
-        const data = await res.json();
+    const box=document.getElementById("signals");
+    const weekly=document.getElementById("weekly-section");
+    const tbody=document.querySelector("#weekly-table tbody");
 
-        market.innerText  = data.market_open ? "AÇIK" : "KAPALI";
-        scanner.innerText = data.system_active ? "AKTİF" : "PASİF";
-        clock.innerText   = data.server_time;
+    box.innerHTML="";
+    tbody.innerHTML="";
 
-        const box     = document.getElementById("signals");
-        const weekly  = document.getElementById("weekly-section");
-        const tbody   = document.querySelector("#weekly-table tbody");
-        const summary = document.getElementById("weekly-summary");
-
-        box.innerHTML = "";
-        tbody.innerHTML = "";
-
-        if (CURRENT_FILTER === "weekly"){
-            box.style.display = "none";
-            weekly.style.display = "block";
-
-            const wt = data.weekly_table;
-            if (wt && wt.summary){
-                summary.innerHTML =
-                    `📡 ${wt.summary.total} | ✅ ${wt.summary.success} | ❌ ${wt.summary.failed}`;
-
-                [...wt.success, ...wt.failed].forEach(r => {
-                    const tr = document.createElement("tr");
-
-                    tr.innerHTML = `
-<td>${r.symbol} ${r.signal_type === "reentry" ? '<span class="helper-chip re">RE</span>' : ''}</td>
+    if(CURRENT_FILTER==="weekly"){
+        weekly.style.display="block";
+        box.style.display="none";
+        const wt=data.weekly_table;
+        if(wt){
+            document.getElementById("weekly-summary").innerText=
+                `Toplam ${wt.summary.total} | ✅ ${wt.summary.success} | ❌ ${wt.summary.failed}`;
+            [...wt.success,...wt.failed].forEach(r=>{
+                if(r.signal_type==="reentry") return;
+                const tr=document.createElement("tr");
+                tr.innerHTML=`
+<td>${r.symbol}</td>
 <td>${r.algorithm}</td>
-<td>${r.entry_price ?? "-"}</td>
-<td>${r.current_price ?? "-"}</td>
-<td>${r.sell_price ?? "<span class='helper-chip c'>Açık</span>"}</td>
-<td>${r.sell_gain_pct ?? "-"}</td>
-<td>${r.live_gain_pct ?? "-"}</td>
-<td>${r.entry_day ?? "-"}</td>
-<td>${r.duration_label ?? "-"}</td>
-<td>${(r.helpers || []).join(", ")}</td>
-`;
-                    tbody.appendChild(tr);
-                });
-            }
-            return;
+<td>${r.entry_price??"-"}</td>
+<td>${r.current_price??"-"}</td>
+<td>${r.sell_price??"-"}</td>
+<td>${r.sell_gain_pct??"-"}</td>
+<td>${r.live_gain_pct??"-"}</td>
+<td>${r.entry_day??"-"}</td>
+<td>${r.duration_label??"-"}</td>
+<td>${(r.helpers||[]).join(", ")}</td>`;
+                tbody.appendChild(tr);
+            });
         }
+        return;
+    }
 
-        weekly.style.display = "none";
-        box.style.display = "grid";
+    weekly.style.display="none";
+    box.style.display="grid";
 
-        (data.signals || [])
-            .filter(matchFilter)
-            .forEach(s => {
+    (data.signals||[]).filter(matchFilter).forEach(s=>{
+        const c=document.createElement("div");
+        const cls=s.category==="success"?"success":(s.action==="GÜÇLÜ AL"?"strong":"watch");
+        c.className=`card signal-${cls} ${s.signal_type==="reentry"?"reentry":""}`;
 
-                const visualCategory =
-                    s.category === "success" ? "success" :
-                    s.action === "GÜÇLÜ AL" ? "strong" :
-                    "watch";
-
-                const c = document.createElement("div");
-                c.className = `card signal-${visualCategory} ${s.signal_type === "reentry" ? "reentry" : ""}`;
-
-                c.innerHTML = `
-<div class="signal-title ${s.signal_type === "reentry" ? "reentry-title" : ""}">
-${s.signal_type === "reentry" ? "♻️ TEKRAR GÜÇLÜ AL" : s.title}
+        c.innerHTML=`
+<div class="signal-title ${s.signal_type==="reentry"?"reentry-title":""}">
+${s.signal_type==="reentry"?"♻️ TEKRAR GÜÇLÜ AL":s.title}
 </div>
 
 <div class="symbol">
 ${s.symbol}
-${s.signal_type === "reentry" ? '<span class="helper-chip re">RE</span>' : ""}
+${s.signal_type==="reentry"?'<span class="helper-chip re">RE</span>':""}
 </div>
 
-${s.entry_price ? `<div class="row">🎯 Giriş: ${s.entry_price}</div>` : ""}
+${s.entry_price?`<div class="row">🎯 Giriş: ${s.entry_price}</div>`:""}
 <div class="price">💰 ${s.price}</div>
-
 <div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
 
-${s.history ? `<div class="history">${s.history.slice(-4).map(h => `${h[0]} → ${h[1]}`).join("<br>")}</div>` : ""}
+${s.tp1?`
+<div class="tp-box">
+<div class="tp-row">TP1 <b>${s.tp1}</b></div>
+<div class="tp-row">TP2 <b>${s.tp2}</b></div>
+<div class="tp-row">TP3 <b>${s.tp3}</b></div>
+</div>`:""}
 
-<div class="time">${s.time}</div>
-`;
-                box.appendChild(c);
-            });
-    }
+${s.helpers_detail?`
+<div class="row">
+${s.helpers_detail.map(h=>`<span class="helper-chip ${h.level.toLowerCase()}">${h.name}</span>`).join("")}
+</div>`:""}
 
-    loadSignals();
-    setInterval(loadSignals, 10000);
-});
+${s.history?`<div class="history">${s.history.slice(-4).map(h=>`${h[0]} → ${h[1]}`).join("<br>")}</div>`:""}
+
+<div class="time">
+<span class="helper-chip ${hourChip(s.time)}">${s.time}</span>
+</div>`;
+        box.appendChild(c);
+    });
+}
+
+loadSignals();
+setInterval(loadSignals,10000);
 </script>
 </body>
 </html>
