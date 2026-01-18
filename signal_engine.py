@@ -306,6 +306,57 @@ def detect_most_trend(df):
     if not res:
         return None
     return "UP" if res["trend"] == "UP" else "DOWN"
+# ======================================================
+# RE-ENTRY (TEKRAR GÜÇLÜ AL) FİLTRESİ
+# ======================================================
+
+def allow_reentry(signal_ctx):
+    """
+    Re-entry sadece:
+    - Hedef sonrası
+    - RSI resetlenmişse
+    - MOST bozulmamışsa
+    - Power gerçek artmışsa
+    """
+
+    tf1h = signal_ctx.get("tf1h")
+    tf4h = signal_ctx.get("tf4h")
+
+    rsi_1h = tf1h.get("rsi") if tf1h else None
+    rsi_4h = tf4h.get("rsi") if tf4h else None
+
+    most_4h = signal_ctx.get("most_4h")
+    most_4h_level = signal_ctx.get("most_4h_level")
+
+    price = signal_ctx.get("price")
+    power = signal_ctx.get("power")
+    prev_power = signal_ctx.get("prev_power")
+
+    # --- RSI KİLİDİ ---
+    if rsi_1h is not None and rsi_1h >= 68:
+        return False
+
+    if rsi_4h is not None and rsi_4h >= 70:
+        return False
+
+    if rsi_1h is not None and rsi_1h > 60:
+        return False
+
+    # --- MOST TREND ---
+    if most_4h != "UP":
+        return False
+
+    if most_4h_level and price <= most_4h_level:
+        return False
+
+    # --- POWER ---
+    if prev_power is None:
+        return False
+
+    if power - prev_power < 15:
+        return False
+
+    return True
 
 # ======================================================
 # YARDIMCI FORMASYONLAR
@@ -830,16 +881,37 @@ def process_symbol_signals(item):
         "power_delta": power_delta,
     }
     # --------------------------------------------------
+    # ♻️ RE-ENTRY KONTROLÜ
+    # --------------------------------------------------
+
+    reentry_ctx = {
+        "tf1h": tf1h,
+        "tf4h": tf4h,
+        "most_4h": most_4h,
+        "most_4h_level": most_4h_level,
+        "price": price,
+        "power": total_power,
+        "prev_power": prev_power,
+    }
+
+    is_reentry = allow_reentry(reentry_ctx)
+
+    # --------------------------------------------------
     # 🔒 YAYIN KONTROLÜ (FINAL – GERÇEK SİNYAL FİLTRESİ)
     # --------------------------------------------------
 
     key = (symbol, algo)
     is_first_published_signal = key not in LAST_PUBLISHED_STATE
 
-    if not is_first_published_signal and in_repeat_block(symbol, algo) and not (
-        strengthened or weakened or most_upgrade or most_downgrade
+    if not is_first_published_signal:
+        if not is_reentry and in_repeat_block(symbol, algo) and not (
+            strengthened or weakened or most_upgrade or most_downgrade
     ):
         return []
+        
+    if is_reentry:
+    signal["title"] = "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)"
+    signal["reentry"] = True
 
     # --------------------------------------------------
     # BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
