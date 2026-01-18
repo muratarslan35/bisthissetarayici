@@ -840,30 +840,25 @@ def process_symbol_signals(item):
         "power_delta": power_delta,
     }
     # --------------------------------------------------
-    # 🔒 YAYIN KONTROLÜ (GİZLİ TARAMA FİLTRESİ)
+    # 🔒 YAYIN KONTROLÜ (FINAL – GERÇEK SİNYAL FİLTRESİ)
     # --------------------------------------------------
-    # Bu sinyal günlük veya haftalık kayda girmiyorsa:
-    # - Dashboarda düşmez
-    # - Telegrama gitmez
-    # - Weekly tabloya sızmaz
 
-    daily = False
-    weekly = False
+    is_first_signal = (symbol, algo) not in LAST_SIGNAL_STATE
 
-    t_key = today_key()
-    w_key = week_key()
-
-    if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
-        daily = True
-
-    if (symbol, algo) in WEEKLY_SUCCESS_TRACKER.get(w_key, {}):
-        weekly = True
-
-    # ❌ HİÇBİR TRACKER'A GİRMİYORSA → YOK SAY
-    if not daily and not weekly:
+    # İlk sinyal değilse ve:
+    # - güçlenme yok
+    # - zayıflama yok
+    # - MOST upgrade/downgrade yok
+    # - repeat block içindeyse
+    # → SUSTUR
+    if not is_first_signal and in_repeat_block(symbol, algo) and not (
+        strengthened or weakened or most_upgrade or most_downgrade
+    ):
         return []
 
-    # ✅ BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
+    # --------------------------------------------------
+    # BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
+    # --------------------------------------------------
     signal["published"] = True
     
     # --------------------------------------------------
