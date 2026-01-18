@@ -57,6 +57,22 @@ body {
         0 0 0 1px rgba(255,255,255,0.03),
         0 12px 32px rgba(0,0,0,.65);
     overflow: hidden;
+    transition: all .25s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow:
+        0 0 0 1px rgba(255,255,255,0.05),
+        0 16px 40px rgba(0,0,0,.85);
+}
+
+/* === RE-ENTRY HOVER === */
+.card.reentry:hover {
+    box-shadow:
+        0 0 0 1px rgba(251,191,36,0.6),
+        0 0 26px rgba(251,191,36,0.35),
+        0 18px 45px rgba(0,0,0,.9);
 }
 
 .card::before {
@@ -74,7 +90,16 @@ body {
 .signal-watch::before { background:#f59e0b; }
 .signal-success::before { background:#a855f7; }
 
-.signal-title { font-size:13px; font-weight:700; opacity:.85; }
+.signal-title {
+    font-size:13px;
+    font-weight:800;
+    opacity:.9;
+}
+
+.signal-title.reentry-title {
+    color:#fbbf24;
+}
+
 .symbol { font-size:24px; font-weight:900; margin:6px 0; }
 .price { font-size:22px; font-weight:800; margin-top:4px; }
 .row { font-size:13px; margin-top:6px; line-height:1.45; }
@@ -132,6 +157,7 @@ body {
 .helper-chip.a { background:#14532d; color:#22c55e; }
 .helper-chip.b { background:#1e3a8a; color:#93c5fd; }
 .helper-chip.c { background:#78350f; color:#fbbf24; }
+.helper-chip.re { background:#f59e0b; color:#000; }
 
 /* ================= WEEKLY TABLE ================= */
 #weekly-section {
@@ -251,9 +277,9 @@ document.addEventListener("DOMContentLoaded", () => {
     function matchFilter(s){
         if (CURRENT_FILTER === "all") return true;
         if (CURRENT_FILTER === "strong")
-            return s.action === "GÜÇLÜ AL" && s.weakened !== true;
+            return s.action === "GÜÇLÜ AL";
         if (CURRENT_FILTER === "power")
-            return (s.power_delta || 0) >= 20 && s.weakened !== true;
+            return (s.power_delta || 0) >= 20;
         if (CURRENT_FILTER === "kombine")
             return s.main_algorithm === "KOMBİNE";
         if (CURRENT_FILTER === "super")
@@ -287,7 +313,6 @@ document.addEventListener("DOMContentLoaded", () => {
         box.innerHTML = "";
         tbody.innerHTML = "";
 
-        /* ================= WEEKLY ================= */
         if (CURRENT_FILTER === "weekly"){
             box.style.display = "none";
             weekly.style.display = "block";
@@ -300,26 +325,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 [...wt.success, ...wt.failed].forEach(r => {
                     const tr = document.createElement("tr");
 
-                    const rowGain =
-                        r.sell_gain_pct !== null
-                            ? r.sell_gain_pct
-                            : r.live_gain_pct;
-
-                    tr.className =
-                        rowGain !== null && rowGain >= 0
-                            ? "weekly-success"
-                            : "weekly-failed";
-
                     tr.innerHTML = `
-<td>${r.symbol}</td>
+<td>${r.symbol} ${r.signal_type === "reentry" ? '<span class="helper-chip re">RE</span>' : ''}</td>
 <td>${r.algorithm}</td>
 <td>${r.entry_price ?? "-"}</td>
 <td>${r.current_price ?? "-"}</td>
 <td>${r.sell_price ?? "<span class='helper-chip c'>Açık</span>"}</td>
-<td>${r.sell_gain_pct !== null ? `<span class="stock-arrow ${r.sell_gain_pct >= 0 ? "up" : "down"}">${r.sell_gain_pct}%</span>` : "-"}</td>
-<td>${r.live_gain_pct !== null ? `<span class="stock-arrow ${r.live_gain_pct >= 0 ? "up" : "down"}">${r.live_gain_pct}%</span>` : "-"}</td>
-<td>${r.entry_day ?? "-"}<br><span class="helper-chip ${hourChip(r.entry_time)}">${r.entry_time ?? ""}</span></td>
-<td>${r.duration_label ? `<span class="helper-chip a">${r.duration_label}</span>` : `<span class="helper-chip c">Açık</span>`}</td>
+<td>${r.sell_gain_pct ?? "-"}</td>
+<td>${r.live_gain_pct ?? "-"}</td>
+<td>${r.entry_day ?? "-"}</td>
+<td>${r.duration_label ?? "-"}</td>
 <td>${(r.helpers || []).join(", ")}</td>
 `;
                     tbody.appendChild(tr);
@@ -328,7 +343,6 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        /* ================= CARDS ================= */
         weekly.style.display = "none";
         box.style.display = "grid";
 
@@ -336,48 +350,30 @@ document.addEventListener("DOMContentLoaded", () => {
             .filter(matchFilter)
             .forEach(s => {
 
-                const price = parseFloat(s.price);
-                const entry = parseFloat(s.entry_price || price);
-
-                const tp1 = (entry * 1.015).toFixed(2);
-                const tp2 = (entry * 1.03).toFixed(2);
-                const tp3 = (entry * 1.05).toFixed(2);
-
                 const visualCategory =
                     s.category === "success" ? "success" :
                     s.action === "GÜÇLÜ AL" ? "strong" :
-                    (s.main_algorithm === "KOMBİNE" || s.main_algorithm === "SÜPER KOMBİNE") ? "combo" :
                     "watch";
 
                 const c = document.createElement("div");
-                c.className = `card signal-${visualCategory}`;
+                c.className = `card signal-${visualCategory} ${s.signal_type === "reentry" ? "reentry" : ""}`;
 
                 c.innerHTML = `
-<div class="signal-title">${s.title || ""}</div>
-<div class="symbol">${s.symbol}</div>
-${s.entry_price ? `<div class="row">🎯 Giriş: ${s.entry_price}</div>` : ""}
-<div class="price">💰 ${s.price}</div>
-${s.live_gain_pct !== null ? `<div class="row">📊 Canlı: <span class="stock-arrow ${s.live_gain_pct >= 0 ? "up" : "down"}">${s.live_gain_pct}%</span></div>` : ""}
-<div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
-
-${(s.most_1h || s.most_4h) ? `
-<div class="block">
-🧭 MOST<br>
-${s.most_1h ? `1H: ${s.most_1h} (${s.most_1h_level})<br>` : ""}
-${s.most_4h ? `4H: ${s.most_4h} (${s.most_4h_level})` : ""}
-</div>` : ""}
-
-<div class="tp-box">
-<div class="tp-row"><div>TP1 %1.5</div><div class="tp-price">${tp1}</div></div>
-<div class="tp-row"><div>TP2 %3</div><div class="tp-price">${tp2}</div></div>
-<div class="tp-row"><div>TP3 %5</div><div class="tp-price">${tp3}</div></div>
+<div class="signal-title ${s.signal_type === "reentry" ? "reentry-title" : ""}">
+${s.signal_type === "reentry" ? "♻️ TEKRAR GÜÇLÜ AL" : s.title}
 </div>
 
-${(s.helpers && s.helpers.length) ? `
-<div class="block">🧩 Yardımcılar:<br>${s.helpers.map(h => `• ${h}`).join("<br>")}</div>` : ""}
+<div class="symbol">
+${s.symbol}
+${s.signal_type === "reentry" ? '<span class="helper-chip re">RE</span>' : ""}
+</div>
 
-${(s.history && s.history.length) ? `
-<div class="history">${s.history.slice(-4).map(h => `${h[0]} → ${h[1]}`).join("<br>")}</div>` : ""}
+${s.entry_price ? `<div class="row">🎯 Giriş: ${s.entry_price}</div>` : ""}
+<div class="price">💰 ${s.price}</div>
+
+<div class="row">⚡ ${s.action} | ${s.main_algorithm}</div>
+
+${s.history ? `<div class="history">${s.history.slice(-4).map(h => `${h[0]} → ${h[1]}`).join("<br>")}</div>` : ""}
 
 <div class="time">${s.time}</div>
 `;
