@@ -143,6 +143,17 @@ body {
     padding:10px;
     border-bottom:1px solid #1e293b;
 }
+
+#reentry-table {
+    width:100%;
+    border-collapse:collapse;
+    background:#0f172a;
+    font-size:13px;
+}
+#reentry-table th, #reentry-table td {
+    padding:10px;
+    border-bottom:1px solid #1e293b;
+}
 </style>
 </head>
 
@@ -157,6 +168,7 @@ body {
 <div class="filter-bar">
     <div class="filter-btn active" onclick="setFilter('all',event)">Tümü</div>
     <div class="filter-btn" onclick="setFilter('strong',event)">Güçlü Al</div>
+    <div class="filter-btn" onclick="setFilter('reentry',event)">♻️ Tekrar Güçlü Al</div>
     <div class="filter-btn" onclick="setFilter('power',event)">Güçlenen</div>
     <div class="filter-btn" onclick="setFilter('kombine',event)">Kombine</div>
     <div class="filter-btn" onclick="setFilter('super',event)">Süper Kombine</div>
@@ -187,7 +199,23 @@ body {
         <tbody></tbody>
     </table>
 </div>
+<div id="reentry-section" style="display:none; padding:22px;">
+    <h2>♻️ TEKRAR GÜÇLÜ AL – Günlük Başarı</h2>
 
+    <table id="reentry-table">
+        <thead>
+            <tr>
+                <th>Hisse</th>
+                <th>Algoritma</th>
+                <th>Giriş</th>
+                <th>Satış</th>
+                <th>Kazanç %</th>
+                <th>Saat</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
 <script>
 let CURRENT_FILTER = "all";
 
@@ -209,6 +237,7 @@ function setFilter(f,e){
 function matchFilter(s){
     if(CURRENT_FILTER==="all") return true;
     if(CURRENT_FILTER==="strong") return s.action==="GÜÇLÜ AL" && s.signal_type!=="reentry";
+    if(CURRENT_FILTER==="reentry") return s.signal_type==="reentry";
     if(CURRENT_FILTER==="power") return (s.power_delta||0)>=20;
     if(CURRENT_FILTER==="kombine") return s.main_algorithm==="KOMBİNE";
     if(CURRENT_FILTER==="super") return s.main_algorithm==="SÜPER KOMBİNE";
@@ -256,6 +285,28 @@ async function loadSignals(){
             });
         }
         return;
+    }
+    if(CURRENT_FILTER==="reentry"){
+    document.getElementById("reentry-section").style.display="block";
+    document.getElementById("weekly-section").style.display="none";
+    box.style.display="none";
+
+    const tbody = document.querySelector("#reentry-table tbody");
+    tbody.innerHTML = "";
+
+    (data.reentry_daily || []).forEach(r=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${r.symbol}</td>
+            <td>${r.algo}</td>
+            <td>${r.entry_price}</td>
+            <td>${r.hit_price}</td>
+            <td>%${r.gain_pct}</td>
+            <td>${r.time}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+    return;
     }
 
     weekly.style.display="none";
