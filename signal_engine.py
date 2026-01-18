@@ -774,20 +774,20 @@ def process_symbol_signals(item):
         tp3 = fmt(base_entry * (1 + TP3_PCT))
 
     if is_reentry:
-    reset_reentry_daily_if_needed()
-    r_store = REENTRY_DAILY_TRACKER.setdefault(t_key, {})
+        reset_reentry_daily_if_needed()
+        r_store = REENTRY_DAILY_TRACKER.setdefault(t_key, {})
 
-    r_key = (symbol, algo, tr_now().strftime("%H:%M:%S"))
-    if r_key not in r_store:
-        r_store[r_key] = {
-            "symbol": symbol,
-            "algo": algo,
-            "entry": base_entry,
-            "tp1": tp1,
-            "hit": False,
-            "hit_price": None,
-            "hit_time": None,
-            "signal_type": "reentry",
+        r_key = (symbol, algo, tr_now().strftime("%H:%M:%S"))
+        if r_key not in r_store:
+            r_store[r_key] = {
+                "symbol": symbol,
+                "algo": algo,
+                "entry": base_entry,
+                "tp1": tp1,
+                "hit": False,
+                "hit_price": None,
+                "hit_time": None,
+                "signal_type": "reentry",
         }
 
     live_gain_pct = None
