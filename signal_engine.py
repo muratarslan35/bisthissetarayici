@@ -772,7 +772,7 @@ def process_symbol_signals(item):
         tp1 = fmt(base_entry * (1 + TP1_PCT))
         tp2 = fmt(base_entry * (1 + TP2_PCT))
         tp3 = fmt(base_entry * (1 + TP3_PCT))
-        
+
     if is_reentry:
     reset_reentry_daily_if_needed()
     r_store = REENTRY_DAILY_TRACKER.setdefault(t_key, {})
