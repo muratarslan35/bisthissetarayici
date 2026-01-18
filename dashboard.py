@@ -5,16 +5,21 @@ import requests
 
 from signal_engine import (
     build_weekly_success_report,
-    week_key, load_weekly_state,
+    week_key,
+    load_weekly_state,
     WEEKLY_SUCCESS_TRACKER,
     FRIDAY_CLOSE_PRICES,
     DAILY_SUCCESS_TRACKER,
-    today_key
+    today_key,
 )
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
+
+# ======================================================
+# IN-MEMORY STATE
+# ======================================================
 
 SIGNALS = []
 SUCCESS_SIGNALS = []
@@ -25,6 +30,10 @@ MAX_SUCCESS_SIGNALS = 50
 RESET_TIME = dtime(9, 40)
 LAST_DASHBOARD_RESET_DATE = None
 
+
+# ======================================================
+# RESET MEKANİZMASI
+# ======================================================
 
 def reset_dashboard_if_needed(now):
     global LAST_DASHBOARD_RESET_DATE
@@ -39,6 +48,10 @@ def reset_dashboard_if_needed(now):
     LAST_DASHBOARD_RESET_DATE = now.date()
 
 
+# ======================================================
+# PUSH HELPERS
+# ======================================================
+
 def push_signal(signal):
     SIGNALS.insert(0, signal)
     del SIGNALS[MAX_SIGNALS:]
@@ -49,14 +62,22 @@ def push_success_signal(signal):
     del SUCCESS_SIGNALS[MAX_SUCCESS_SIGNALS:]
 
 
+# ======================================================
+# GÜN İSİMLERİ
+# ======================================================
+
 TR_DAYS = {
     "Monday": "Pazartesi",
     "Tuesday": "Salı",
     "Wednesday": "Çarşamba",
     "Thursday": "Perşembe",
-    "Friday": "Cuma"
+    "Friday": "Cuma",
 }
 
+
+# ======================================================
+# WEEKLY TABLE DATA
+# ======================================================
 
 def build_weekly_table_data():
     w_key = week_key()
@@ -104,7 +125,7 @@ def build_weekly_table_data():
                 duration_label = (
                     f"{duration_minutes} dk"
                     if duration_minutes < 60
-                    else f"{duration_minutes//60}s {duration_minutes%60}dk"
+                    else f"{duration_minutes // 60}s {duration_minutes % 60}dk"
                 )
             except Exception:
                 pass
@@ -112,6 +133,7 @@ def build_weekly_table_data():
         row = {
             "symbol": symbol,
             "algorithm": algo,
+
             "signal_type": d.get("signal_type", "primary"),
             "reentry": d.get("signal_type") == "reentry",
 
@@ -145,9 +167,13 @@ def build_weekly_table_data():
             "total": len(week_data),
             "success": len(success),
             "failed": len(failed),
-        }
+        },
     }
 
+
+# ======================================================
+# LIVE GAIN ENRICH
+# ======================================================
 
 def enrich_live_gain(signals):
     enriched = []
@@ -163,12 +189,16 @@ def enrich_live_gain(signals):
             except Exception:
                 pass
 
-        s = dict(s)
-        s["live_gain_pct"] = live_gain_pct
-        enriched.append(s)
+        s2 = dict(s)
+        s2["live_gain_pct"] = live_gain_pct
+        enriched.append(s2)
 
     return enriched
 
+
+# ======================================================
+# API
+# ======================================================
 
 @dashboard_bp.route("/api/dashboard")
 def dashboard_api():
@@ -204,27 +234,42 @@ def dashboard_api():
         if not d.get("hit"):
             continue
 
+        entry = d.get("entry")
+        hit_price = d.get("hit_price")
+
+        gain_pct = None
+        if isinstance(entry, (int, float)) and isinstance(hit_price, (int, float)):
+            gain_pct = round(((hit_price - entry) / entry) * 100, 2)
+
         daily_success.append({
             "symbol": d.get("symbol"),
-            "price": d.get("hit_price"),
-            "entry_price": d.get("entry"),
+            "price": hit_price,
+            "entry_price": entry,
+
             "category": "success",
             "action": "BAŞARILI",
             "main_algorithm": d.get("algo"),
             "time": d.get("hit_time"),
+
             "helpers": d.get("helpers", []),
+            "helpers_detail": [],
+
+            "power_delta": 0,
 
             "signal_type": d.get("signal_type", "primary"),
             "reentry": d.get("signal_type") == "reentry",
 
             "title": (
-            "🎯 HEDEF GELDİ (RE-ENTRY)"
-            if d.get("signal_type") == "reentry"
-            else "🎯 HEDEF GELDİ"
+                "🎯 HEDEF GELDİ (RE-ENTRY)"
+                if d.get("signal_type") == "reentry"
+                else "🎯 HEDEF GELDİ"
             ),
+
+            "gain_pct": gain_pct,
         })
 
     weekly_text = build_weekly_success_report()
+
     all_signals = daily_success + SUCCESS_SIGNALS + SIGNALS
 
     return jsonify({
@@ -234,7 +279,7 @@ def dashboard_api():
         "signals": enrich_live_gain(all_signals),
         "weekly_report": {
             "week_id": week_key(),
-            "text": weekly_text
+            "text": weekly_text,
         } if weekly_text else None,
-        "weekly_table": build_weekly_table_data()
+        "weekly_table": build_weekly_table_data(),
     })
