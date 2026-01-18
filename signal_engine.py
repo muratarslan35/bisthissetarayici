@@ -907,11 +907,11 @@ def process_symbol_signals(item):
         if not is_reentry and in_repeat_block(symbol, algo) and not (
             strengthened or weakened or most_upgrade or most_downgrade
     ):
-        return []
+    return []
         
     if is_reentry:
-    signal["title"] = "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)"
-    signal["reentry"] = True
+        signal["title"] = "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)"
+        signal["reentry"] = True
 
     # --------------------------------------------------
     # BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
