@@ -10,6 +10,7 @@ from signal_engine import (
     WEEKLY_SUCCESS_TRACKER,
     FRIDAY_CLOSE_PRICES,
     DAILY_SUCCESS_TRACKER,
+    REENTRY_DAILY_TRACKER,
     today_key,
 )
 
@@ -133,25 +134,19 @@ def build_weekly_table_data():
         row = {
             "symbol": symbol,
             "algorithm": algo,
-
             "signal_type": d.get("signal_type", "primary"),
             "reentry": d.get("signal_type") == "reentry",
-
             "entry_price": round(entry, 2) if isinstance(entry, (int, float)) else None,
             "current_price": round(current_price, 2) if isinstance(current_price, (int, float)) else None,
-
             "sell_price": round(sell_price, 2) if isinstance(sell_price, (int, float)) else None,
             "sell_gain_pct": sell_gain_pct,
             "live_gain_pct": live_gain_pct,
             "gain_pct": sell_gain_pct,
-
             "entry_day": entry_day,
             "entry_time": entry_time,
             "hit_time": hit_time,
-
             "duration_minutes": duration_minutes,
             "duration_label": duration_label,
-
             "helpers": helpers,
         }
 
@@ -227,6 +222,10 @@ def dashboard_api():
     except Exception:
         pass
 
+    # ======================================================
+    # DAILY SUCCESS
+    # ======================================================
+
     daily_success = []
     t_key = today_key()
 
@@ -237,35 +236,44 @@ def dashboard_api():
         entry = d.get("entry")
         hit_price = d.get("hit_price")
 
-        gain_pct = None
-        if isinstance(entry, (int, float)) and isinstance(hit_price, (int, float)):
-            gain_pct = round(((hit_price - entry) / entry) * 100, 2)
+        gain_pct = round(((hit_price - entry) / entry) * 100, 2)
 
         daily_success.append({
             "symbol": d.get("symbol"),
             "price": hit_price,
             "entry_price": entry,
-
             "category": "success",
             "action": "BAŞARILI",
             "main_algorithm": d.get("algo"),
             "time": d.get("hit_time"),
-
             "helpers": d.get("helpers", []),
             "helpers_detail": [],
-
             "power_delta": 0,
-
             "signal_type": d.get("signal_type", "primary"),
             "reentry": d.get("signal_type") == "reentry",
-
-            "title": (
-                "🎯 HEDEF GELDİ (RE-ENTRY)"
-                if d.get("signal_type") == "reentry"
-                else "🎯 HEDEF GELDİ"
-            ),
-
+            "title": "🎯 HEDEF GELDİ (RE-ENTRY)" if d.get("signal_type") == "reentry" else "🎯 HEDEF GELDİ",
             "gain_pct": gain_pct,
+        })
+
+    # ======================================================
+    # ♻️ RE-ENTRY DAILY TABLE
+    # ======================================================
+
+    reentry_daily = []
+
+    for r in REENTRY_DAILY_TRACKER.get(t_key, {}).values():
+        if not r.get("hit"):
+            continue
+
+        gain_pct = round(((r["hit_price"] - r["entry"]) / r["entry"]) * 100, 2)
+
+        reentry_daily.append({
+            "symbol": r["symbol"],
+            "algo": r["algo"],
+            "entry_price": r["entry"],
+            "hit_price": r["hit_price"],
+            "gain_pct": gain_pct,
+            "time": r["hit_time"],
         })
 
     weekly_text = build_weekly_success_report()
@@ -282,4 +290,5 @@ def dashboard_api():
             "text": weekly_text,
         } if weekly_text else None,
         "weekly_table": build_weekly_table_data(),
+        "reentry_daily": reentry_daily,
     })
