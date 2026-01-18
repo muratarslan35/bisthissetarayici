@@ -761,6 +761,18 @@ def process_symbol_signals(item):
         "prev_power": prev_power,
         "after_target": after_target,
     })
+
+    base_entry = price if is_reentry else entry_price
+
+    tp1 = None
+    tp2 = None
+    tp3 = None
+
+    if base_entry:
+        tp1 = fmt(base_entry * (1 + TP1_PCT))
+        tp2 = fmt(base_entry * (1 + TP2_PCT))
+        tp3 = fmt(base_entry * (1 + TP3_PCT))
+        
     if is_reentry:
     reset_reentry_daily_if_needed()
     r_store = REENTRY_DAILY_TRACKER.setdefault(t_key, {})
@@ -775,18 +787,8 @@ def process_symbol_signals(item):
             "hit": False,
             "hit_price": None,
             "hit_time": None,
+            "signal_type": "reentry",
         }
-
-    base_entry = price if is_reentry else entry_price
-
-    tp1 = None
-    tp2 = None
-    tp3 = None
-
-    if base_entry:
-        tp1 = fmt(base_entry * (1 + TP1_PCT))
-        tp2 = fmt(base_entry * (1 + TP2_PCT))
-        tp3 = fmt(base_entry * (1 + TP3_PCT))
 
     live_gain_pct = None
     if base_entry:
@@ -990,17 +992,17 @@ def update_success_targets(symbol, price):
     r_day = REENTRY_DAILY_TRACKER.get(t_key, {})
 
     for k, r in r_day.items():
-    if r.get("hit"):
-        continue
-    if r.get("symbol") != symbol:
-        continue
-    if not r.get("tp1"):
-        continue
+        if r.get("hit"):
+            continue
+        if r.get("symbol") != symbol:
+            continue
+        if not r.get("tp1"):
+            continue
 
-    if price >= r["tp1"]:
-        r["hit"] = True
-        r["hit_price"] = price
-        r["hit_time"] = tr_now().strftime("%H:%M:%S")
+        if price >= r["tp1"]:
+            r["hit"] = True
+            r["hit_price"] = price
+            r["hit_time"] = tr_now().strftime("%H:%M:%S")
 
     return success_signals
 
