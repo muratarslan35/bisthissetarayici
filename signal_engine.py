@@ -93,6 +93,7 @@ LAST_PUBLISHED_STATE = {}
 
 DAILY_SUCCESS_TRACKER = load_daily_state()
 DAILY_CLOSE_PRICES = {}
+REENTRY_DAILY_TRACKER = {}
 
 WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
 
@@ -147,6 +148,12 @@ def reset_weekly_success_if_needed():
     WEEKLY_SUCCESS_TRACKER[key] = {}
     FRIDAY_CLOSE_PRICES.clear()
     save_weekly_state()
+
+def reset_reentry_daily_if_needed():
+    key = today_key()
+    if key not in REENTRY_DAILY_TRACKER:
+        REENTRY_DAILY_TRACKER.clear()
+        REENTRY_DAILY_TRACKER[key] = {}
 
 # ======================================================
 # HELPER SEVİYELERİ
@@ -963,6 +970,20 @@ def update_success_targets(symbol, price):
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
             d["hit_day"] = tr_now().strftime("%A")
             save_weekly_state()
+
+    # ---------- RE-ENTRY ----------
+    r_day = REENTRY_DAILY_TRACKER.get(t_key, {})
+
+    for k, r in r_day.items():
+        if r["hit"]:
+            continue
+        if r["symbol"] != symbol:
+            continue
+
+    if price >= r["tp1"]:
+        r["hit"] = True
+        r["hit_price"] = price
+        r["hit_time"] = tr_now().strftime("%H:%M:%S")
 
     return success_signals
 
