@@ -710,7 +710,6 @@ def process_symbol_signals(item):
         "most_4h": most_4h,
         "history": history,
     }
-
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
@@ -810,7 +809,6 @@ def process_symbol_signals(item):
     LAST_PUBLISHED_STATE[key] = tr_now()
     mark_sent(symbol, algo)
 
-    # ❗ RE-ENTRY ise STORE’A YAZMA
     if not is_reentry:
         d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
         w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
@@ -846,6 +844,8 @@ def process_symbol_signals(item):
             save_weekly_state()
 
     return [signal]
+
+
 
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
