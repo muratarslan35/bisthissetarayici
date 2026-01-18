@@ -810,13 +810,24 @@ def process_symbol_signals(item):
     entry_price = None
     if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
         entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
+    # --------------------------------------------------
+    # ♻️ RE-ENTRY ENTRY & TP (YENİ GİRİŞ)
+    # --------------------------------------------------
+
+    reentry_entry_price = None
+
+    if is_reentry:
+        reentry_entry_price = price
 
     # --------------------------------------------------
     # TP HESAPLARI
     # --------------------------------------------------
-    tp1 = round(entry_price * 1.015, 2) if entry_price else None
-    tp2 = round(entry_price * 1.03, 2) if entry_price else None
-    tp3 = round(entry_price * 1.05, 2) if entry_price else None
+
+    base_entry = reentry_entry_price if is_reentry else entry_price
+
+    tp1 = round(base_entry * 1.015, 2) if base_entry else None
+    tp2 = round(base_entry * 1.03, 2) if base_entry else None
+    tp3 = round(base_entry * 1.05, 2) if base_entry else None
 
     # --------------------------------------------------
     # CANLI GETİRİ % (DASHBOARD + OKLAR)
@@ -835,7 +846,8 @@ def process_symbol_signals(item):
     # --------------------------------------------------
     signal = {
         "symbol": symbol,
-        "entry_price": fmt(entry_price),
+        "entry_price": fmt(base_entry),
+        "reentry": is_reentry,
         "price": fmt(price),
         "live_gain_pct": live_gain_pct,
 
@@ -880,9 +892,17 @@ def process_symbol_signals(item):
         "power": total_power,
         "power_delta": power_delta,
     }
+    signal["signal_type"] = "reentry" if is_reentry else "primary"
     # --------------------------------------------------
     # ♻️ RE-ENTRY KONTROLÜ
     # --------------------------------------------------
+
+    # hedef sonrası mı?
+    after_target = False
+    w_key = week_key()
+    if (symbol, algo) in WEEKLY_SUCCESS_TRACKER.get(w_key, {}):
+        if WEEKLY_SUCCESS_TRACKER[w_key][(symbol, algo)].get("hit"):
+            after_target = True
 
     reentry_ctx = {
         "tf1h": tf1h,
@@ -892,6 +912,7 @@ def process_symbol_signals(item):
         "price": price,
         "power": total_power,
         "prev_power": prev_power,
+        "after_target": after_target,
     }
 
     is_reentry = allow_reentry(reentry_ctx)
@@ -904,20 +925,24 @@ def process_symbol_signals(item):
     is_first_published_signal = key not in LAST_PUBLISHED_STATE
 
     if not is_first_published_signal:
-        if not is_reentry and in_repeat_block(symbol, algo) and not (
-            strengthened or weakened or most_upgrade or most_downgrade
-    ):
-    return []
-        
+        if (
+            not is_reentry
+            and in_repeat_block(symbol, algo)
+            and not (strengthened or weakened or most_upgrade or most_downgrade)
+        ):
+            return []
+
     if is_reentry:
         signal["title"] = "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)"
         signal["reentry"] = True
+        signal["category"] = "strong"
 
     # --------------------------------------------------
     # BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
     # --------------------------------------------------
     signal["published"] = True
     LAST_PUBLISHED_STATE[key] = tr_now()
+    mark_sent(symbol, algo)
     
     # --------------------------------------------------
     # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
@@ -931,7 +956,7 @@ def process_symbol_signals(item):
             "symbol": symbol,
             "algo": algo,
             "helpers": list(helper_names),
-            "entry": price,
+            "entry": base_entry,
             "target": price * (1 + TARGET_PCT),
             "hit": False,
             "entry_time": tr_now().strftime("%H:%M:%S"),
@@ -946,7 +971,7 @@ def process_symbol_signals(item):
             "helpers": list(helper_names),
 
             # fiyatlar
-            "entry": price,
+            "entry": base_entry,
             "target": price * (1 + TARGET_PCT),
 
             # durum
@@ -1200,7 +1225,12 @@ def format_signal_message(signal):
 
     # ---------- HEADER ----------
     lines.append(f"📊 {signal['symbol']}")
-    lines.append(f"🏷 {signal['title']}")
+
+    if signal.get("signal_type") == "reentry":
+        lines.append("♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)")
+    else:
+        lines.append(f"🏷 {signal['title']}")
+
     lines.append("")
 
     entry = signal.get("entry_price")
@@ -1208,11 +1238,13 @@ def format_signal_message(signal):
 
     if entry:
         lines.append(f"🎯 Giriş: {entry}")
+
     lines.append(f"💰 Canlı: {price}")
 
     lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
 
+    
     # ---------- TP LEVELS ----------
     if entry:
         tp1 = round(entry * 1.015, 2)
