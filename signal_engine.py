@@ -83,6 +83,9 @@ def save_daily_state():
 REPEAT_BLOCK_MINUTES = 45
 TARGET_PCT = 0.015
 POWER_STRENGTH_THRESHOLD = 20
+TP1_PCT = 0.015    # %1.5
+TP2_PCT = 0.03    # %3
+TP3_PCT = 0.05    # %5
 
 LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
@@ -754,6 +757,15 @@ def process_symbol_signals(item):
 
     base_entry = price if is_reentry else entry_price
 
+    tp1 = None
+    tp2 = None
+    tp3 = None
+
+    if base_entry:
+        tp1 = fmt(base_entry * (1 + TP1_PCT))
+        tp2 = fmt(base_entry * (1 + TP2_PCT))
+        tp3 = fmt(base_entry * (1 + TP3_PCT))
+
     live_gain_pct = None
     if base_entry:
         live_gain_pct = round(((price - base_entry) / base_entry) * 100, 2)
@@ -764,6 +776,9 @@ def process_symbol_signals(item):
         "reentry": is_reentry,
         "price": fmt(price),
         "live_gain_pct": live_gain_pct,
+        "tp1": tp1,
+        "tp2": tp2,
+        "tp3": tp3,
         "title": "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)" if is_reentry else title,
         "action": action,
         "category": "strong" if is_reentry else category,
