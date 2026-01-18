@@ -1,15 +1,18 @@
+# ====== PARÇA 1 BAŞLANGIÇ ======
+
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import numpy as np
 import json
 import os
+from threading import Lock
 
 from utils import (
     detect_three_peaks,
     detect_support_resistance_break,
     get_last_resistance
 )
-from threading import Lock
+
 _STORE_LOCK = Lock()
 
 # ======================================================
@@ -21,6 +24,7 @@ DATA_DIR = "data"
 DAILY_STATE_FILE = os.path.join(DATA_DIR, "daily_state.json")
 WEEKLY_STATE_FILE = os.path.join(DATA_DIR, "weekly_state.json")
 
+
 def load_weekly_state():
     if not os.path.exists(WEEKLY_STATE_FILE):
         return {}, {}
@@ -28,12 +32,10 @@ def load_weekly_state():
     try:
         with open(WEEKLY_STATE_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return (
-                data.get("weekly", {}),
-                data.get("friday_prices", {})
-            )
+            return data.get("weekly", {}), data.get("friday_prices", {})
     except Exception:
         return {}, {}
+
 
 def save_weekly_state():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -50,6 +52,8 @@ def save_weekly_state():
                 indent=2,
                 default=str
             )
+
+
 def load_daily_state():
     if not os.path.exists(DAILY_STATE_FILE):
         return {}
@@ -59,6 +63,7 @@ def load_daily_state():
             return json.load(f)
     except Exception:
         return {}
+
 
 def save_daily_state():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -72,6 +77,7 @@ def save_daily_state():
                 indent=2,
                 default=str
             )
+
 # ======================================================
 # GLOBALS
 # ======================================================
@@ -84,13 +90,10 @@ LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
 LAST_PUBLISHED_STATE = {}
 
-# 🔹 GÜNLÜK (RAM – ORİJİNAL DAVRANIŞ)
 DAILY_SUCCESS_TRACKER = {}
-# 🔹 GÜNLÜK KAPANIŞ SNAPSHOT
 DAILY_CLOSE_PRICES = {}
-# 🔹 HAFTALIK + CUMA (DISK – KALICI)
+
 WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
-# 🔹 GÜNLÜK (DISK + RAM)
 DAILY_SUCCESS_TRACKER = load_daily_state()
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -102,41 +105,43 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 def tr_now():
     return datetime.now(TR_TZ)
 
+
 def today_key():
     return tr_now().date().isoformat()
+
 
 def week_key():
     now = tr_now()
     monday = now - timedelta(days=now.weekday())
     return monday.date().isoformat()
 
+
 def fmt(v):
     return round(v, 2) if isinstance(v, (int, float)) else None
+
 
 def is_market_close_final_window():
     now = tr_now()
     return now.hour == 18 and now.minute >= 10
+
 # ======================================================
 # RESET MEKANİZMALARI
 # ======================================================
 
 def reset_daily_success_if_needed():
-    """
-    Her yeni günde DAILY_SUCCESS_TRACKER sıfırlanır (RAM)
-    """
     key = today_key()
     if key not in DAILY_SUCCESS_TRACKER:
         DAILY_SUCCESS_TRACKER.clear()
         DAILY_SUCCESS_TRACKER[key] = {}
         save_daily_state()
+
+
 def reset_weekly_success_if_needed():
     key = week_key()
 
-    # ⛔️ EĞER DISKTE VERİ VARSA ASLA RESETLEME
     if WEEKLY_SUCCESS_TRACKER:
         return
 
-    # ⛔️ SADECE PAZARTESİ SABAHI VE GERÇEKTEN YENİ HAFTAYSA
     WEEKLY_SUCCESS_TRACKER[key] = {}
     FRIDAY_CLOSE_PRICES.clear()
     save_weekly_state()
@@ -193,6 +198,7 @@ def in_repeat_block(symbol, algo):
     t = LAST_SENT.get((symbol, algo))
     return t and tr_now() < t
 
+
 def mark_sent(symbol, algo):
     LAST_SENT[(symbol, algo)] = tr_now() + timedelta(minutes=REPEAT_BLOCK_MINUTES)
 
@@ -214,6 +220,7 @@ def ema_trend(e20, e50, e200):
 def is_green(df, idx):
     return df.iloc[idx]["Close"] > df.iloc[idx]["Open"]
 
+
 def is_4h_first_green_after_red(df):
     if df is None or len(df) < 3:
         return False
@@ -222,6 +229,7 @@ def is_4h_first_green_after_red(df):
         df.iloc[-2]["Close"] > df.iloc[-2]["Open"]
     )
 
+
 def is_4h_trend_green(df):
     if df is None or len(df) < 2:
         return False
@@ -229,34 +237,6 @@ def is_4h_trend_green(df):
         df.iloc[-2]["Close"] > df.iloc[-2]["Open"] or
         df.iloc[-1]["Close"] > df.iloc[-1]["Open"]
     )
-
-# ======================================================
-# 4H SIKIŞMA + ONAYLI KIRILIM
-# ======================================================
-
-def detect_4h_squeeze_breakout(df):
-    if df is None or len(df) < 10:
-        return False
-
-    zone = df.iloc[-10:-2]
-    high_range = zone["High"].max()
-    low_range = zone["Low"].min()
-
-    # Dar bant filtresi
-    if (high_range - low_range) / low_range > 0.06:
-        return False
-
-    breakout = df.iloc[-2]
-    prev = df.iloc[-3]
-
-    if breakout["Close"] <= prev["High"]:
-        return False
-
-    vol_ma = df["Volume"].rolling(10).mean().iloc[-2]
-    if breakout["Volume"] <= vol_ma:
-        return False
-
-    return True
 
 # ======================================================
 # MOST (MOVING STOP)
@@ -301,24 +281,49 @@ def calculate_most(df, period=9, multiplier=2.0):
         "prev_level": most[-2]
     }
 
+
 def detect_most_trend(df):
     res = calculate_most(df)
     if not res:
         return None
     return "UP" if res["trend"] == "UP" else "DOWN"
+
+# ====== PARÇA 1 BİTİŞ ======
+
+# ====== PARÇA 2 BAŞLANGIÇ ======
+
+# ======================================================
+# 4H SIKIŞMA + ONAYLI KIRILIM
+# ======================================================
+
+def detect_4h_squeeze_breakout(df):
+    if df is None or len(df) < 10:
+        return False
+
+    zone = df.iloc[-10:-2]
+    high_range = zone["High"].max()
+    low_range = zone["Low"].min()
+
+    if (high_range - low_range) / low_range > 0.06:
+        return False
+
+    breakout = df.iloc[-2]
+    prev = df.iloc[-3]
+
+    if breakout["Close"] <= prev["High"]:
+        return False
+
+    vol_ma = df["Volume"].rolling(10).mean().iloc[-2]
+    if breakout["Volume"] <= vol_ma:
+        return False
+
+    return True
+
 # ======================================================
 # RE-ENTRY (TEKRAR GÜÇLÜ AL) FİLTRESİ
 # ======================================================
 
 def allow_reentry(signal_ctx):
-    """
-    Re-entry sadece:
-    - Hedef sonrası
-    - RSI resetlenmişse
-    - MOST bozulmamışsa
-    - Power gerçek artmışsa
-    """
-
     tf1h = signal_ctx.get("tf1h")
     tf4h = signal_ctx.get("tf4h")
 
@@ -331,48 +336,38 @@ def allow_reentry(signal_ctx):
     price = signal_ctx.get("price")
     power = signal_ctx.get("power")
     prev_power = signal_ctx.get("prev_power")
+    after_target = signal_ctx.get("after_target")
 
-    # --- RSI KİLİDİ ---
+    if not after_target:
+        return False
+
     if rsi_1h is not None and rsi_1h >= 68:
         return False
-
     if rsi_4h is not None and rsi_4h >= 70:
         return False
-
     if rsi_1h is not None and rsi_1h > 60:
         return False
 
-    # --- MOST TREND ---
     if most_4h != "UP":
         return False
-
     if most_4h_level and price <= most_4h_level:
         return False
 
-    # --- POWER ---
     if prev_power is None:
         return False
-
     if power - prev_power < 15:
         return False
 
     return True
 
 # ======================================================
-# YARDIMCI FORMASYONLAR
-# ======================================================
-# ======================================================
-# PROFESYONEL L2 / L3 / L4 SEVİYE ANALİZİ (FINAL)
+# PROFESYONEL L2 / L3 / L4 SEVİYE ANALİZİ
 # ======================================================
 
 def detect_levels(df, tf, tolerance=None):
     if tolerance is None:
         tolerance = 0.006 if tf == "4h" else 0.004
-    """
-    Profesyonel seviye tespiti:
-    - Aynı fiyat bölgesine tekrar tekrar temas
-    - Gürültü filtresi
-    """
+
     levels = []
     closes = df["Close"].values
     volumes = df["Volume"].values
@@ -396,11 +391,6 @@ def detect_levels(df, tf, tolerance=None):
 
 
 def confirm_breakout(df, level):
-    """
-    Gerçek kırılım şartları:
-    - Kapanış seviye üstü
-    - Hacim ortalama üstü
-    """
     last = df.iloc[-1]
     vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
 
@@ -411,17 +401,12 @@ def confirm_breakout(df, level):
 
 
 def classify_level(lvl, tf):
-    """
-    Zaman dilimine göre seviye sınıflaması
-    """
     t = lvl["touches"]
 
     if t >= 3 and tf in ("4h", "1d"):
         return ("L4 MAJÖR KIRILIM", 18)
-
     if t >= 3:
         return ("L3 GÜÇLÜ KIRILIM", 12)
-
     if t >= 2:
         return ("L2 KIRILIM", 6)
 
@@ -429,15 +414,11 @@ def classify_level(lvl, tf):
 
 
 def detect_l2_l3_l4_pro(df, price, tf):
-    """
-    TEK ve GERÇEK L2 / L3 / L4 kaynağı
-    """
     helpers = []
 
-    for lvl in detect_levels(df):
+    for lvl in detect_levels(df, tf):
         if price <= lvl["level"]:
             continue
-
         if not confirm_breakout(df, lvl["level"]):
             continue
 
@@ -446,7 +427,8 @@ def detect_l2_l3_l4_pro(df, price, tf):
             helpers.append(res)
 
     return helpers
-    
+
+
 def detect_order_block(df):
     if df is None or len(df) < 20:
         return False
@@ -458,10 +440,10 @@ def detect_order_block(df):
 
     return df.iloc[-1]["Close"] > reds.iloc[-1]["High"]
 
-
 # ======================================================
 # HELPER INDICATORS (ANA TOPLAMA)
 # ======================================================
+
 def helper_indicators(item):
     helpers = []
 
@@ -470,7 +452,6 @@ def helper_indicators(item):
     tf4h = item["tf"].get("4h")
     tf1d = item["tf"].get("1d")
 
-    # RSI
     rsi = tf15.get("rsi")
     if rsi is not None:
         if rsi < 28:
@@ -478,11 +459,9 @@ def helper_indicators(item):
         elif rsi < 35:
             helpers.append(("RSI DÜŞÜK", 6))
 
-    # HACİM
     if tf15.get("volume_ok"):
         helpers.append(("GÜÇLÜ HACİM", 10))
 
-    # ORDER BLOCK + FORMASYON
     df15 = tf15.get("df")
     if df15 is not None:
         if detect_three_peaks(df15["Close"]):
@@ -490,7 +469,6 @@ def helper_indicators(item):
         if detect_order_block(df15):
             helpers.append(("ORDER BLOCK", 15))
 
-    # L2 – 15m
     helpers.extend(
         detect_l2_l3_l4_pro(
             tf15["df"],
@@ -499,7 +477,6 @@ def helper_indicators(item):
         )
     )
 
-    # L3 – 1H
     if tf1h:
         helpers.extend(
             detect_l2_l3_l4_pro(
@@ -509,7 +486,6 @@ def helper_indicators(item):
             )
         )
 
-    # L4 – 4H
     if tf4h:
         helpers.extend(
             detect_l2_l3_l4_pro(
@@ -519,18 +495,15 @@ def helper_indicators(item):
             )
         )
 
-    # 1H YAPISAL KIRILIM
     if tf1h and detect_support_resistance_break(tf1h["df"]):
         helpers.append(("1H YAPISAL KIRILIM", 20))
 
-    # 4H TREND + SIKIŞMA
     if tf4h:
         if detect_support_resistance_break(tf4h["df"]):
             helpers.append(("4H TREND KIRILIMI", 25))
         if detect_4h_squeeze_breakout(tf4h["df"]):
             helpers.append(("4H SIKIŞMA KIRILIMI (ONAYLI)", 30))
 
-    # EMA ONAY
     if tf1h and tf4h:
         if (
             tf15["ema20"] > tf15["ema50"] and
@@ -539,11 +512,9 @@ def helper_indicators(item):
         ):
             helpers.append(("ÇOKLU ZAMAN EMA ONAYI", 10))
 
-    # GOLDEN CROSS
     if tf1d and tf1d.get("ema50") > tf1d.get("ema200"):
         helpers.append(("GOLDEN CROSS", 10))
 
-    # MOST
     if tf4h:
         m4 = detect_most_trend(tf4h["df"])
         if m4 == "UP":
@@ -572,16 +543,12 @@ def kombine_signal(item):
 
     if not tf1d or not tf4h or not tf1h:
         return None
-
     if not is_green(tf1d["df"], -2):
         return None
-
     if not is_4h_first_green_after_red(tf4h["df"]):
         return None
-
     if not is_green(tf1h["df"], -1):
         return None
-
     if tf1d["rsi"] >= 50:
         return None
 
@@ -594,6 +561,7 @@ def kombine_signal(item):
 
     return {"main_type": "KOMBİNE", "base_strength": 55}
 
+
 def super_kombine_signal(item):
     tf15 = item["tf"]["15m"]
     tf1d = item["tf"].get("1d")
@@ -603,18 +571,12 @@ def super_kombine_signal(item):
     if not tf1d or not tf4h or not tf1h:
         return None
 
-    if not (
-        is_green(tf1d["df"], -2) and
-        is_green(tf1d["df"], -1)
-    ):
+    if not (is_green(tf1d["df"], -2) and is_green(tf1d["df"], -1)):
         return None
-
     if not is_4h_trend_green(tf4h["df"]):
         return None
-
     if not is_green(tf1h["df"], -1):
         return None
-
     if tf1d["rsi"] >= 48:
         return None
 
@@ -627,6 +589,9 @@ def super_kombine_signal(item):
 
     return {"main_type": "SÜPER KOMBİNE", "base_strength": 75}
 
+# ====== PARÇA 2 BİTİŞ ======
+# ====== PARÇA 3 BAŞLANGIÇ ======
+
 # ======================================================
 # PROCESS SYMBOL SIGNALS
 # ======================================================
@@ -635,30 +600,20 @@ def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
-    # ✅ DOĞRU RESET FONKSİYONLARI
     reset_daily_success_if_needed()
     reset_weekly_success_if_needed()
 
-    # --------------------------------------------------
-    # ANA ALGORİTMA
-    # --------------------------------------------------
     main = super_kombine_signal(item) or kombine_signal(item)
     if not main:
         return []
 
     algo = main["main_type"]
 
-    # --------------------------------------------------
-    # HELPERS + POWER
-    # --------------------------------------------------
     helpers = helper_indicators(item)
     helper_map = {h[0]: h[1] for h in helpers}
     helper_names = set(helper_map.keys())
 
-    total_power = sum(
-        v for v in helper_map.values()
-        if isinstance(v, (int, float))
-    )
+    total_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
 
     key = (symbol, algo)
     prev = LAST_SIGNAL_STATE.get(key, {})
@@ -670,9 +625,6 @@ def process_symbol_signals(item):
     added_helpers = list(helper_names - prev_helpers)
     removed_helpers = list(prev_helpers - helper_names)
 
-    # --------------------------------------------------
-    # MOST (1H + 4H)
-    # --------------------------------------------------
     tf1h = item["tf"].get("1h")
     tf4h = item["tf"].get("4h")
 
@@ -688,18 +640,12 @@ def process_symbol_signals(item):
         helper_names.add("MOST KIRILIMI")
         helper_map["MOST KIRILIMI"] = -50
 
-    # --------------------------------------------------
-    # SEVİYE SAYIMI
-    # --------------------------------------------------
     levels = {"A": 0, "B": 0, "C": 0}
     for h in helper_names:
         lvl = HELPER_LEVELS.get(h)
         if lvl:
             levels[lvl] += 1
 
-    # --------------------------------------------------
-    # AKSİYON
-    # --------------------------------------------------
     if levels["A"] >= 1:
         action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye"
     elif levels["B"] >= 1:
@@ -709,9 +655,6 @@ def process_symbol_signals(item):
     else:
         return []
 
-    # --------------------------------------------------
-    # MOST DOWNGRADE / UPGRADE
-    # --------------------------------------------------
     if most_downgrade:
         if action == "GÜÇLÜ AL":
             action, category = "AL", "combo"
@@ -728,9 +671,6 @@ def process_symbol_signals(item):
             action, category = "GÜÇLÜ AL", "strong"
             title = "🚀 MOST 4H YUKARI – GÜÇLÜ AL"
 
-    # --------------------------------------------------
-    # POWER DEĞİŞİMİ
-    # --------------------------------------------------
     strengthened = False
     weakened = False
 
@@ -743,11 +683,6 @@ def process_symbol_signals(item):
             title = "⚠️ ZAYIFLAYAN SİNYAL"
             category = "watch"
 
-    
-
-    # --------------------------------------------------
-    # HISTORY
-    # --------------------------------------------------
     now_h = tr_now().strftime("%H:%M")
     history = prev.get("history", [(now_h, f"{algo} sinyal")])
 
@@ -755,20 +690,15 @@ def process_symbol_signals(item):
         history.append((now_h, f"Eklendi: {', '.join(added_helpers)}"))
     if removed_helpers:
         history.append((now_h, f"Çıktı: {', '.join(removed_helpers)}"))
-
     if most_downgrade:
         history.append((now_h, "MOST 4H aşağı – downgrade"))
     if most_upgrade:
         history.append((now_h, "MOST 4H yukarı – upgrade"))
-
     if strengthened:
         history.append((now_h, f"Güç arttı (+{power_delta})"))
     if weakened:
         history.append((now_h, f"Güç düştü ({power_delta})"))
 
-    # --------------------------------------------------
-    # STATE KAYDI
-    # --------------------------------------------------
     LAST_SIGNAL_STATE[key] = {
         "power": total_power,
         "helpers": list(helper_names),
@@ -776,18 +706,12 @@ def process_symbol_signals(item):
         "history": history,
     }
 
-    # --------------------------------------------------
-    # DİRENÇLER
-    # --------------------------------------------------
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
     r1h_dist_pct = round(((r1h - price) / price) * 100, 2) if r1h else None
     r4h_dist_pct = round(((r4h - price) / price) * 100, 2) if r4h else None
 
-    # --------------------------------------------------
-    # MOST SEVİYELERİ (GERÇEK)
-    # --------------------------------------------------
     most_1h_level = None
     most_4h_level = None
 
@@ -801,105 +725,14 @@ def process_symbol_signals(item):
         if m4:
             most_4h_level = round(m4["level"], 2)
 
-    # --------------------------------------------------
-    # ENTRY (SABİT)
-    # --------------------------------------------------
     t_key = today_key()
     w_key = week_key()
 
     entry_price = None
     if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
         entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
-    # --------------------------------------------------
-    # ♻️ RE-ENTRY ENTRY & TP (YENİ GİRİŞ)
-    # --------------------------------------------------
 
-    reentry_entry_price = None
-
-    if is_reentry:
-        reentry_entry_price = price
-
-    # --------------------------------------------------
-    # TP HESAPLARI
-    # --------------------------------------------------
-
-    base_entry = reentry_entry_price if is_reentry else entry_price
-
-    tp1 = round(base_entry * 1.015, 2) if base_entry else None
-    tp2 = round(base_entry * 1.03, 2) if base_entry else None
-    tp3 = round(base_entry * 1.05, 2) if base_entry else None
-
-    # --------------------------------------------------
-    # CANLI GETİRİ % (DASHBOARD + OKLAR)
-    # --------------------------------------------------
-    live_gain_pct = None
-    if entry_price is not None and price is not None:
-        try:
-            live_gain_pct = round(
-                ((price - entry_price) / entry_price) * 100, 2
-            )
-        except Exception:
-            live_gain_pct = None
-
-    # --------------------------------------------------
-    # SIGNAL OBJESİ
-    # --------------------------------------------------
-    signal = {
-        "symbol": symbol,
-        "entry_price": fmt(base_entry),
-        "reentry": is_reentry,
-        "price": fmt(price),
-        "live_gain_pct": live_gain_pct,
-
-        "title": title,
-        "action": action,
-        "category": category,
-        "main_algorithm": algo,
-
-        "ema_trend": ema_trend(
-            item["tf"]["15m"]["ema20_live"],
-            item["tf"]["15m"]["ema50_live"],
-            item["tf"]["15m"]["ema200_live"]
-        ),
-
-        "helpers": list(helper_names),
-        "helpers_detail": [
-            {
-                "name": h,
-                "level": HELPER_LEVELS[h],
-                "desc": HELPER_DESCRIPTIONS.get(h, "")
-            }
-            for h in helper_names if h in HELPER_LEVELS
-        ],
-
-        "history": history,
-        "time": tr_now().strftime("%H:%M:%S"),
-
-        "resistance_1h": fmt(r1h),
-        "resistance_4h": fmt(r4h),
-        "resistance_1h_pct": r1h_dist_pct,
-        "resistance_4h_pct": r4h_dist_pct,
-
-        "tp1": tp1,
-        "tp2": tp2,
-        "tp3": tp3,
-
-        "most_1h": most_1h,
-        "most_4h": most_4h,
-        "most_1h_level": most_1h_level,
-        "most_4h_level": most_4h_level,
-
-        "power": total_power,
-        "power_delta": power_delta,
-    }
-    signal["signal_type"] = "reentry" if is_reentry else "primary"
-    # --------------------------------------------------
-    # ♻️ RE-ENTRY KONTROLÜ
-    # --------------------------------------------------
-
-    # hedef sonrası mı?
     after_target = False
-    w_key = week_key()
     if (symbol, algo) in WEEKLY_SUCCESS_TRACKER.get(w_key, {}):
         if WEEKLY_SUCCESS_TRACKER[w_key][(symbol, algo)].get("hit"):
             after_target = True
@@ -917,13 +750,59 @@ def process_symbol_signals(item):
 
     is_reentry = allow_reentry(reentry_ctx)
 
-    # --------------------------------------------------
-    # 🔒 YAYIN KONTROLÜ (FINAL – GERÇEK SİNYAL FİLTRESİ)
-    # --------------------------------------------------
+    base_entry = price if is_reentry else entry_price
 
-    key = (symbol, algo)
+    tp1 = round(base_entry * 1.015, 2) if base_entry else None
+    tp2 = round(base_entry * 1.03, 2) if base_entry else None
+    tp3 = round(base_entry * 1.05, 2) if base_entry else None
+
+    live_gain_pct = None
+    if entry_price is not None:
+        live_gain_pct = round(((price - entry_price) / entry_price) * 100, 2)
+
+    signal = {
+        "symbol": symbol,
+        "entry_price": fmt(base_entry),
+        "reentry": is_reentry,
+        "price": fmt(price),
+        "live_gain_pct": live_gain_pct,
+        "title": title,
+        "action": action,
+        "category": category,
+        "main_algorithm": algo,
+        "ema_trend": ema_trend(
+            item["tf"]["15m"]["ema20_live"],
+            item["tf"]["15m"]["ema50_live"],
+            item["tf"]["15m"]["ema200_live"]
+        ),
+        "helpers": list(helper_names),
+        "helpers_detail": [
+            {
+                "name": h,
+                "level": HELPER_LEVELS[h],
+                "desc": HELPER_DESCRIPTIONS.get(h, "")
+            }
+            for h in helper_names if h in HELPER_LEVELS
+        ],
+        "history": history,
+        "time": tr_now().strftime("%H:%M:%S"),
+        "resistance_1h": fmt(r1h),
+        "resistance_4h": fmt(r4h),
+        "resistance_1h_pct": r1h_dist_pct,
+        "resistance_4h_pct": r4h_dist_pct,
+        "tp1": tp1,
+        "tp2": tp2,
+        "tp3": tp3,
+        "most_1h": most_1h,
+        "most_4h": most_4h,
+        "most_1h_level": most_1h_level,
+        "most_4h_level": most_4h_level,
+        "power": total_power,
+        "power_delta": power_delta,
+        "signal_type": "reentry" if is_reentry else "primary",
+    }
+
     is_first_published_signal = key not in LAST_PUBLISHED_STATE
-
     if not is_first_published_signal:
         if (
             not is_reentry
@@ -934,23 +813,15 @@ def process_symbol_signals(item):
 
     if is_reentry:
         signal["title"] = "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)"
-        signal["reentry"] = True
         signal["category"] = "strong"
 
-    # --------------------------------------------------
-    # BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
-    # --------------------------------------------------
     signal["published"] = True
     LAST_PUBLISHED_STATE[key] = tr_now()
     mark_sent(symbol, algo)
-    
-    # --------------------------------------------------
-    # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
-    # --------------------------------------------------
+
     d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
     w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
-    # ---- DAILY (RAM) ----
     if (symbol, algo) not in d_store:
         d_store[(symbol, algo)] = {
             "symbol": symbol,
@@ -963,68 +834,60 @@ def process_symbol_signals(item):
             "entry_date": tr_now().date(),
         }
         save_daily_state()
-    # ---- WEEKLY (DISK) ----
+
     if (symbol, algo) not in w_store:
         w_store[(symbol, algo)] = {
             "symbol": symbol,
             "algo": algo,
             "helpers": list(helper_names),
-
-            # fiyatlar
             "entry": base_entry,
             "target": price * (1 + TARGET_PCT),
-
-            # durum
             "hit": False,
             "hit_price": None,
             "hit_time": None,
             "hit_day": None,
-
-            # zaman (dashboard için ZORUNLU)
             "entry_day": tr_now().strftime("%A"),
             "entry_date": tr_now().date(),
             "entry_time": tr_now().strftime("%H:%M:%S"),
         }
-    
         save_weekly_state()
-    
 
     return [signal]
+
+# ====== PARÇA 3 BİTİŞ ======
+# ====== PARÇA 4 BAŞLANGIÇ ======
 
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
 # ======================================================
 
 def capture_friday_close(symbol, price):
-    """
-    Cuma günü 18:05–18:10 arasında son fiyatı yakalar
-    """
     now = tr_now()
 
-    if now.weekday() != 4:  # cuma değil
+    if now.weekday() != 4:
         return
 
     if now.hour == 18 and 5 <= now.minute <= 10:
         FRIDAY_CLOSE_PRICES.setdefault(symbol, price)
         save_weekly_state()
-        
+
+
 def capture_daily_close(symbol, price):
     if not is_market_close_final_window():
         return
 
     DAILY_CLOSE_PRICES.setdefault(symbol, price)
+
 # ======================================================
 # SUCCESS TARGET UPDATE (DAILY + WEEKLY)
 # ======================================================
 
 def update_success_targets(symbol, price):
-    # Günlük kapanış snapshot
     capture_daily_close(symbol, price)
-    # app.py scanner loop her turda çağırıyor
+
     reset_daily_success_if_needed()
     reset_weekly_success_if_needed()
 
-    # ✅ Cuma kapanış fiyatını yakala
     capture_friday_close(symbol, price)
 
     t_key = today_key()
@@ -1035,7 +898,6 @@ def update_success_targets(symbol, price):
     daily = DAILY_SUCCESS_TRACKER.get(t_key, {})
     weekly = WEEKLY_SUCCESS_TRACKER.get(w_key, {})
 
-    # ---------- DAILY ----------
     for (sym, algo), d in daily.items():
         if d.get("hit"):
             continue
@@ -1047,7 +909,9 @@ def update_success_targets(symbol, price):
             d["hit_price"] = price
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
             save_daily_state()
+
             entry = d["entry"]
+            gain_pct = round(((price - entry) / entry) * 100, 2)
 
             success_signals.append({
                 "symbol": sym,
@@ -1059,7 +923,7 @@ def update_success_targets(symbol, price):
                 "entry_price": fmt(entry),
                 "target_price": fmt(d["target"]),
                 "hit_price": fmt(price),
-                "gain_pct": round(((price - entry) / entry) * 100, 2),
+                "gain_pct": gain_pct,
                 "time": d["hit_time"],
                 "helpers": d.get("helpers", []),
                 "history": [
@@ -1069,7 +933,6 @@ def update_success_targets(symbol, price):
                 ],
             })
 
-    # ---------- WEEKLY (SADECE TAKİP, MESAJ YOK) ----------
     for (sym, algo), d in weekly.items():
         if d.get("hit"):
             continue
@@ -1082,8 +945,8 @@ def update_success_targets(symbol, price):
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
             d["hit_day"] = tr_now().strftime("%A")
             save_weekly_state()
-    return success_signals
 
+    return success_signals
 
 # ======================================================
 # DAILY SUCCESS REPORT (TELEGRAM)
@@ -1096,7 +959,6 @@ def build_daily_success_report():
     if not day_data:
         return None
 
-    # 🔥 KAPANIŞTA GELEN HEDEFLERİ ZORLA KONTROL ET
     for d in day_data.values():
         if d.get("hit"):
             continue
@@ -1140,7 +1002,6 @@ def build_daily_success_report():
 
     return "\n".join(lines)
 
-
 # ======================================================
 # WEEKLY SUCCESS REPORT (CUMA)
 # ======================================================
@@ -1172,9 +1033,7 @@ def build_weekly_success_report():
             friday_price = FRIDAY_CLOSE_PRICES.get(d["symbol"])
             friday_gain = None
             if friday_price:
-                friday_gain = round(
-                    ((friday_price - d["entry"]) / d["entry"]) * 100, 2
-                )
+                friday_gain = round(((friday_price - d["entry"]) / d["entry"]) * 100, 2)
 
             line = (
                 f"• {d['symbol']} | {d['algo']} | "
@@ -1191,22 +1050,18 @@ def build_weekly_success_report():
         lines.append("")
         lines.append("⛔ HEDEF GELMEYENLER:")
         for d in fails:
-            lines.append(
-                f"• {d['symbol']} | {d['algo']}"
-            )
+            lines.append(f"• {d['symbol']} | {d['algo']}")
 
     lines.append("")
     lines.append(f"🕒 {tr_now().strftime('%d.%m.%Y %H:%M')}")
 
     return "\n".join(lines)
 
-
 # ======================================================
 # TELEGRAM FORMAT
 # ======================================================
 
 def format_signal_message(signal):
-    # ---------- SUCCESS ----------
     if signal.get("category") == "success":
         return "\n".join([
             "🎯 HEDEF GELDİ",
@@ -1222,8 +1077,6 @@ def format_signal_message(signal):
         ])
 
     lines = []
-
-    # ---------- HEADER ----------
     lines.append(f"📊 {signal['symbol']}")
 
     if signal.get("signal_type") == "reentry":
@@ -1240,12 +1093,9 @@ def format_signal_message(signal):
         lines.append(f"🎯 Giriş: {entry}")
 
     lines.append(f"💰 Canlı: {price}")
-
     lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
 
-    
-    # ---------- TP LEVELS ----------
     if entry:
         tp1 = round(entry * 1.015, 2)
         tp2 = round(entry * 1.03, 2)
@@ -1257,7 +1107,6 @@ def format_signal_message(signal):
         lines.append(f"• TP2 (%3): {tp2}")
         lines.append(f"• TP3 (%5): {tp3}")
 
-    # ---------- RESISTANCES ----------
     r1h = signal.get("resistance_1h")
     r4h = signal.get("resistance_4h")
 
@@ -1273,7 +1122,6 @@ def format_signal_message(signal):
             pct = round(((r4h - price) / price) * 100, 2)
             lines.append(f"• 4H Direnç: {r4h} (%{pct} kalan)")
 
-    # ---------- MOST ----------
     if signal.get("most_1h") or signal.get("most_4h"):
         lines.append("")
         lines.append("🧭 MOST:")
@@ -1288,14 +1136,12 @@ def format_signal_message(signal):
             arrow = "⬆️" if signal["most_4h"] == "UP" else "⬇️"
             lines.append(f"• 4H MOST ({lvl}): {arrow}" if lvl else f"• 4H MOST: {arrow}")
 
-    # ---------- HELPERS ----------
     if signal.get("helpers_detail"):
         lines.append("")
         lines.append("🧩 Yardımcılar:")
         for h in signal["helpers_detail"]:
             lines.append(f"• [{h['level']}] {h['name']}")
 
-    # ---------- POWER ----------
     if signal.get("power_delta"):
         lines.append("")
         lines.append(
@@ -1303,7 +1149,6 @@ def format_signal_message(signal):
             f"Güç Değişimi: {signal['power_delta']}"
         )
 
-    # ---------- HISTORY ----------
     if signal.get("history"):
         lines.append("")
         lines.append("🕒 Gelişim:")
@@ -1314,7 +1159,6 @@ def format_signal_message(signal):
     lines.append(f"⏰ {signal['time']}")
 
     return "\n".join(lines)
-
 
 # ======================================================
 # BULK PROCESS
@@ -1331,8 +1175,11 @@ def process_signals(data):
             symbol = item["symbol"]
             price = item["current_price"]
 
+            update_success_targets(symbol, price)
 
         except Exception:
             continue
 
     return out
+
+# ====== PARÇA 4 BİTİŞ ======
