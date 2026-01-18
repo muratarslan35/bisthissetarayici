@@ -1,5 +1,3 @@
-# ====== PARÇA 1 BAŞLANGIÇ ======
-
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import numpy as np
@@ -90,11 +88,10 @@ LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
 LAST_PUBLISHED_STATE = {}
 
-DAILY_SUCCESS_TRACKER = {}
+DAILY_SUCCESS_TRACKER = load_daily_state()
 DAILY_CLOSE_PRICES = {}
 
 WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
-DAILY_SUCCESS_TRACKER = load_daily_state()
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -139,9 +136,11 @@ def reset_daily_success_if_needed():
 def reset_weekly_success_if_needed():
     key = week_key()
 
-    if WEEKLY_SUCCESS_TRACKER:
+    # ✅ SADECE YENİ HAFTA İSE BAŞLAT
+    if key in WEEKLY_SUCCESS_TRACKER:
         return
 
+    WEEKLY_SUCCESS_TRACKER.clear()
     WEEKLY_SUCCESS_TRACKER[key] = {}
     FRIDAY_CLOSE_PRICES.clear()
     save_weekly_state()
@@ -288,10 +287,6 @@ def detect_most_trend(df):
         return None
     return "UP" if res["trend"] == "UP" else "DOWN"
 
-# ====== PARÇA 1 BİTİŞ ======
-
-# ====== PARÇA 2 BAŞLANGIÇ ======
-
 # ======================================================
 # 4H SIKIŞMA + ONAYLI KIRILIM
 # ======================================================
@@ -338,9 +333,11 @@ def allow_reentry(signal_ctx):
     prev_power = signal_ctx.get("prev_power")
     after_target = signal_ctx.get("after_target")
 
+    # 🔒 SADECE HEDEF SONRASI
     if not after_target:
         return False
 
+    # RSI KİLİTLERİ
     if rsi_1h is not None and rsi_1h >= 68:
         return False
     if rsi_4h is not None and rsi_4h >= 70:
@@ -348,11 +345,13 @@ def allow_reentry(signal_ctx):
     if rsi_1h is not None and rsi_1h > 60:
         return False
 
+    # MOST
     if most_4h != "UP":
         return False
     if most_4h_level and price <= most_4h_level:
         return False
 
+    # POWER
     if prev_power is None:
         return False
     if power - prev_power < 15:
@@ -365,6 +364,9 @@ def allow_reentry(signal_ctx):
 # ======================================================
 
 def detect_levels(df, tf, tolerance=None):
+    if df is None or len(df) < 50:
+        return []
+
     if tolerance is None:
         tolerance = 0.006 if tf == "4h" else 0.004
 
@@ -391,6 +393,9 @@ def detect_levels(df, tf, tolerance=None):
 
 
 def confirm_breakout(df, level):
+    if df is None or len(df) < 20:
+        return False
+
     last = df.iloc[-1]
     vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
 
@@ -414,6 +419,9 @@ def classify_level(lvl, tf):
 
 
 def detect_l2_l3_l4_pro(df, price, tf):
+    if df is None or len(df) < 50:
+        return []
+
     helpers = []
 
     for lvl in detect_levels(df, tf):
@@ -471,7 +479,7 @@ def helper_indicators(item):
 
     helpers.extend(
         detect_l2_l3_l4_pro(
-            tf15["df"],
+            tf15.get("df"),
             item["current_price"],
             tf="15m"
         )
@@ -480,7 +488,7 @@ def helper_indicators(item):
     if tf1h:
         helpers.extend(
             detect_l2_l3_l4_pro(
-                tf1h["df"],
+                tf1h.get("df"),
                 item["current_price"],
                 tf="1h"
             )
@@ -489,7 +497,7 @@ def helper_indicators(item):
     if tf4h:
         helpers.extend(
             detect_l2_l3_l4_pro(
-                tf4h["df"],
+                tf4h.get("df"),
                 item["current_price"],
                 tf="4h"
             )
@@ -588,9 +596,6 @@ def super_kombine_signal(item):
         return None
 
     return {"main_type": "SÜPER KOMBİNE", "base_strength": 75}
-
-# ====== PARÇA 2 BİTİŞ ======
-# ====== PARÇA 3 BAŞLANGIÇ ======
 
 # ======================================================
 # PROCESS SYMBOL SIGNALS
@@ -737,7 +742,7 @@ def process_symbol_signals(item):
         if WEEKLY_SUCCESS_TRACKER[w_key][(symbol, algo)].get("hit"):
             after_target = True
 
-    reentry_ctx = {
+    is_reentry = allow_reentry({
         "tf1h": tf1h,
         "tf4h": tf4h,
         "most_4h": most_4h,
@@ -746,19 +751,13 @@ def process_symbol_signals(item):
         "power": total_power,
         "prev_power": prev_power,
         "after_target": after_target,
-    }
-
-    is_reentry = allow_reentry(reentry_ctx)
+    })
 
     base_entry = price if is_reentry else entry_price
 
-    tp1 = round(base_entry * 1.015, 2) if base_entry else None
-    tp2 = round(base_entry * 1.03, 2) if base_entry else None
-    tp3 = round(base_entry * 1.05, 2) if base_entry else None
-
     live_gain_pct = None
-    if entry_price is not None:
-        live_gain_pct = round(((price - entry_price) / entry_price) * 100, 2)
+    if base_entry:
+        live_gain_pct = round(((price - base_entry) / base_entry) * 100, 2)
 
     signal = {
         "symbol": symbol,
@@ -766,9 +765,9 @@ def process_symbol_signals(item):
         "reentry": is_reentry,
         "price": fmt(price),
         "live_gain_pct": live_gain_pct,
-        "title": title,
+        "title": "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)" if is_reentry else title,
         "action": action,
-        "category": category,
+        "category": "strong" if is_reentry else category,
         "main_algorithm": algo,
         "ema_trend": ema_trend(
             item["tf"]["15m"]["ema20_live"],
@@ -790,9 +789,6 @@ def process_symbol_signals(item):
         "resistance_4h": fmt(r4h),
         "resistance_1h_pct": r1h_dist_pct,
         "resistance_4h_pct": r4h_dist_pct,
-        "tp1": tp1,
-        "tp2": tp2,
-        "tp3": tp3,
         "most_1h": most_1h,
         "most_4h": most_4h,
         "most_1h_level": most_1h_level,
@@ -800,10 +796,10 @@ def process_symbol_signals(item):
         "power": total_power,
         "power_delta": power_delta,
         "signal_type": "reentry" if is_reentry else "primary",
+        "published": True,
     }
 
-    is_first_published_signal = key not in LAST_PUBLISHED_STATE
-    if not is_first_published_signal:
+    if key in LAST_PUBLISHED_STATE:
         if (
             not is_reentry
             and in_repeat_block(symbol, algo)
@@ -811,51 +807,45 @@ def process_symbol_signals(item):
         ):
             return []
 
-    if is_reentry:
-        signal["title"] = "♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)"
-        signal["category"] = "strong"
-
-    signal["published"] = True
     LAST_PUBLISHED_STATE[key] = tr_now()
     mark_sent(symbol, algo)
 
-    d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
-    w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
+    # ❗ RE-ENTRY ise STORE’A YAZMA
+    if not is_reentry:
+        d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
+        w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
-    if (symbol, algo) not in d_store:
-        d_store[(symbol, algo)] = {
-            "symbol": symbol,
-            "algo": algo,
-            "helpers": list(helper_names),
-            "entry": base_entry,
-            "target": price * (1 + TARGET_PCT),
-            "hit": False,
-            "entry_time": tr_now().strftime("%H:%M:%S"),
-            "entry_date": tr_now().date(),
-        }
-        save_daily_state()
+        if (symbol, algo) not in d_store:
+            d_store[(symbol, algo)] = {
+                "symbol": symbol,
+                "algo": algo,
+                "helpers": list(helper_names),
+                "entry": base_entry,
+                "target": price * (1 + TARGET_PCT),
+                "hit": False,
+                "entry_time": tr_now().strftime("%H:%M:%S"),
+                "entry_date": tr_now().date(),
+            }
+            save_daily_state()
 
-    if (symbol, algo) not in w_store:
-        w_store[(symbol, algo)] = {
-            "symbol": symbol,
-            "algo": algo,
-            "helpers": list(helper_names),
-            "entry": base_entry,
-            "target": price * (1 + TARGET_PCT),
-            "hit": False,
-            "hit_price": None,
-            "hit_time": None,
-            "hit_day": None,
-            "entry_day": tr_now().strftime("%A"),
-            "entry_date": tr_now().date(),
-            "entry_time": tr_now().strftime("%H:%M:%S"),
-        }
-        save_weekly_state()
+        if (symbol, algo) not in w_store:
+            w_store[(symbol, algo)] = {
+                "symbol": symbol,
+                "algo": algo,
+                "helpers": list(helper_names),
+                "entry": base_entry,
+                "target": price * (1 + TARGET_PCT),
+                "hit": False,
+                "hit_price": None,
+                "hit_time": None,
+                "hit_day": None,
+                "entry_day": tr_now().strftime("%A"),
+                "entry_date": tr_now().date(),
+                "entry_time": tr_now().strftime("%H:%M:%S"),
+            }
+            save_weekly_state()
 
     return [signal]
-
-# ====== PARÇA 3 BİTİŞ ======
-# ====== PARÇA 4 BAŞLANGIÇ ======
 
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
@@ -877,6 +867,8 @@ def capture_daily_close(symbol, price):
         return
 
     DAILY_CLOSE_PRICES.setdefault(symbol, price)
+    save_daily_state()
+
 
 # ======================================================
 # SUCCESS TARGET UPDATE (DAILY + WEEKLY)
@@ -898,6 +890,7 @@ def update_success_targets(symbol, price):
     daily = DAILY_SUCCESS_TRACKER.get(t_key, {})
     weekly = WEEKLY_SUCCESS_TRACKER.get(w_key, {})
 
+    # ---------- DAILY ----------
     for (sym, algo), d in daily.items():
         if d.get("hit"):
             continue
@@ -933,6 +926,16 @@ def update_success_targets(symbol, price):
                 ],
             })
 
+            # 🔁 DAILY kapanıştan gelen hit → WEEKLY’ye de yaz
+            w = weekly.get((sym, algo))
+            if w and not w.get("hit"):
+                w["hit"] = True
+                w["hit_price"] = price
+                w["hit_time"] = d["hit_time"]
+                w["hit_day"] = tr_now().strftime("%A")
+                save_weekly_state()
+
+    # ---------- WEEKLY (canlı takip) ----------
     for (sym, algo), d in weekly.items():
         if d.get("hit"):
             continue
@@ -947,6 +950,7 @@ def update_success_targets(symbol, price):
             save_weekly_state()
 
     return success_signals
+
 
 # ======================================================
 # DAILY SUCCESS REPORT (TELEGRAM)
@@ -972,6 +976,16 @@ def build_daily_success_report():
             d["hit_price"] = close_price
             d["hit_time"] = "18:10"
             save_daily_state()
+
+            # WEEKLY’ye de işle
+            w_key = week_key()
+            w = WEEKLY_SUCCESS_TRACKER.get(w_key, {}).get((d["symbol"], d["algo"]))
+            if w and not w.get("hit"):
+                w["hit"] = True
+                w["hit_price"] = close_price
+                w["hit_time"] = "18:10"
+                w["hit_day"] = tr_now().strftime("%A")
+                save_weekly_state()
 
     hits = [d for d in day_data.values() if d.get("hit")]
     fails = [d for d in day_data.values() if not d.get("hit")]
@@ -1001,6 +1015,7 @@ def build_daily_success_report():
     lines.append(f"🕒 {tr_now().strftime('%H:%M')}")
 
     return "\n".join(lines)
+
 
 # ======================================================
 # WEEKLY SUCCESS REPORT (CUMA)
@@ -1057,6 +1072,7 @@ def build_weekly_success_report():
 
     return "\n".join(lines)
 
+
 # ======================================================
 # TELEGRAM FORMAT
 # ======================================================
@@ -1085,7 +1101,6 @@ def format_signal_message(signal):
         lines.append(f"🏷 {signal['title']}")
 
     lines.append("")
-
     entry = signal.get("entry_price")
     price = signal.get("price")
 
@@ -1096,69 +1111,11 @@ def format_signal_message(signal):
     lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
 
-    if entry:
-        tp1 = round(entry * 1.015, 2)
-        tp2 = round(entry * 1.03, 2)
-        tp3 = round(entry * 1.05, 2)
-
-        lines.append("")
-        lines.append("🎯 TP Seviyeleri:")
-        lines.append(f"• TP1 (%1.5): {tp1}")
-        lines.append(f"• TP2 (%3): {tp2}")
-        lines.append(f"• TP3 (%5): {tp3}")
-
-    r1h = signal.get("resistance_1h")
-    r4h = signal.get("resistance_4h")
-
-    if price and (r1h or r4h):
-        lines.append("")
-        lines.append("🧱 Dirençler:")
-
-        if r1h:
-            pct = round(((r1h - price) / price) * 100, 2)
-            lines.append(f"• 1H Direnç: {r1h} (%{pct} kalan)")
-
-        if r4h:
-            pct = round(((r4h - price) / price) * 100, 2)
-            lines.append(f"• 4H Direnç: {r4h} (%{pct} kalan)")
-
-    if signal.get("most_1h") or signal.get("most_4h"):
-        lines.append("")
-        lines.append("🧭 MOST:")
-
-        if signal.get("most_1h"):
-            lvl = signal.get("most_1h_level")
-            arrow = "⬆️" if signal["most_1h"] == "UP" else "⬇️"
-            lines.append(f"• 1H MOST ({lvl}): {arrow}" if lvl else f"• 1H MOST: {arrow}")
-
-        if signal.get("most_4h"):
-            lvl = signal.get("most_4h_level")
-            arrow = "⬆️" if signal["most_4h"] == "UP" else "⬇️"
-            lines.append(f"• 4H MOST ({lvl}): {arrow}" if lvl else f"• 4H MOST: {arrow}")
-
-    if signal.get("helpers_detail"):
-        lines.append("")
-        lines.append("🧩 Yardımcılar:")
-        for h in signal["helpers_detail"]:
-            lines.append(f"• [{h['level']}] {h['name']}")
-
-    if signal.get("power_delta"):
-        lines.append("")
-        lines.append(
-            f"{'🔥' if signal['power_delta'] > 0 else '⚠️'} "
-            f"Güç Değişimi: {signal['power_delta']}"
-        )
-
-    if signal.get("history"):
-        lines.append("")
-        lines.append("🕒 Gelişim:")
-        for t, msg in signal["history"][-4:]:
-            lines.append(f"{t} → {msg}")
-
     lines.append("")
     lines.append(f"⏰ {signal['time']}")
 
     return "\n".join(lines)
+
 
 # ======================================================
 # BULK PROCESS
@@ -1172,14 +1129,13 @@ def process_signals(data):
             signals = process_symbol_signals(item)
             out.extend(signals)
 
-            symbol = item["symbol"]
-            price = item["current_price"]
-
-            update_success_targets(symbol, price)
+            update_success_targets(
+                item["symbol"],
+                item["current_price"]
+            )
 
         except Exception:
             continue
 
     return out
 
-# ====== PARÇA 4 BİTİŞ ======
