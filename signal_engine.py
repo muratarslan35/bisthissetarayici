@@ -839,6 +839,32 @@ def process_symbol_signals(item):
         "power": total_power,
         "power_delta": power_delta,
     }
+    # --------------------------------------------------
+    # 🔒 YAYIN KONTROLÜ (GİZLİ TARAMA FİLTRESİ)
+    # --------------------------------------------------
+    # Bu sinyal günlük veya haftalık kayda girmiyorsa:
+    # - Dashboarda düşmez
+    # - Telegrama gitmez
+    # - Weekly tabloya sızmaz
+
+    daily = False
+    weekly = False
+
+    t_key = today_key()
+    w_key = week_key()
+
+    if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
+        daily = True
+
+    if (symbol, algo) in WEEKLY_SUCCESS_TRACKER.get(w_key, {}):
+        weekly = True
+
+    # ❌ HİÇBİR TRACKER'A GİRMİYORSA → YOK SAY
+    if not daily and not weekly:
+        return []
+
+    # ✅ BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
+    signal["published"] = True
     
     # --------------------------------------------------
     # ENTRY KAYDI (GÜNLÜK + HAFTALIK)
@@ -883,32 +909,7 @@ def process_symbol_signals(item):
         }
     
         save_weekly_state()
-    # --------------------------------------------------
-    # 🔒 YAYIN KONTROLÜ (GİZLİ TARAMA FİLTRESİ)
-    # --------------------------------------------------
-    # Bu sinyal günlük veya haftalık kayda girmiyorsa:
-    # - Dashboarda düşmez
-    # - Telegrama gitmez
-    # - Weekly tabloya sızmaz
-
-    daily = False
-    weekly = False
-
-    t_key = today_key()
-    w_key = week_key()
-
-    if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
-        daily = True
-
-    if (symbol, algo) in WEEKLY_SUCCESS_TRACKER.get(w_key, {}):
-        weekly = True
-
-    # ❌ HİÇBİR TRACKER'A GİRMİYORSA → YOK SAY
-    if not daily and not weekly:
-        return []
-
-    # ✅ BU NOKTADAN SONRAKİ SİNYAL GERÇEKTİR
-    signal["published"] = True
+    
 
     return [signal]
 
