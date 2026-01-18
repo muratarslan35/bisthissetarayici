@@ -204,23 +204,24 @@ def dashboard_api():
         if not d.get("hit"):
             continue
 
-        daily_success.append({
-            "symbol": d.get("symbol"),
-            "price": d.get("hit_price"),
-            "entry_price": d.get("entry"),
-            "category": "success",
-            "action": "BAŞARILI",
-            "main_algorithm": d.get("algo"),
-            "time": d.get("hit_time"),
-            "helpers": d.get("helpers", []),
+    daily_success.append({
+        "symbol": d.get("symbol"),
+        "price": d.get("hit_price"),
+        "entry_price": d.get("entry"),
+        "category": "success",
+        "action": "BAŞARILI",
+        "main_algorithm": d.get("algo"),
+        "time": d.get("hit_time"),
+        "helpers": d.get("helpers", []),
 
-            # 🔽 EKLENECEK
-            "signal_type": d.get("signal_type", "primary"),
-            "reentry": d.get("signal_type") == "reentry",
+        "signal_type": d.get("signal_type", "primary"),
+        "reentry": d.get("signal_type") == "reentry",
 
-            "title": "🎯 HEDEF GELDİ (RE-ENTRY)"
-             if d.get("signal_type") == "reentry"
-             else "🎯 HEDEF GELDİ",
+        "title": (
+        "🎯 HEDEF GELDİ (RE-ENTRY)"
+        if d.get("signal_type") == "reentry"
+        else "🎯 HEDEF GELDİ"
+        ),
     })
 
     weekly_text = build_weekly_success_report()
