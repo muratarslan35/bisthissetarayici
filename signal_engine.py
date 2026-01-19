@@ -1182,6 +1182,41 @@ def format_signal_message(signal):
         if signal.get("tp3"):
             lines.append(f"• TP3: {signal['tp3']}")
 
+    # ---------- ANLIK KAZANÇ ----------
+    if signal.get("live_gain_pct") is not None:
+        lines.append(f"💹 Anlık Kazanç: %{signal['live_gain_pct']}")
+
+    # ---------- YARDIMCILAR ----------
+    helpers = signal.get("helpers_detail") or []
+    if helpers:
+        lines.append("")
+        lines.append("🧩 YARDIMCILAR")
+        for h in helpers:
+            lines.append(f"• [{h['level']}] {h['name']}")
+
+    # ---------- GEÇMİŞ ----------
+    history = signal.get("history") or []
+    if history:
+        lines.append("")
+        lines.append("📜 HAREKETLER")
+        for t, msg in history[-4:]:
+            lines.append(f"{t} → {msg}")
+
+    lines.append("")
+    lines.append(f"⏰ {signal['time']}")
+
+    return "\n".join(lines)
+
+    # ---------- TP'LER ----------
+    if signal.get("tp1"):
+        lines.append("")
+        lines.append("🎯 HEDEFLER")
+        lines.append(f"• TP1: {signal['tp1']}")
+        if signal.get("tp2"):
+            lines.append(f"• TP2: {signal['tp2']}")
+        if signal.get("tp3"):
+            lines.append(f"• TP3: {signal['tp3']}")
+
     # ---------- YARDIMCILAR ----------
     helpers = signal.get("helpers_detail", [])
     if helpers:
