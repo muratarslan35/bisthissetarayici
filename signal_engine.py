@@ -987,32 +987,33 @@ def update_success_targets(symbol, price):
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
             d["hit_day"] = tr_now().strftime("%A")
             save_weekly_state()
-
+            
     # ---------- RE-ENTRY ----------
-r_day = REENTRY_DAILY_TRACKER.get(t_key, {})
+    t_key = today_key()
+    r_day = REENTRY_DAILY_TRACKER.get(t_key, {})
 
-for r in r_day.values():   # ⬅️ items() YOK
-    if r.get("hit"):
-        continue
+    for r in r_day.values():
+        if r.get("hit"):
+            continue
 
-    if r.get("symbol") != symbol:
-        continue
+        if r.get("symbol") != symbol:
+            continue
 
-    tp1 = r.get("tp1")
-    entry = r.get("entry")
+        entry = r.get("entry")
+        tp1 = r.get("tp1")
 
-    # Güvenlik kilidi
-    if not isinstance(tp1, (int, float)):
-        continue
-    if not isinstance(entry, (int, float)):
-        continue
+        if not isinstance(entry, (int, float)):
+            continue
+        if not isinstance(tp1, (int, float)):
+            continue
 
-    if price >= tp1:
-        r["hit"] = True
-        r["hit_price"] = price
-        r["hit_time"] = tr_now().strftime("%H:%M:%S")
-        r["gain_pct"] = round(((price - entry) / entry) * 100, 2)
+        if price >= tp1:
+            r["hit"] = True
+            r["hit_price"] = price
+            r["hit_time"] = tr_now().strftime("%H:%M:%S")
+            r["gain_pct"] = round(((price - entry) / entry) * 100, 2)
 
+    
 
 # ======================================================
 # DAILY SUCCESS REPORT (TELEGRAM)
