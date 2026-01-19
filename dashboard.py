@@ -141,7 +141,7 @@ def build_weekly_table_data():
             "sell_price": round(sell_price, 2) if isinstance(sell_price, (int, float)) else None,
             "sell_gain_pct": sell_gain_pct,
             "live_gain_pct": live_gain_pct,
-            "gain_pct": sell_gain_pct,
+            "gain_pct": gain_pct,
             "entry_day": entry_day,
             "entry_time": entry_time,
             "hit_time": hit_time,
