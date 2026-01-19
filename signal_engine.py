@@ -671,7 +671,7 @@ def process_symbol_signals(item):
         return []
 
     if action == "İZLE":
-    LAST_SIGNAL_STATE[key] = {
+        LAST_SIGNAL_STATE[key] = {
         "power": total_power,
         "helpers": list(helper_names),
         "most_4h": most_4h,
