@@ -236,7 +236,9 @@ def dashboard_api():
         entry = d.get("entry")
         hit_price = d.get("hit_price")
 
-        gain_pct = round(((hit_price - entry) / entry) * 100, 2)
+        gain_pct = None
+        if entry is not None and hit_price is not None and entry != 0:
+            gain_pct = round(((hit_price - entry) / entry) * 100, 2)
 
         daily_success.append({
             "symbol": d.get("symbol"),
