@@ -989,22 +989,29 @@ def update_success_targets(symbol, price):
             save_weekly_state()
 
     # ---------- RE-ENTRY ----------
-    r_day = REENTRY_DAILY_TRACKER.get(t_key, {})
+r_day = REENTRY_DAILY_TRACKER.get(t_key, {})
 
-    for k, r in r_day.items():
-        if r.get("hit"):
-            continue
-        if r.get("symbol") != symbol:
-            continue
-        if not r.get("tp1"):
-            continue
+for r in r_day.values():   # ⬅️ items() YOK
+    if r.get("hit"):
+        continue
 
-        if price >= r["tp1"]:
-            r["hit"] = True
-            r["hit_price"] = price
-            r["hit_time"] = tr_now().strftime("%H:%M:%S")
+    if r.get("symbol") != symbol:
+        continue
 
-    return success_signals
+    tp1 = r.get("tp1")
+    entry = r.get("entry")
+
+    # Güvenlik kilidi
+    if not isinstance(tp1, (int, float)):
+        continue
+    if not isinstance(entry, (int, float)):
+        continue
+
+    if price >= tp1:
+        r["hit"] = True
+        r["hit_price"] = price
+        r["hit_time"] = tr_now().strftime("%H:%M:%S")
+        r["gain_pct"] = round(((price - entry) / entry) * 100, 2)
 
 
 # ======================================================
