@@ -670,6 +670,15 @@ def process_symbol_signals(item):
     else:
         return []
 
+    if action == "İZLE":
+    LAST_SIGNAL_STATE[key] = {
+        "power": total_power,
+        "helpers": list(helper_names),
+        "most_4h": most_4h,
+        "history": history,
+    }
+    return []
+
     if most_downgrade:
         if action == "GÜÇLÜ AL":
             action, category = "AL", "combo"
