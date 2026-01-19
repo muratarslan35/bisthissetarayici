@@ -1013,7 +1013,7 @@ def update_success_targets(symbol, price):
             r["hit_time"] = tr_now().strftime("%H:%M:%S")
             r["gain_pct"] = round(((price - entry) / entry) * 100, 2)
 
-    
+    return success_signals 
 
 # ======================================================
 # DAILY SUCCESS REPORT (TELEGRAM)
