@@ -1164,21 +1164,44 @@ def format_signal_message(signal):
         lines.append(f"🏷 {signal['title']}")
 
     lines.append("")
-    entry = signal.get("entry_price")
-    price = signal.get("price")
 
-    if entry:
-        lines.append(f"🎯 Giriş: {entry}")
+    if signal.get("entry_price"):
+        lines.append(f"🎯 Giriş: {signal['entry_price']}")
 
-    lines.append(f"💰 Canlı: {price}")
+    lines.append(f"💰 Canlı: {signal['price']}")
     lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
+
+    # ---------- TP'LER ----------
+    if signal.get("tp1"):
+        lines.append("")
+        lines.append("🎯 HEDEFLER")
+        lines.append(f"• TP1: {signal['tp1']}")
+        if signal.get("tp2"):
+            lines.append(f"• TP2: {signal['tp2']}")
+        if signal.get("tp3"):
+            lines.append(f"• TP3: {signal['tp3']}")
+
+    # ---------- YARDIMCILAR ----------
+    helpers = signal.get("helpers_detail", [])
+    if helpers:
+        lines.append("")
+        lines.append("🧩 YARDIMCILAR")
+        for h in helpers:
+            lines.append(f"• [{h['level']}] {h['name']}")
+
+    # ---------- GEÇMİŞ / HAREKET ----------
+    history = signal.get("history", [])
+    if history:
+        lines.append("")
+        lines.append("📜 HAREKETLER")
+        for t, msg in history[-4:]:
+            lines.append(f"{t} → {msg}")
 
     lines.append("")
     lines.append(f"⏰ {signal['time']}")
 
     return "\n".join(lines)
-
 
 # ======================================================
 # BULK PROCESS
