@@ -669,6 +669,9 @@ def process_symbol_signals(item):
         action, category, title = "İZLE", "watch", "👀 İZLE"
     else:
         return []
+        
+    now_h = tr_now().strftime("%H:%M")
+    history = prev.get("history", [(now_h, f"{algo} sinyal")])
 
     if action == "İZLE":
         LAST_SIGNAL_STATE[key] = {
@@ -707,8 +710,7 @@ def process_symbol_signals(item):
             title = "⚠️ ZAYIFLAYAN SİNYAL"
             category = "watch"
 
-    now_h = tr_now().strftime("%H:%M")
-    history = prev.get("history", [(now_h, f"{algo} sinyal")])
+    
 
     if added_helpers:
         history.append((now_h, f"Eklendi: {', '.join(added_helpers)}"))
