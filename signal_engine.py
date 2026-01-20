@@ -773,7 +773,7 @@ def process_symbol_signals(item):
         "after_target": after_target,
     })
 
-    base_entry = price if is_reentry else entry_price
+    base_entry = price if (is_reentry or entry_price is None) else entry_price
 
     tp1 = None
     tp2 = None
