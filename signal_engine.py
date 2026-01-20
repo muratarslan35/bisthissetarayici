@@ -13,6 +13,9 @@ from utils import (
 
 _STORE_LOCK = Lock()
 
+def make_key(*parts):
+    return "|".join(str(p) for p in parts)
+
 # ======================================================
 # PERSIST CONFIG (HAFTALIK + CUMA)
 # ======================================================
