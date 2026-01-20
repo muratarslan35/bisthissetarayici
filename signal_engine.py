@@ -672,18 +672,21 @@ def process_symbol_signals(item):
         
     now_h = tr_now().strftime("%H:%M")
     history = list(prev.get("history", []))
-        if not history:
-    history.append((now_h, f"{algo} sinyal"))
 
+    if not history:
+        history.append((now_h, f"{algo} sinyal"))
+
+    # 🔕 İZLE → sadece state tut, sinyal gönderme
     if action == "İZLE":
         LAST_SIGNAL_STATE[key] = {
-        "power": total_power,
-        "helpers": list(helper_names),
-        "most_4h": most_4h,
-        "history": history,
-    }
+            "power": total_power,
+            "helpers": list(helper_names),
+            "most_4h": most_4h,
+            "history": history,
+        }
         return []
 
+    # 🔻 MOST downgrade
     if most_downgrade:
         if action == "GÜÇLÜ AL":
             action, category = "AL", "combo"
