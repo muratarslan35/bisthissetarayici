@@ -671,8 +671,10 @@ def process_symbol_signals(item):
         return []
         
     now_h = tr_now().strftime("%H:%M")
-    history = prev.get("history", [(now_h, f"{algo} sinyal")])
-
+    history = list(prev.get("history", []))
+if not history:
+    history.append((now_h, f"{algo} sinyal"))
+    
     if action == "İZLE":
         LAST_SIGNAL_STATE[key] = {
         "power": total_power,
