@@ -1072,7 +1072,8 @@ def build_daily_success_report():
 
             # WEEKLY’ye de işle
             w_key = week_key()
-            w = WEEKLY_SUCCESS_TRACKER.get(w_key, {}).get((d["symbol"], d["algo"]))
+            wk = make_key(d["symbol"], d["algo"])
+            w = WEEKLY_SUCCESS_TRACKER.get(w_key, {}).get(wk)
             if w and not w.get("hit"):
                 w["hit"] = True
                 w["hit_price"] = close_price
