@@ -677,7 +677,7 @@ def process_symbol_signals(item):
         "most_4h": most_4h,
         "history": history,
     }
-    return []
+        return []
 
     if most_downgrade:
         if action == "GÜÇLÜ AL":
