@@ -994,7 +994,8 @@ def update_success_targets(symbol, price):
             })
 
             # 🔁 DAILY kapanıştan gelen hit → WEEKLY’ye de yaz
-            w = weekly.get((sym, algo))
+            wk = make_key(sym, algo)
+            w = weekly.get(wk)
             if w and not w.get("hit"):
                 w["hit"] = True
                 w["hit_price"] = price
