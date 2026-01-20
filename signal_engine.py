@@ -675,7 +675,7 @@ def process_symbol_signals(item):
     if not history:
     history.append((now_h, f"{algo} sinyal"))
 
-if action == "İZLE":
+    if action == "İZLE":
     LAST_SIGNAL_STATE[key] = {
         "power": total_power,
         "helpers": list(helper_names),
