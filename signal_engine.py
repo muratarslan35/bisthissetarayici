@@ -759,12 +759,15 @@ def process_symbol_signals(item):
     w_key = week_key()
 
     entry_price = None
-    if (symbol, algo) in DAILY_SUCCESS_TRACKER.get(t_key, {}):
-        entry_price = DAILY_SUCCESS_TRACKER[t_key][(symbol, algo)]["entry"]
+    k = make_key(symbol, algo)
+
+    if k in DAILY_SUCCESS_TRACKER.get(t_key, {}):
+        entry_price = DAILY_SUCCESS_TRACKER[t_key][k]["entry"]
 
     after_target = False
-    if (symbol, algo) in WEEKLY_SUCCESS_TRACKER.get(w_key, {}):
-        if WEEKLY_SUCCESS_TRACKER[w_key][(symbol, algo)].get("hit"):
+    k = make_key(symbol, algo)
+    if k in WEEKLY_SUCCESS_TRACKER.get(w_key, {}):
+        if WEEKLY_SUCCESS_TRACKER[w_key][k].get("hit"):
             after_target = True
 
     is_reentry = allow_reentry({
@@ -868,8 +871,10 @@ def process_symbol_signals(item):
         d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
         w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
-        if (symbol, algo) not in d_store:
-            d_store[(symbol, algo)] = {
+        k = make_key(symbol, algo)
+
+        if k not in d_store:
+            d_store[k] = {
                 "symbol": symbol,
                 "algo": algo,
                 "helpers": list(helper_names),
@@ -881,8 +886,10 @@ def process_symbol_signals(item):
             }
             save_daily_state()
 
-        if (symbol, algo) not in w_store:
-            w_store[(symbol, algo)] = {
+        k = make_key(symbol, algo)
+
+        if k not in w_store:
+            w_store[k] = {
                 "symbol": symbol,
                 "algo": algo,
                 "helpers": list(helper_names),
@@ -946,7 +953,9 @@ def update_success_targets(symbol, price):
     weekly = WEEKLY_SUCCESS_TRACKER.get(w_key, {})
 
     # ---------- DAILY ----------
-    for (sym, algo), d in daily.items():
+    for k, d in daily.items():
+        sym = d["symbol"]
+        algo = d["algo"]
         if d.get("hit"):
             continue
         if sym != symbol:
@@ -991,7 +1000,9 @@ def update_success_targets(symbol, price):
                 save_weekly_state()
 
     # ---------- WEEKLY (canlı takip) ----------
-    for (sym, algo), d in weekly.items():
+    for k, d in weekly.items():
+        sym = d["symbol"]
+        algo = d["algo"]
         if d.get("hit"):
             continue
         if sym != symbol:
