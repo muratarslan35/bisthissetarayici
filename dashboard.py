@@ -98,10 +98,12 @@ def build_weekly_table_data():
 
         sell_gain_pct = None
         live_gain_pct = None
-
-        if isinstance(entry, (int, float)):
+        gain_pct = None
+        
+        if isinstance(entry, (int, float)) and entry != 0:
             if isinstance(sell_price, (int, float)):
                 sell_gain_pct = round(((sell_price - entry) / entry) * 100, 2)
+                gain_pct = sell_gain_pct  # 🎯 HIT varsa bu ana kazanç
 
             if isinstance(current_price, (int, float)):
                 live_gain_pct = round(((current_price - entry) / entry) * 100, 2)
