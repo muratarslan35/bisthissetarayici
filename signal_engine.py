@@ -141,15 +141,34 @@ def reset_daily_success_if_needed():
 
 
 def reset_weekly_success_if_needed():
-    key = week_key()
+    global WEEKLY_SUCCESS_TRACKER
 
-    # ✅ SADECE YENİ HAFTA İSE BAŞLAT
-    if key in WEEKLY_SUCCESS_TRACKER:
+    new_w_key = week_key()
+
+    # Eğer bu hafta zaten varsa → hiçbir şey yapma
+    if new_w_key in WEEKLY_SUCCESS_TRACKER:
         return
 
+    # 🔁 Önceki haftalardan HIT OLMAYANLARI topla
+    carry_over = {}
+
+    for wk, week_data in WEEKLY_SUCCESS_TRACKER.items():
+        if not isinstance(week_data, dict):
+            continue
+
+        for k, v in week_data.items():
+            if not v.get("hit"):
+                carry_over[k] = v
+
+    # 🧹 Her şeyi temizle
     WEEKLY_SUCCESS_TRACKER.clear()
-    WEEKLY_SUCCESS_TRACKER[key] = {}
+
+    # 🆕 Yeni haftayı oluştur ve devredenleri ekle
+    WEEKLY_SUCCESS_TRACKER[new_w_key] = carry_over
+
+    # 📉 Cuma fiyatları sıfırlanır (yeni hafta için)
     FRIDAY_CLOSE_PRICES.clear()
+
     save_weekly_state()
 
 def reset_reentry_daily_if_needed():
