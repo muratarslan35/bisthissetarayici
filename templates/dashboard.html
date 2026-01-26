@@ -80,6 +80,12 @@ body {
     font-size:11px;
     color:#94a3b8;
 }
+
+.muted {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
 .signal-strong::before { background:#dc2626; }
 .signal-combo::before { background:#2563eb; }
 .signal-watch::before { background:#f59e0b; }
@@ -232,12 +238,22 @@ function hourChip(time){
 }
 
 function formatEntryDay(row){
-    const day = row.entry_day || "";
+    const day  = row.entry_day  || "";
     const date = row.entry_date || "";
+    const time = row.entry_time || "";
+
+    if(day && date && time){
+        return `
+            ${day}<br>
+            <span class="muted">${date}</span><br>
+            <span class="muted">${time}</span>
+        `;
+    }
 
     if(day && date){
         return `${day}<br><span class="muted">${date}</span>`;
     }
+
     if(day) return day;
     if(date) return date;
     return "-";
