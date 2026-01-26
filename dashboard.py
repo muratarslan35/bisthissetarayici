@@ -22,6 +22,12 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 # IN-MEMORY STATE
 # ======================================================
 
+# ======================================================
+# LIVE PRICE CACHE (ANLIK FİYAT)
+# ======================================================
+
+LIVE_PRICES = {}
+
 SIGNALS = []
 SUCCESS_SIGNALS = []
 
@@ -56,6 +62,12 @@ def reset_dashboard_if_needed(now):
 def push_signal(signal):
     SIGNALS.insert(0, signal)
     del SIGNALS[MAX_SIGNALS:]
+
+    # 🔴 CANLI FİYATI CACHE'E YAZ
+    symbol = signal.get("symbol")
+    price = signal.get("price")
+    if symbol and isinstance(price, (int, float)):
+        LIVE_PRICES[symbol] = price
 
 
 def push_success_signal(signal):
@@ -94,40 +106,38 @@ def build_weekly_table_data():
         helpers = d.get("helpers", [])
 
         sell_price = d.get("hit_price")
-        current_price = FRIDAY_CLOSE_PRICES.get(symbol)
+        current_price = LIVE_PRICES.get(symbol)
 
         sell_gain_pct = None
         live_gain_pct = None
         gain_pct = None
-        
+
         if isinstance(entry, (int, float)) and entry != 0:
             if isinstance(sell_price, (int, float)):
                 sell_gain_pct = round(((sell_price - entry) / entry) * 100, 2)
-                gain_pct = sell_gain_pct  # 🎯 HIT varsa bu ana kazanç
+                gain_pct = sell_gain_pct
 
             if isinstance(current_price, (int, float)):
                 live_gain_pct = round(((current_price - entry) / entry) * 100, 2)
 
-        
         entry_date = d.get("entry_date")
         entry_day_raw = d.get("entry_day")
         entry_day = TR_DAYS.get(entry_day_raw, entry_day_raw)
 
-        
         # ======================================================
-        # ⏱ ENTRY TIME (MEVCUT SAATİ KORU)
+        # ⏱ ENTRY TIME (MEVCUT SAATİ KORU – SADECE NORMALIZE)
         # ======================================================
 
         entry_time = d.get("entry_time")
 
-        # HH:MM formatı gelirse → HH:MM:SS yap
+        # "HH:MM" gelirse → "HH:MM:00"
         if isinstance(entry_time, str) and len(entry_time) == 5:
-        entry_time = f"{entry_time}:00"
+            entry_time = f"{entry_time}:00"
 
-        # Hatalıysa iptal et
+        # Hâlâ string değilse → iptal
         if not isinstance(entry_time, str):
-        entry_time = None
-            
+            entry_time = None
+
         hit_time = d.get("hit_time")
 
         duration_minutes = None
