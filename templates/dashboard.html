@@ -190,8 +190,8 @@ body {
                 <th>Canlı</th>
                 <th>Satış</th>
                 <th>Satış %</th>
-                <th>Canlı %</th>
-                <th>Gün</th>
+                <th>Haftalık %</th>
+                <th>Gün/Tarih</th>
                 <th>Süre</th>
                 <th>Yardımcılar</th>
             </tr>
@@ -227,6 +227,17 @@ function hourChip(time){
     return "c";
 }
 
+function formatEntryDay(row){
+    const day = row.entry_day || "";
+    const date = row.entry_date || "";
+
+    if(day && date){
+        return `${day}<br><span class="muted">${date}</span>`;
+    }
+    if(day) return day;
+    if(date) return date;
+    return "-";
+}
 function setFilter(f,e){
     CURRENT_FILTER = f;
     document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
@@ -278,7 +289,7 @@ async function loadSignals(){
 <td>${r.sell_price??"-"}</td>
 <td>${r.sell_gain_pct??"-"}</td>
 <td>${r.live_gain_pct??"-"}</td>
-<td>${r.entry_day??"-"}</td>
+<td>${formatEntryDay(r)}</td>
 <td>${r.duration_label??"-"}</td>
 <td>${(r.helpers||[]).join(", ")}</td>`;
                 tbody.appendChild(tr);
