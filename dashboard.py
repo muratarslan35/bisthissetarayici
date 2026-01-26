@@ -107,11 +107,27 @@ def build_weekly_table_data():
 
             if isinstance(current_price, (int, float)):
                 live_gain_pct = round(((current_price - entry) / entry) * 100, 2)
+
+        
         entry_date = d.get("entry_date")
         entry_day_raw = d.get("entry_day")
         entry_day = TR_DAYS.get(entry_day_raw, entry_day_raw)
 
+        
+        # ======================================================
+        # ⏱ ENTRY TIME (MEVCUT SAATİ KORU)
+        # ======================================================
+
         entry_time = d.get("entry_time")
+
+        # HH:MM formatı gelirse → HH:MM:SS yap
+        if isinstance(entry_time, str) and len(entry_time) == 5:
+        entry_time = f"{entry_time}:00"
+
+        # Hatalıysa iptal et
+        if not isinstance(entry_time, str):
+        entry_time = None
+            
         hit_time = d.get("hit_time")
 
         duration_minutes = None
