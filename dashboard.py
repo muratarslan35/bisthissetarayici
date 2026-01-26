@@ -107,7 +107,7 @@ def build_weekly_table_data():
 
             if isinstance(current_price, (int, float)):
                 live_gain_pct = round(((current_price - entry) / entry) * 100, 2)
-
+        entry_date = d.get("entry_date")
         entry_day_raw = d.get("entry_day")
         entry_day = TR_DAYS.get(entry_day_raw, entry_day_raw)
 
@@ -145,6 +145,7 @@ def build_weekly_table_data():
             "live_gain_pct": live_gain_pct,
             "gain_pct": gain_pct,
             "entry_day": entry_day,
+            "entry_date": entry_date,
             "entry_time": entry_time,
             "hit_time": hit_time,
             "duration_minutes": duration_minutes,
