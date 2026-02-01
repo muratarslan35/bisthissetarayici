@@ -447,6 +447,9 @@ def classify_level(lvl, tf):
 
     if t >= 3 and tf in ("4h", "1d"):
         return ("L4 MAJÖR KIRILIM", 18)
+    if t == 2 and tf in ("4h", "1d") and lvl["volume"] > np.mean(volumes):
+        return ("L4 MAJÖR KIRILIM", 18)
+
     if t >= 3:
         return ("L3 GÜÇLÜ KIRILIM", 12)
     if t >= 2:
