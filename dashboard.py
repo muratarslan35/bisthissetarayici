@@ -22,10 +22,6 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 # IN-MEMORY STATE
 # ======================================================
 
-# ======================================================
-# LIVE PRICE CACHE (ANLIK FİYAT)
-# ======================================================
-
 LIVE_PRICES = {}
 
 SIGNALS = []
@@ -63,7 +59,6 @@ def push_signal(signal):
     SIGNALS.insert(0, signal)
     del SIGNALS[MAX_SIGNALS:]
 
-    # 🔴 CANLI FİYATI CACHE'E YAZ
     symbol = signal.get("symbol")
     price = signal.get("price")
     if symbol and isinstance(price, (int, float)):
@@ -113,28 +108,36 @@ def build_weekly_table_data():
         gain_pct = None
 
         if isinstance(entry, (int, float)) and entry != 0:
-            if isinstance(sell_price, (int, float)):
-                sell_gain_pct = round(((sell_price - entry) / entry) * 100, 2)
-                gain_pct = sell_gain_pct
-
             if isinstance(current_price, (int, float)):
                 live_gain_pct = round(((current_price - entry) / entry) * 100, 2)
+                gain_pct = live_gain_pct
+
+            if isinstance(sell_price, (int, float)):
+                sell_gain_pct = round(((sell_price - entry) / entry) * 100, 2)
+
+        # ======================================================
+        # ENTRY DATE → SADECE TARİH
+        # ======================================================
 
         entry_date = d.get("entry_date")
+        if isinstance(entry_date, str):
+            if " " in entry_date:
+                entry_date = entry_date.split(" ")[0]
+            elif "T" in entry_date:
+                entry_date = entry_date.split("T")[0]
+        else:
+            entry_date = None
+
         entry_day_raw = d.get("entry_day")
         entry_day = TR_DAYS.get(entry_day_raw, entry_day_raw)
 
         # ======================================================
-        # ⏱ ENTRY TIME (MEVCUT SAATİ KORU – SADECE NORMALIZE)
+        # ENTRY TIME → GERÇEK SİNYAL SAATİ
         # ======================================================
 
         entry_time = d.get("entry_time")
-
-        # "HH:MM" gelirse → "HH:MM:00"
         if isinstance(entry_time, str) and len(entry_time) == 5:
             entry_time = f"{entry_time}:00"
-
-        # Hâlâ string değilse → iptal
         if not isinstance(entry_time, str):
             entry_time = None
 
@@ -173,7 +176,6 @@ def build_weekly_table_data():
             "entry_day": entry_day,
             "entry_date": entry_date,
             "entry_time": entry_time,
-            "hit_time": hit_time,
             "duration_minutes": duration_minutes,
             "duration_label": duration_label,
             "helpers": helpers,
@@ -251,10 +253,6 @@ def dashboard_api():
     except Exception:
         pass
 
-    # ======================================================
-    # DAILY SUCCESS
-    # ======================================================
-
     daily_success = []
     t_key = today_key()
 
@@ -266,7 +264,7 @@ def dashboard_api():
         hit_price = d.get("hit_price")
 
         gain_pct = None
-        if entry is not None and hit_price is not None and entry != 0:
+        if entry and hit_price:
             gain_pct = round(((hit_price - entry) / entry) * 100, 2)
 
         daily_success.append({
@@ -286,10 +284,6 @@ def dashboard_api():
             "gain_pct": gain_pct,
         })
 
-    # ======================================================
-    # ♻️ RE-ENTRY DAILY TABLE
-    # ======================================================
-
     reentry_daily = []
 
     for r in REENTRY_DAILY_TRACKER.get(t_key, {}).values():
@@ -308,7 +302,6 @@ def dashboard_api():
         })
 
     weekly_text = build_weekly_success_report()
-
     all_signals = daily_success + SUCCESS_SIGNALS + SIGNALS
 
     return jsonify({
