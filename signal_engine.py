@@ -370,23 +370,28 @@ def allow_reentry(signal_ctx):
         return False
 
     # RSI KİLİTLERİ
-    if rsi_1h is not None and rsi_1h >= 68:
+    if rsi_1h is not None and rsi_1h >= 70:
         return False
-    if rsi_4h is not None and rsi_4h >= 70:
+    if rsi_4h is not None and rsi_4h >= 72:
         return False
-    if rsi_1h is not None and rsi_1h > 60:
-        return False
+    if rsi_1h is not None:
+        if rsi_1h < 45 or rsi_1h > 68:
+            return False
 
     # MOST
     if most_4h != "UP":
         return False
-    if most_4h_level and price <= most_4h_level:
-        return False
+    if most_4h_level:
+        # MOST’un %0.6 altına kadar izin ver
+        if price < most_4h_level * 0.994:
+            return False
+
+    return True
 
     # POWER
     if prev_power is None:
         return False
-    if power - prev_power < 15:
+    if power - prev_power < 12:
         return False
 
     return True
