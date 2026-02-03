@@ -302,7 +302,7 @@ def dashboard_api():
         })
 
     weekly_text = build_weekly_success_report()
-    all_signals = daily_success + SUCCESS_SIGNALS + SIGNALS
+    all_signals = daily_success  + SIGNALS
 
     return jsonify({
         "market_open": market_open,
