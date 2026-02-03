@@ -386,8 +386,6 @@ def allow_reentry(signal_ctx):
         if price < most_4h_level * 0.994:
             return False
 
-    return True
-
     # POWER
     if prev_power is None:
         return False
@@ -765,6 +763,7 @@ def process_symbol_signals(item):
         "helpers": list(helper_names),
         "most_4h": most_4h,
         "history": history,
+        "entry": base_entry,
     }
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
@@ -811,8 +810,15 @@ def process_symbol_signals(item):
         "after_target": after_target,
     })
 
-    base_entry = price if (is_reentry or entry_price is None) else entry_price
-
+    if is_reentry:
+        prev_state = LAST_SIGNAL_STATE.get(key)
+        if prev_state and "entry" in prev_state:
+            base_entry = prev_state["entry"]
+        else:
+            base_entry = price
+    else:
+        base_entry = entry_price if entry_price is not None else price
+    
     tp1 = None
     tp2 = None
     tp3 = None
@@ -888,8 +894,7 @@ def process_symbol_signals(item):
 
     if key in LAST_PUBLISHED_STATE:
         if (
-            not is_reentry
-            and in_repeat_block(symbol, algo)
+            in_repeat_block(symbol, algo)
             and not (strengthened or weakened or most_upgrade or most_downgrade)
         ):
             return []
