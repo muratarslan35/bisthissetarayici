@@ -643,6 +643,8 @@ def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
+    base_entry = None
+    
     reset_daily_success_if_needed()
     reset_weekly_success_if_needed()
 
@@ -758,13 +760,7 @@ def process_symbol_signals(item):
     if weakened:
         history.append((now_h, f"Güç düştü ({power_delta})"))
 
-    LAST_SIGNAL_STATE[key] = {
-        "power": total_power,
-        "helpers": list(helper_names),
-        "most_4h": most_4h,
-        "history": history,
-        "entry": base_entry,
-    }
+    
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
     r4h = get_last_resistance(tf4h["df"]) if tf4h else None
 
@@ -844,6 +840,13 @@ def process_symbol_signals(item):
                 "hit_time": None,
                 "signal_type": "reentry",
             }
+    LAST_SIGNAL_STATE[key] = {
+        "power": total_power,
+        "helpers": list(helper_names),
+        "most_4h": most_4h,
+        "history": history,
+        "entry": base_entry,
+    }
 
     live_gain_pct = None
     if base_entry:
