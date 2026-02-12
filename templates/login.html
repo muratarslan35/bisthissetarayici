@@ -2,93 +2,159 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Giriş Yap</title>
+<title>BIST Trade Paneli</title>
 
 <style>
-body{
+*{
     margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Segoe UI, Arial, sans-serif;
+}
+
+body{
     height:100vh;
     display:flex;
     justify-content:center;
     align-items:center;
-    background:linear-gradient(135deg,#0f172a,#0b0f1a);
-    font-family:Segoe UI,Arial;
-    color:white;
+    background:url("/static/login-bg.png") center/cover no-repeat;
+    overflow:hidden;
 }
 
-.card{
-    background:#111827;
-    padding:40px;
-    border-radius:16px;
-    width:350px;
-    box-shadow:0 20px 50px rgba(0,0,0,.5);
+/* ARKA PLAN KARARTMA */
+body::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:rgba(5,15,30,0.75);
+    backdrop-filter:blur(6px);
 }
 
-.card h2{
-    margin-top:0;
+/* LOGIN KUTUSU */
+.login-box{
+    position:relative;
+    width:360px; /* biraz küçültüldü */
+    padding:45px 35px;
+    border-radius:18px;
+    background:rgba(10,15,30,0.55); /* şeffaflaştırıldı */
+    backdrop-filter:blur(14px);
+    box-shadow:0 0 40px rgba(0,0,0,0.8);
+    z-index:2;
+}
+
+/* NEON BORDER ANIMASYONU */
+.login-box::before{
+    content:"";
+    position:absolute;
+    inset:-3px;
+    border-radius:20px;
+    padding:3px;
+    background:linear-gradient(
+        90deg,
+        #00ff00,
+        #ff0000,
+        #ffae00,
+        #00ffcc,
+        #00ff00
+    );
+    background-size:400%;
+    animation:borderMove 6s linear infinite;
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;
+    mask-composite:exclude;
+}
+
+@keyframes borderMove{
+    0%{background-position:0% 50%;}
+    100%{background-position:400% 50%;}
+}
+
+/* BAŞLIK */
+.login-box h2{
     text-align:center;
     margin-bottom:30px;
+    font-size:22px;
+    letter-spacing:1px;
+    color:#00d9ff;
+    text-shadow:0 0 15px rgba(0,217,255,0.7);
 }
 
-.input-group{
+/* INPUT */
+.input-box{
     margin-bottom:20px;
 }
 
-input{
+.input-box input{
     width:100%;
-    padding:12px;
-    border-radius:8px;
-    border:none;
-    background:#1f2937;
-    color:white;
+    padding:14px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,0.15);
+    background:rgba(0,0,0,0.5);
+    color:#fff;
     font-size:14px;
+    outline:none;
+    transition:0.3s;
 }
 
-button{
+.input-box input:focus{
+    border-color:#00d9ff;
+    box-shadow:0 0 12px rgba(0,217,255,0.6);
+}
+
+/* LOGIN BUTTON */
+.login-btn{
     width:100%;
-    padding:12px;
-    border-radius:8px;
+    padding:14px;
     border:none;
-    background:#2563eb;
-    color:white;
-    font-weight:600;
-    cursor:pointer;
+    border-radius:12px;
     font-size:15px;
+    font-weight:bold;
+    letter-spacing:1px;
+    cursor:pointer;
+    background:linear-gradient(90deg,#0077ff,#00d9ff);
+    color:#fff;
+    transition:0.4s;
+    box-shadow:0 0 15px rgba(0,217,255,0.4);
 }
 
-button:hover{
-    background:#1d4ed8;
+.login-btn:hover{
+    transform:translateY(-2px);
+    box-shadow:0 0 25px rgba(0,217,255,0.8);
 }
 
-.error{
+/* FOOTER */
+.footer-text{
+    margin-top:18px;
     text-align:center;
-    margin-top:15px;
-    color:#f87171;
-    font-size:13px;
+    font-size:12px;
+    color:rgba(255,255,255,0.6);
 }
 </style>
 </head>
+
 <body>
 
-<div class="card">
-    <h2>BIST Sinyal Giriş</h2>
+<form method="POST" action="/login" class="login-box">
+    <h2>BIST TRADE PANELİ</h2>
 
-    <form method="POST">
-        <div class="input-group">
-            <input type="text" name="username" placeholder="Kullanıcı Adı" required>
-        </div>
+    <div class="input-box">
+        <input type="text" name="username" placeholder="Kullanıcı Adı" required>
+    </div>
 
-        <div class="input-group">
-            <input type="password" name="password" placeholder="Şifre" required>
-        </div>
+    <div class="input-box">
+        <input type="password" name="password" placeholder="Şifre" required>
+    </div>
 
-        <button type="submit">Giriş Yap</button>
-    </form>
+    <button type="submit" class="login-btn">
+        GİRİŞ YAP
+    </button>
 
-    {% if error %}
-    <div class="error">{{ error }}</div>
-    {% endif %}
-</div>
+    <div class="footer-text">
+        Güvenli Profesyonel Trade Sistemi
+    </div>
+</form>
 
 </body>
 </html>
