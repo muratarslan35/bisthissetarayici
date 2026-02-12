@@ -1,1 +1,194 @@
-1
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Admin Panel</title>
+
+<style>
+body{
+    margin:0;
+    background:#0b0f1a;
+    font-family:Segoe UI,Arial;
+    color:#e6e6e6;
+}
+
+.header{
+    padding:20px;
+    background:#0f172a;
+    border-bottom:1px solid #1e293b;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.header h1{
+    margin:0;
+    font-size:20px;
+}
+
+.logout-btn{
+    background:#dc2626;
+    padding:8px 14px;
+    border-radius:8px;
+    text-decoration:none;
+    color:white;
+    font-size:14px;
+}
+
+.container{
+    padding:30px;
+}
+
+.table-wrapper{
+    background:#111827;
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+}
+
+th,td{
+    padding:12px 14px;
+    border-bottom:1px solid #1e293b;
+    text-align:left;
+}
+
+th{
+    background:#1f2937;
+    font-weight:600;
+}
+
+tr:hover{
+    background:#1a2233;
+}
+
+.badge{
+    padding:4px 8px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:600;
+}
+
+.active{
+    background:#14532d;
+    color:#22c55e;
+}
+
+.inactive{
+    background:#3f1d1d;
+    color:#f87171;
+}
+
+.action-btn{
+    padding:6px 10px;
+    border-radius:6px;
+    border:none;
+    cursor:pointer;
+    font-size:12px;
+}
+
+.plus{ background:#16a34a; color:white; }
+.minus{ background:#dc2626; color:white; }
+
+.chat-edit{
+    background:#2563eb;
+    color:white;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>⚙️ Admin Panel</h1>
+    <a href="/logout" class="logout-btn">Çıkış</a>
+</div>
+
+<div class="container">
+    <div class="table-wrapper">
+        <table id="users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Kullanıcı</th>
+                    <th>Telegram</th>
+                    <th>Abonelik Bitiş</th>
+                    <th>Kalan Gün</th>
+                    <th>Durum</th>
+                    <th>İşlem</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+
+async function loadUsers(){
+    const res = await fetch("/admin/users");
+    const users = await res.json();
+
+    const tbody = document.querySelector("#users-table tbody");
+    tbody.innerHTML="";
+
+    users.forEach(u=>{
+        const tr=document.createElement("tr");
+
+        const remaining = u.remaining_days !== null 
+            ? (u.remaining_days >= 0 ? u.remaining_days+" gün" : "Süresi Doldu")
+            : "-";
+
+        tr.innerHTML=`
+            <td>${u.id}</td>
+            <td>${u.username}</td>
+            <td>${u.telegram_chat_id || "-"}</td>
+            <td>${u.subscription_end || "-"}</td>
+            <td>${remaining}</td>
+            <td>
+                <span class="badge ${u.is_active? 'active':'inactive'}">
+                    ${u.is_active? 'Aktif':'Pasif'}
+                </span>
+            </td>
+            <td>
+                <button class="action-btn plus" onclick="updateSub(${u.id},7)">+7</button>
+                <button class="action-btn minus" onclick="updateSub(${u.id},-7)">-7</button>
+                <button class="action-btn chat-edit" onclick="editChat(${u.id})">Chat ID</button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+async function updateSub(user_id,days){
+    await fetch("/admin/update-subscription",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:user_id,days:days})
+    });
+    loadUsers();
+}
+
+async function editChat(user_id){
+    const newChat = prompt("Yeni Chat ID giriniz:");
+    if(!newChat) return;
+
+    await fetch("/admin/update-chat-id",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:user_id,chat_id:newChat})
+    });
+
+    loadUsers();
+}
+
+loadUsers();
+</script>
+
+</body>
+</html>
