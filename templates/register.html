@@ -2,18 +2,28 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BIST TRADE PANELİ - Kayıt</title>
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;}
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,body{
+    height:100%;
+}
 
 body{
     min-height:100vh;
     display:flex;
     justify-content:center;
     align-items:center;
-    background:url('/static/bist-bg.jpg') no-repeat center center fixed;
+    background:url('/static/bist-bg.jpg') center center no-repeat;
     background-size:cover;
+    background-attachment:fixed;
     font-family:Segoe UI,Arial;
     position:relative;
 }
@@ -21,24 +31,27 @@ body{
 /* DARK OVERLAY */
 body::before{
     content:"";
-    position:absolute;
+    position:fixed;
     inset:0;
     background:linear-gradient(180deg,rgba(0,0,0,.75),rgba(0,0,0,.85));
-    z-index:1;
-    pointer-events:none; /* TIKLANMA SORUNU ÇÖZÜLDÜ */
+    z-index:0;
+    pointer-events:none;
 }
 
+/* REGISTER PANEL */
 .register-box{
     position:relative;
     width:360px;
+    max-width:90%;
     padding:40px 30px;
-    background:rgba(15,23,42,.75);
+    background:rgba(15,23,42,.78);
     backdrop-filter:blur(15px);
     border-radius:18px;
     box-shadow:0 0 40px rgba(0,0,0,.8);
     z-index:2;
 }
 
+/* Animated Border */
 .register-box::before{
     content:"";
     position:absolute;
@@ -66,6 +79,7 @@ h1{
     color:#ffffff;
     margin-bottom:25px;
     font-size:22px;
+    letter-spacing:1px;
 }
 
 .input-group{
@@ -81,6 +95,7 @@ h1{
     color:#fff;
     font-size:14px;
     outline:none;
+    transition:.3s;
 }
 
 .input-group input:focus{
@@ -123,6 +138,10 @@ button:hover{
     color:#3b82f6;
     text-decoration:none;
 }
+
+.login-link a:hover{
+    text-decoration:underline;
+}
 </style>
 </head>
 
@@ -132,15 +151,15 @@ button:hover{
     <h1>BIST TRADE PANELİ</h1>
 
     <div class="input-group">
-        <input type="text" name="username" placeholder="Kullanıcı Adı" required>
+        <input type="text" name="username" placeholder="Kullanıcı Adı" required autocomplete="off">
     </div>
 
     <div class="input-group">
-        <input type="password" name="password" placeholder="Şifre" required>
+        <input type="password" name="password" placeholder="Şifre" required autocomplete="new-password">
     </div>
 
     <div class="input-group">
-        <input type="text" name="invite_code" placeholder="Davet Kodu" required>
+        <input type="text" name="invite_code" placeholder="Davet Kodu" required autocomplete="off">
     </div>
 
     <div class="invite-note">
