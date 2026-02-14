@@ -32,21 +32,41 @@ from dashboard import (
     push_success_signal
 )
 
+# ======================================================
+# ENV
+# ======================================================
+
 load_dotenv()
 ADMIN_PANEL_PATH = os.getenv("ADMIN_PANEL_PATH", "admin-hidden")
+
+# ======================================================
+# TIME
+# ======================================================
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 BIST_OPEN = dtime(9, 40)
 BIST_CLOSE = dtime(18, 5)
 SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
 
+# ======================================================
+# TELEGRAM
+# ======================================================
+
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# ======================================================
+# FLASK
+# ======================================================
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "super-secret-key")
 app.register_blueprint(dashboard_bp)
 
 init_db()
+
+# ======================================================
+# HELPERS
+# ======================================================
 
 def now_tr():
     return datetime.now(TR_TZ)
@@ -103,22 +123,26 @@ def broadcast_signal(text):
 
     conn.close()
 
+# ======================================================
+# STARTUP MESSAGE
+# ======================================================
+
 def send_startup_message():
     broadcast_signal(
         "🟢 <b>HİSSE TARAMA SİSTEMİ BAŞLATILDI</b>\n"
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
     )
 
+# ======================================================
+# INVITE CODE
+# ======================================================
+
 def validate_invite_code(code):
     if not code:
         return False
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT id, is_used, expires_at
-        FROM invite_codes
-        WHERE code=?
-    """, (code,))
+    cur.execute("SELECT id, is_used, expires_at FROM invite_codes WHERE code=?", (code,))
     row = cur.fetchone()
     if not row:
         conn.close()
@@ -139,12 +163,15 @@ def mark_invite_code_used(code, username):
     cur = conn.cursor()
     cur.execute("""
         UPDATE invite_codes
-        SET is_used=1,
-            used_by=?
+        SET is_used=1, used_by=?
         WHERE code=?
     """, (username, code))
     conn.commit()
     conn.close()
+
+# ======================================================
+# SESSION
+# ======================================================
 
 def register_session(username):
     sid = str(uuid4())
@@ -169,6 +196,10 @@ def session_valid(username):
     if not row:
         return False
     return row["active_session_id"] == session.get("sid")
+
+# ======================================================
+# SECURITY
+# ======================================================
 
 @app.before_request
 def security():
@@ -201,6 +232,10 @@ def admin_required(f):
             return "Unauthorized", 403
         return f(*args, **kwargs)
     return wrapper
+
+# ======================================================
+# AUTH
+# ======================================================
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -248,6 +283,18 @@ def logout():
     session.clear()
     return redirect("/login")
 
+# ======================================================
+# INDEX
+# ======================================================
+
+@app.route("/")
+def index():
+    return render_template("dashboard.html")
+
+# ======================================================
+# ADMIN PANEL
+# ======================================================
+
 @app.route(f"/{ADMIN_PANEL_PATH}")
 def admin_panel():
     return render_template("admin.html")
@@ -260,12 +307,80 @@ def admin_users():
     cur.execute("""
         SELECT id, username, telegram_chat_id,
                subscription_end, status, is_active
-        FROM users
-        ORDER BY id DESC
+        FROM users ORDER BY id DESC
     """)
     users = cur.fetchall()
     conn.close()
     return jsonify([dict(u) for u in users])
+
+@app.route("/admin/delete-user", methods=["POST"])
+@admin_required
+def delete_user():
+    data = request.json
+    user_id = data.get("user_id")
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM users WHERE id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "deleted"})
+
+@app.route("/admin/update-subscription", methods=["POST"])
+@admin_required
+def update_subscription():
+    data = request.json
+    user_id = data.get("user_id")
+    days = int(data.get("days", 0))
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT subscription_end FROM users WHERE id=?", (user_id,))
+    row = cur.fetchone()
+    now = datetime.now()
+    if row and row["subscription_end"]:
+        current_end = datetime.strptime(row["subscription_end"], "%Y-%m-%d %H:%M:%S")
+        if current_end > now:
+            new_end = current_end + timedelta(days=days)
+        else:
+            new_end = now + timedelta(days=days)
+    else:
+        new_end = now + timedelta(days=days)
+    cur.execute("""
+        UPDATE users
+        SET subscription_end=?, status='approved', is_active=1
+        WHERE id=?
+    """, (new_end.strftime("%Y-%m-%d %H:%M:%S"), user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+@app.route("/admin/invite-codes")
+@admin_required
+def admin_invite_codes():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT code, is_used, used_by, created_at
+        FROM invite_codes ORDER BY created_at DESC
+    """)
+    codes = cur.fetchall()
+    conn.close()
+    return jsonify([dict(c) for c in codes])
+
+@app.route("/admin/delete-code", methods=["POST"])
+@admin_required
+def admin_delete_code():
+    data = request.json
+    code = data.get("code")
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM invite_codes WHERE code=?", (code,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "deleted"})
+
+# ======================================================
+# SCANNER
+# ======================================================
 
 def scanner_loop():
     send_startup_message()
@@ -276,70 +391,41 @@ def scanner_loop():
     while True:
         now = now_tr()
         print(f"\n⏱ Döngü: {now.strftime('%H:%M:%S')}", flush=True)
-
         reset_daily_success_if_needed()
         reset_weekly_success_if_needed()
 
         try:
             if not is_market_open(now):
                 print("⏹ Market kapalı", flush=True)
-
-                if now.time() >= dtime(18, 10) and last_close_snapshot_date != now.date():
-                    try:
-                        market_data = fetch_bist_data()
-                        for item in market_data:
-                            update_success_targets(
-                                item["symbol"],
-                                item["current_price"]
-                            )
-                        last_close_snapshot_date = now.date()
-                    except Exception as e:
-                        print("Snapshot error:", e)
-
-                if last_daily_report != now.date() and now.time() > BIST_CLOSE:
-                    report = build_daily_success_report()
-                    if report:
-                        broadcast_signal(report)
-                    last_daily_report = now.date()
-
-                if now.weekday() == 4 and now.time() >= dtime(18, 10):
-                    week_id = now.strftime("%Y-%W")
-                    if last_weekly_report != week_id:
-                        report = build_weekly_success_report()
-                        if report:
-                            broadcast_signal(report)
-                        last_weekly_report = week_id
-
                 time.sleep(30)
                 continue
 
             print("✅ MARKET AÇIK → TARAMA", flush=True)
-
             market_data = fetch_bist_data()
 
             for item in market_data:
                 symbol = item.get("symbol")
                 price = item.get("current_price")
 
-                try:
-                    signals = process_symbol_signals(item)
-                    success_hits = update_success_targets(symbol, price)
+                signals = process_symbol_signals(item)
+                success_hits = update_success_targets(symbol, price)
 
-                    for s in success_hits:
-                        push_success_signal(s)
-                        broadcast_signal(format_signal_message(s))
+                for s in success_hits:
+                    push_success_signal(s)
+                    broadcast_signal(format_signal_message(s))
 
-                    for s in signals:
-                        push_signal(s)
-                        broadcast_signal(format_signal_message(s))
-
-                except Exception as e:
-                    print(f"⚠ {symbol} hata:", e)
+                for s in signals:
+                    push_signal(s)
+                    broadcast_signal(format_signal_message(s))
 
         except Exception as e:
             print("🔥 Scanner genel hata:", e)
 
         time.sleep(SCAN_INTERVAL)
+
+# ======================================================
+# START
+# ======================================================
 
 if __name__ == "__main__":
     threading.Thread(target=scanner_loop, daemon=True).start()
