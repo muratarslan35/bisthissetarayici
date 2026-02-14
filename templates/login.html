@@ -2,63 +2,51 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>BIST Trade Paneli</title>
+<title>BIST TRADE PANELİ</title>
 
 <style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Segoe UI, Arial, sans-serif;
-}
+*{margin:0;padding:0;box-sizing:border-box;}
 
 body{
     height:100vh;
     display:flex;
     justify-content:center;
     align-items:center;
-    background:url("/static/login-bg.png") center/cover no-repeat;
+    background:url('/static/bist-bg.jpg') no-repeat center center/cover;
+    font-family:Segoe UI,Arial;
     overflow:hidden;
 }
 
-/* ARKA PLAN KARARTMA */
+/* DARK OVERLAY */
 body::before{
     content:"";
     position:absolute;
     inset:0;
-    background:rgba(5,15,30,0.75);
-    backdrop-filter:blur(6px);
+    background:linear-gradient(180deg,rgba(0,0,0,.8),rgba(0,0,0,.9));
 }
 
-/* LOGIN KUTUSU */
+/* PANEL */
 .login-box{
     position:relative;
-    width:360px; /* biraz küçültüldü */
-    padding:45px 35px;
+    width:360px;
+    padding:40px 30px;
+    background:rgba(15,23,42,.75);
+    backdrop-filter:blur(15px);
     border-radius:18px;
-    background:rgba(10,15,30,0.55); /* şeffaflaştırıldı */
-    backdrop-filter:blur(14px);
-    box-shadow:0 0 40px rgba(0,0,0,0.8);
+    box-shadow:0 0 40px rgba(0,0,0,.8);
     z-index:2;
 }
 
-/* NEON BORDER ANIMASYONU */
+/* ANIMATED BORDER */
 .login-box::before{
     content:"";
     position:absolute;
     inset:-3px;
     border-radius:20px;
     padding:3px;
-    background:linear-gradient(
-        90deg,
-        #00ff00,
-        #ff0000,
-        #ffae00,
-        #00ffcc,
-        #00ff00
-    );
-    background-size:400%;
-    animation:borderMove 6s linear infinite;
+    background:linear-gradient(90deg,#00ff88,#ff0000,#00ff88);
+    background-size:300% 300%;
+    animation:borderMove 4s linear infinite;
     -webkit-mask:
         linear-gradient(#000 0 0) content-box,
         linear-gradient(#000 0 0);
@@ -68,91 +56,90 @@ body::before{
 
 @keyframes borderMove{
     0%{background-position:0% 50%;}
-    100%{background-position:400% 50%;}
+    50%{background-position:100% 50%;}
+    100%{background-position:0% 50%;}
 }
 
-/* BAŞLIK */
-.login-box h2{
+h1{
     text-align:center;
-    margin-bottom:30px;
+    color:#ffffff;
+    margin-bottom:25px;
     font-size:22px;
     letter-spacing:1px;
-    color:#00d9ff;
-    text-shadow:0 0 15px rgba(0,217,255,0.7);
 }
 
-/* INPUT */
-.input-box{
-    margin-bottom:20px;
+.input-group{
+    margin-bottom:18px;
 }
 
-.input-box input{
+.input-group input{
     width:100%;
-    padding:14px;
+    padding:12px;
+    border:none;
     border-radius:10px;
-    border:1px solid rgba(255,255,255,0.15);
-    background:rgba(0,0,0,0.5);
+    background:#0f172a;
     color:#fff;
     font-size:14px;
     outline:none;
-    transition:0.3s;
 }
 
-.input-box input:focus{
-    border-color:#00d9ff;
-    box-shadow:0 0 12px rgba(0,217,255,0.6);
+.input-group input:focus{
+    box-shadow:0 0 10px #3b82f6;
 }
 
-/* LOGIN BUTTON */
-.login-btn{
+button{
     width:100%;
-    padding:14px;
+    padding:12px;
     border:none;
     border-radius:12px;
     font-size:15px;
-    font-weight:bold;
-    letter-spacing:1px;
+    font-weight:600;
     cursor:pointer;
-    background:linear-gradient(90deg,#0077ff,#00d9ff);
     color:#fff;
-    transition:0.4s;
-    box-shadow:0 0 15px rgba(0,217,255,0.4);
+    background:linear-gradient(90deg,#2563eb,#3b82f6);
+    transition:.3s;
 }
 
-.login-btn:hover{
+button:hover{
     transform:translateY(-2px);
-    box-shadow:0 0 25px rgba(0,217,255,0.8);
+    box-shadow:0 8px 20px rgba(59,130,246,.6);
 }
 
-/* FOOTER */
-.footer-text{
+.register-link{
     margin-top:18px;
     text-align:center;
-    font-size:12px;
-    color:rgba(255,255,255,0.6);
+    font-size:13px;
+    color:#94a3b8;
+}
+
+.register-link a{
+    color:#3b82f6;
+    text-decoration:none;
+}
+
+.register-link a:hover{
+    text-decoration:underline;
 }
 </style>
 </head>
 
 <body>
 
-<form method="POST" action="/login" class="login-box">
-    <h2>BIST TRADE PANELİ</h2>
+<form class="login-box" method="POST">
+    <h1>BIST TRADE PANELİ</h1>
 
-    <div class="input-box">
+    <div class="input-group">
         <input type="text" name="username" placeholder="Kullanıcı Adı" required>
     </div>
 
-    <div class="input-box">
+    <div class="input-group">
         <input type="password" name="password" placeholder="Şifre" required>
     </div>
 
-    <button type="submit" class="login-btn">
-        GİRİŞ YAP
-    </button>
+    <button type="submit">Giriş Yap</button>
 
-    <div class="footer-text">
-        Güvenli Profesyonel Trade Sistemi
+    <div class="register-link">
+        Hesabın yok mu? <a href="/register">Kayıt Ol</a>
     </div>
 </form>
 
