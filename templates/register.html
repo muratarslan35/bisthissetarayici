@@ -12,10 +12,6 @@
     box-sizing:border-box;
 }
 
-html,body{
-    height:100%;
-}
-
 body{
     min-height:100vh;
     display:flex;
@@ -23,24 +19,22 @@ body{
     align-items:center;
     background:url('/static/bist-bg.jpg') center center no-repeat;
     background-size:cover;
-    background-attachment:fixed;
     font-family:Segoe UI,Arial;
     position:relative;
 }
 
-/* DARK OVERLAY */
-body::before{
-    content:"";
-    position:fixed;
+/* OVERLAY ARTIK GERÇEK DIV */
+.overlay{
+    position:absolute;
     inset:0;
     background:linear-gradient(180deg,rgba(0,0,0,.75),rgba(0,0,0,.85));
     z-index:0;
-    pointer-events:none;
 }
 
-/* REGISTER PANEL */
+/* PANEL */
 .register-box{
     position:relative;
+    z-index:1;
     width:360px;
     max-width:90%;
     padding:40px 30px;
@@ -48,10 +42,9 @@ body::before{
     backdrop-filter:blur(15px);
     border-radius:18px;
     box-shadow:0 0 40px rgba(0,0,0,.8);
-    z-index:2;
 }
 
-/* Animated Border */
+/* ANIMATED BORDER */
 .register-box::before{
     content:"";
     position:absolute;
@@ -95,7 +88,6 @@ h1{
     color:#fff;
     font-size:14px;
     outline:none;
-    transition:.3s;
 }
 
 .input-group input:focus{
@@ -138,28 +130,26 @@ button:hover{
     color:#3b82f6;
     text-decoration:none;
 }
-
-.login-link a:hover{
-    text-decoration:underline;
-}
 </style>
 </head>
 
 <body>
 
+<div class="overlay"></div>
+
 <form class="register-box" method="POST">
     <h1>BIST TRADE PANELİ</h1>
 
     <div class="input-group">
-        <input type="text" name="username" placeholder="Kullanıcı Adı" required autocomplete="off">
+        <input type="text" name="username" placeholder="Kullanıcı Adı" required>
     </div>
 
     <div class="input-group">
-        <input type="password" name="password" placeholder="Şifre" required autocomplete="new-password">
+        <input type="password" name="password" placeholder="Şifre" required>
     </div>
 
     <div class="input-group">
-        <input type="text" name="invite_code" placeholder="Davet Kodu" required autocomplete="off">
+        <input type="text" name="invite_code" placeholder="Davet Kodu" required>
     </div>
 
     <div class="invite-note">
