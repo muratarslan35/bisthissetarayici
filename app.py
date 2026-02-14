@@ -237,6 +237,17 @@ def security():
     if not user or not user["is_active"] or not subscription_valid(user):
         session.clear()
         return redirect("/login")
+# ======================================================
+# ADMIN DECORATOR
+# ======================================================
+
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if session.get("user") != "admin":
+            return "Unauthorized", 403
+        return f(*args, **kwargs)
+    return wrapper
 
 # ======================================================
 # AUTH
