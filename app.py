@@ -100,7 +100,7 @@ def send_user_telegram(chat_id, text):
         pass
 
 # ======================================================
-# TELEGRAM CHANNEL CONTROL (YENİ EKLENDİ)
+# TELEGRAM CHANNEL CONTROL
 # ======================================================
 
 def create_invite_link():
@@ -133,7 +133,6 @@ def kick_from_channel(chat_id):
             },
             timeout=5
         )
-        # hemen unban ederek tekrar join ihtimali bırak
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/unbanChatMember",
             json={
@@ -290,7 +289,20 @@ def logout():
     return redirect("/login")
 
 # ======================================================
-# ADMIN APPROVAL & INVITE (YENİ EKLENDİ)
+# ADMIN REQUIRED (EKSİKTİ EKLENDİ)
+# ======================================================
+
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if session.get("user") != "admin":
+            return "Unauthorized", 403
+        return f(*args, **kwargs)
+    return wrapper
+
+# ======================================================
+# ADMIN APPROVAL (TEKRAR ÖDEME SENARYOSU DAHİL)
 # ======================================================
 
 @app.route("/admin/approve-user", methods=["POST"])
@@ -312,7 +324,8 @@ def approve_user():
         SET status='approved',
             subscription_end=?,
             invite_sent=1,
-            invite_link=?
+            invite_link=?,
+            is_active=1
         WHERE id=?
     """, (
         new_end.strftime("%Y-%m-%d %H:%M:%S"),
@@ -329,13 +342,47 @@ def approve_user():
     if user and user["telegram_chat_id"] and invite_link:
         send_user_telegram(
             user["telegram_chat_id"],
-            f"✅ Ödemeniz onaylandı.\n\nKanal giriş linkiniz:\n{invite_link}"
+            f"✅ Aboneliğiniz aktif edildi.\n\nYeni giriş linkiniz:\n{invite_link}"
         )
 
     return {"status": "approved"}
 
 # ======================================================
-# REMINDER + EXPIRE CONTROL
+# EXPIRE KONTROLÜ (YENİ EKLENDİ)
+# ======================================================
+
+def remove_expired_users():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cur.execute("""
+        SELECT id, telegram_chat_id
+        FROM users
+        WHERE subscription_end IS NOT NULL
+        AND subscription_end < ?
+        AND status='approved'
+    """, (now,))
+
+    expired = cur.fetchall()
+
+    for u in expired:
+        if u["telegram_chat_id"]:
+            kick_from_channel(u["telegram_chat_id"])
+
+        cur.execute("""
+            UPDATE users
+            SET status='expired',
+                invite_sent=0
+            WHERE id=?
+        """, (u["id"],))
+
+    conn.commit()
+    conn.close()
+
+# ======================================================
+# REMINDER + EXPIRE
 # ======================================================
 
 def check_subscription_reminders():
@@ -343,7 +390,11 @@ def check_subscription_reminders():
     cur = conn.cursor()
     tomorrow = (datetime.now() + timedelta(days=1)).date()
 
-    cur.execute("SELECT telegram_chat_id, subscription_end FROM users WHERE is_active=1")
+    cur.execute("""
+        SELECT telegram_chat_id, subscription_end
+        FROM users
+        WHERE is_active=1 AND status='approved'
+    """)
     users = cur.fetchall()
 
     for u in users:
@@ -358,9 +409,6 @@ def check_subscription_reminders():
                 "⚠️ Yarın aboneliğiniz sona eriyor."
             )
 
-        if end_date < datetime.now():
-            kick_from_channel(u["telegram_chat_id"])
-
     conn.close()
 
 # ======================================================
@@ -372,6 +420,8 @@ def scanner_loop():
 
     while True:
         now = now_tr()
+
+        remove_expired_users()
 
         if last_reminder != now.date():
             check_subscription_reminders()
