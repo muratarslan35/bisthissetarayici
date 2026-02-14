@@ -4,6 +4,7 @@ import threading
 from datetime import datetime, time as dtime, timedelta
 from zoneinfo import ZoneInfo
 from uuid import uuid4
+from functools import wraps
 
 from dotenv import load_dotenv
 from flask import (
@@ -35,6 +36,8 @@ from dashboard import (
 # ENV
 # ======================================================
 load_dotenv()
+
+ADMIN_PANEL_PATH = os.getenv("ADMIN_PANEL_PATH", "admin-hidden")
 
 # ======================================================
 # TIME
@@ -210,14 +213,16 @@ def security():
     if request.path.startswith("/static"):
         return
 
-    if request.endpoint in ("login", "register"):
+    if request.path in ("/login", "/register"):
+        return
+
+    if request.path.startswith(f"/{ADMIN_PANEL_PATH}"):
+        if session.get("user") != "admin":
+            return "Unauthorized", 403
         return
 
     if "user" not in session:
         return redirect("/login")
-
-    if session.get("user") == "admin":
-        return
 
     if not session_valid(session["user"]):
         session.clear()
@@ -253,14 +258,6 @@ def login():
     if not user or not check_password_hash(user["password_hash"], password):
         conn.close()
         return "Login failed", 401
-
-    if not user["is_active"]:
-        conn.close()
-        return "Account inactive", 403
-
-    if not subscription_valid(user):
-        conn.close()
-        return "Subscription expired", 403
 
     register_session(username)
     conn.close()
@@ -301,114 +298,12 @@ def logout():
     return redirect("/login")
 
 # ======================================================
-# ADMIN APPROVAL
+# ADMIN PANEL (HIDDEN URL)
 # ======================================================
 
-def admin_required(f):
-    from functools import wraps
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if session.get("user") != "admin":
-            return "Unauthorized", 403
-        return f(*args, **kwargs)
-    return wrapper
-
-@app.route("/admin/approve-user", methods=["POST"])
-@admin_required
-def approve_user():
-    data = request.json
-    user_id = data.get("user_id")
-    days = int(data.get("days", 30))
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    new_end = datetime.now() + timedelta(days=days)
-
-    cur.execute("""
-        UPDATE users
-        SET status='approved',
-            subscription_end=?,
-            invite_sent=0,
-            is_active=1
-        WHERE id=?
-    """, (
-        new_end.strftime("%Y-%m-%d %H:%M:%S"),
-        user_id
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return {"status": "approved"}
-
-# ======================================================
-# SCANNER LOOP (FULL PRODUCTION)
-# ======================================================
-
-def scanner_loop():
-    send_startup_message()
-
-    last_daily_report = None
-    last_weekly_report = None
-    last_close_snapshot_date = None
-
-    while True:
-        now = now_tr()
-
-        reset_daily_success_if_needed()
-        reset_weekly_success_if_needed()
-
-        try:
-            if not is_market_open(now):
-
-                if now.time() >= dtime(18, 10) and last_close_snapshot_date != now.date():
-                    try:
-                        market_data = fetch_bist_data()
-                        for item in market_data:
-                            update_success_targets(item["symbol"], item["current_price"])
-                        last_close_snapshot_date = now.date()
-                    except Exception as e:
-                        print("Snapshot error:", e)
-
-                if last_daily_report != now.date() and now.time() > BIST_CLOSE:
-                    report = build_daily_success_report()
-                    if report:
-                        broadcast_signal(report)
-                    last_daily_report = now.date()
-
-                if now.weekday() == 4 and now.time() >= dtime(18, 10):
-                    week_id = now.strftime("%Y-%W")
-                    if last_weekly_report != week_id:
-                        report = build_weekly_success_report()
-                        if report:
-                            broadcast_signal(report)
-                        last_weekly_report = week_id
-
-                time.sleep(30)
-                continue
-
-            market_data = fetch_bist_data()
-
-            for item in market_data:
-                symbol = item.get("symbol")
-                price = item.get("current_price")
-
-                signals = process_symbol_signals(item)
-                success_hits = update_success_targets(symbol, price)
-
-                for s in success_hits:
-                    push_success_signal(s)
-                    broadcast_signal(format_signal_message(s))
-
-                for s in signals:
-                    push_signal(s)
-                    broadcast_signal(format_signal_message(s))
-
-        except Exception as e:
-            print("Scanner error:", e)
-
-        time.sleep(SCAN_INTERVAL)
+@app.route(f"/{ADMIN_PANEL_PATH}")
+def admin_panel():
+    return render_template("admin.html")
 
 # ======================================================
 # ROUTES
@@ -425,6 +320,38 @@ def health():
         "time": now_tr().isoformat(),
         "market_open": is_market_open()
     })
+
+# ======================================================
+# SCANNER LOOP
+# ======================================================
+
+def scanner_loop():
+    send_startup_message()
+
+    while True:
+        try:
+            if is_market_open():
+                market_data = fetch_bist_data()
+
+                for item in market_data:
+                    symbol = item.get("symbol")
+                    price = item.get("current_price")
+
+                    signals = process_symbol_signals(item)
+                    success_hits = update_success_targets(symbol, price)
+
+                    for s in success_hits:
+                        push_success_signal(s)
+                        broadcast_signal(format_signal_message(s))
+
+                    for s in signals:
+                        push_signal(s)
+                        broadcast_signal(format_signal_message(s))
+
+        except Exception as e:
+            print("Scanner error:", e)
+
+        time.sleep(SCAN_INTERVAL)
 
 # ======================================================
 # START
