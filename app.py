@@ -357,7 +357,89 @@ def admin_required(f):
             return "Unauthorized", 403
         return f(*args, **kwargs)
     return wrapper
+# ======================================================
+# ADMIN INVITE CODE MANAGEMENT
+# ======================================================
 
+import secrets
+import string
+
+def generate_random_code(length=12):
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+
+@app.route("/admin/generate-codes", methods=["POST"])
+@admin_required
+def admin_generate_codes():
+    data = request.json
+    count = int(data.get("count", 1))
+    expire_days = data.get("expire_days")
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    created_codes = []
+
+    for _ in range(count):
+        code = generate_random_code()
+
+        expires_at = None
+        if expire_days:
+            expires_at = (
+                datetime.now() + timedelta(days=int(expire_days))
+            ).strftime("%Y-%m-%d %H:%M:%S")
+
+        cur.execute("""
+            INSERT INTO invite_codes (
+                code,
+                is_used,
+                expires_at
+            )
+            VALUES (?, 0, ?)
+        """, (code, expires_at))
+
+        created_codes.append(code)
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "created", "codes": created_codes}
+
+
+@app.route("/admin/invite-codes")
+@admin_required
+def admin_list_codes():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT code, is_used, used_by, created_at
+        FROM invite_codes
+        ORDER BY created_at DESC
+    """)
+
+    codes = cur.fetchall()
+    conn.close()
+
+    return jsonify([dict(c) for c in codes])
+
+
+@app.route("/admin/delete-code", methods=["POST"])
+@admin_required
+def admin_delete_code():
+    data = request.json
+    code = data.get("code")
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM invite_codes WHERE code=?", (code,))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "deleted"}
 # ======================================================
 # ADMIN APPROVAL (TEKRAR ÖDEME SENARYOSU DAHİL)
 # ======================================================
