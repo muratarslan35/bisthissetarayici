@@ -12,8 +12,11 @@
     box-sizing:border-box;
 }
 
+html,body{
+    height:100%;
+}
+
 body{
-    min-height:100vh;
     display:flex;
     justify-content:center;
     align-items:center;
@@ -23,56 +26,31 @@ body{
     position:relative;
 }
 
-/* OVERLAY ARTIK GERÇEK DIV */
+/* OVERLAY DIV */
 .overlay{
-    position:absolute;
+    position:fixed;
     inset:0;
     background:linear-gradient(180deg,rgba(0,0,0,.75),rgba(0,0,0,.85));
     z-index:0;
 }
 
-/* PANEL */
 .register-box{
     position:relative;
-    z-index:1;
+    z-index:2;
     width:360px;
     max-width:90%;
     padding:40px 30px;
-    background:rgba(15,23,42,.78);
-    backdrop-filter:blur(15px);
+    background:rgba(15,23,42,.85);
+    backdrop-filter:blur(12px);
     border-radius:18px;
     box-shadow:0 0 40px rgba(0,0,0,.8);
 }
 
-/* ANIMATED BORDER */
-.register-box::before{
-    content:"";
-    position:absolute;
-    inset:-3px;
-    border-radius:20px;
-    padding:3px;
-    background:linear-gradient(90deg,#00ff88,#ff0000,#00ff88);
-    background-size:300% 300%;
-    animation:borderMove 4s linear infinite;
-    -webkit-mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;
-    mask-composite:exclude;
-}
-
-@keyframes borderMove{
-    0%{background-position:0% 50%;}
-    50%{background-position:100% 50%;}
-    100%{background-position:0% 50%;}
-}
-
 h1{
     text-align:center;
-    color:#ffffff;
+    color:#fff;
     margin-bottom:25px;
     font-size:22px;
-    letter-spacing:1px;
 }
 
 .input-group{
@@ -111,12 +89,6 @@ button{
     cursor:pointer;
     color:#fff;
     background:linear-gradient(90deg,#16a34a,#22c55e);
-    transition:.3s;
-}
-
-button:hover{
-    transform:translateY(-2px);
-    box-shadow:0 8px 20px rgba(34,197,94,.6);
 }
 
 .login-link{
