@@ -1,5 +1,4 @@
 import os
-import asyncio
 import sqlite3
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -43,7 +42,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_connection()
     cur = conn.cursor()
 
-    # Bu telegram zaten bağlı mı?
     cur.execute("SELECT * FROM users WHERE telegram_chat_id=?", (chat_id,))
     existing = cur.fetchone()
 
@@ -76,7 +74,6 @@ async def link_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_connection()
     cur = conn.cursor()
 
-    # Username var mı?
     cur.execute("SELECT * FROM users WHERE username=?", (username,))
     user = cur.fetchone()
 
@@ -87,7 +84,6 @@ async def link_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
         return
 
-    # Başka telegrama bağlı mı?
     if user["telegram_chat_id"]:
         await update.message.reply_text(
             "⚠️ Bu hesap zaten başka bir Telegram hesabına bağlı."
@@ -95,7 +91,6 @@ async def link_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
         return
 
-    # Bağlama işlemi
     cur.execute("""
         UPDATE users
         SET telegram_chat_id=?
@@ -228,10 +223,10 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
 # ======================================================
-# MAIN
+# MAIN (FIXED)
 # ======================================================
 
-async def main():
+def main():
     app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
@@ -245,7 +240,7 @@ async def main():
     app.job_queue.run_repeating(subscription_checker, interval=3600, first=20)
 
     print("🤖 Bot aktif...")
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
