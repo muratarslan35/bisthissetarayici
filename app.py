@@ -48,7 +48,6 @@ SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
 # TELEGRAM
 # ======================================================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
 # ======================================================
 # FLASK
@@ -96,63 +95,8 @@ def send_user_telegram(chat_id, text):
             },
             timeout=5
         )
-    except:
+    except Exception:
         pass
-
-# ======================================================
-# INVITE CODE CONTROL
-# ======================================================
-
-def validate_invite_code(code):
-    if not code:
-        return False
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT id, is_used, expires_at
-        FROM invite_codes
-        WHERE code=?
-    """, (code,))
-
-    row = cur.fetchone()
-
-    if not row:
-        conn.close()
-        return False
-
-    if row["is_used"] == 1:
-        conn.close()
-        return False
-
-    if row["expires_at"]:
-        expire_time = datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
-        if expire_time < datetime.now():
-            conn.close()
-            return False
-
-    conn.close()
-    return True
-
-
-def mark_invite_code_used(code, username):
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        UPDATE invite_codes
-        SET is_used=1,
-            used_by=?
-        WHERE code=?
-    """, (username, code))
-
-    conn.commit()
-    conn.close()
-
-# ======================================================
-# TELEGRAM CHANNEL CONTROL
-# ======================================================
 
 def broadcast_signal(text):
     conn = get_connection()
@@ -174,7 +118,63 @@ def broadcast_signal(text):
     conn.close()
 
 # ======================================================
-# SESSION CONTROL (TEK CİHAZ)
+# STARTUP MESSAGE
+# ======================================================
+
+def send_startup_message():
+    broadcast_signal(
+        "🟢 <b>HİSSE TARAMA SİSTEMİ BAŞLATILDI</b>\n"
+        f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
+    )
+
+# ======================================================
+# INVITE CODE CONTROL
+# ======================================================
+
+def validate_invite_code(code):
+    if not code:
+        return False
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, is_used, expires_at
+        FROM invite_codes
+        WHERE code=?
+    """, (code,))
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        return False
+
+    if row["is_used"] == 1:
+        conn.close()
+        return False
+
+    if row["expires_at"]:
+        expire_time = datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
+        if expire_time < datetime.now():
+            conn.close()
+            return False
+
+    conn.close()
+    return True
+
+def mark_invite_code_used(code, username):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE invite_codes
+        SET is_used=1,
+            used_by=?
+        WHERE code=?
+    """, (username, code))
+    conn.commit()
+    conn.close()
+
+# ======================================================
+# SESSION CONTROL
 # ======================================================
 
 def register_session(username):
@@ -202,7 +202,7 @@ def session_valid(username):
     return row["active_session_id"] == session.get("sid")
 
 # ======================================================
-# SECURITY LAYER
+# SECURITY
 # ======================================================
 
 @app.before_request
@@ -216,7 +216,6 @@ def security():
     if "user" not in session:
         return redirect("/login")
 
-    # ADMIN MUAF
     if session.get("user") == "admin":
         return
 
@@ -285,16 +284,10 @@ def register():
     try:
         cur.execute(
             "INSERT INTO users (username, password_hash, subscription_end, status) VALUES (?, ?, ?, ?)",
-            (
-                username,
-                generate_password_hash(password),
-                None,
-                "pending"
-            )
+            (username, generate_password_hash(password), None, "pending")
         )
         conn.commit()
         mark_invite_code_used(invite_code, username)
-
     except:
         conn.close()
         return "Username exists", 400
@@ -308,7 +301,7 @@ def logout():
     return redirect("/login")
 
 # ======================================================
-# ADMIN REQUIRED
+# ADMIN APPROVAL
 # ======================================================
 
 def admin_required(f):
@@ -319,10 +312,6 @@ def admin_required(f):
             return "Unauthorized", 403
         return f(*args, **kwargs)
     return wrapper
-
-# ======================================================
-# ADMIN APPROVAL (BOT UYUMLU)
-# ======================================================
 
 @app.route("/admin/approve-user", methods=["POST"])
 @admin_required
@@ -354,10 +343,16 @@ def approve_user():
     return {"status": "approved"}
 
 # ======================================================
-# SCANNER LOOP
+# SCANNER LOOP (FULL PRODUCTION)
 # ======================================================
 
 def scanner_loop():
+    send_startup_message()
+
+    last_daily_report = None
+    last_weekly_report = None
+    last_close_snapshot_date = None
+
     while True:
         now = now_tr()
 
@@ -366,6 +361,30 @@ def scanner_loop():
 
         try:
             if not is_market_open(now):
+
+                if now.time() >= dtime(18, 10) and last_close_snapshot_date != now.date():
+                    try:
+                        market_data = fetch_bist_data()
+                        for item in market_data:
+                            update_success_targets(item["symbol"], item["current_price"])
+                        last_close_snapshot_date = now.date()
+                    except Exception as e:
+                        print("Snapshot error:", e)
+
+                if last_daily_report != now.date() and now.time() > BIST_CLOSE:
+                    report = build_daily_success_report()
+                    if report:
+                        broadcast_signal(report)
+                    last_daily_report = now.date()
+
+                if now.weekday() == 4 and now.time() >= dtime(18, 10):
+                    week_id = now.strftime("%Y-%W")
+                    if last_weekly_report != week_id:
+                        report = build_weekly_success_report()
+                        if report:
+                            broadcast_signal(report)
+                        last_weekly_report = week_id
+
                 time.sleep(30)
                 continue
 
@@ -403,6 +422,7 @@ def index():
 def health():
     return jsonify({
         "status": "ok",
+        "time": now_tr().isoformat(),
         "market_open": is_market_open()
     })
 
