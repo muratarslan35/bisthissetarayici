@@ -23,12 +23,11 @@ body{
     align-items:center;
     background:url('/static/bist-bg.jpg') center center no-repeat;
     background-size:cover;
-    background-attachment:fixed;
     font-family:Segoe UI,Arial;
     position:relative;
 }
 
-/* DARK OVERLAY */
+/* DARK OVERLAY — TIKLAMAYI ENGELLEMEZ */
 body::before{
     content:"";
     position:fixed;
@@ -48,10 +47,11 @@ body::before{
     backdrop-filter:blur(15px);
     border-radius:18px;
     box-shadow:0 0 40px rgba(0,0,0,.8);
-    z-index:2;
+    z-index:5;
+    overflow:hidden;
 }
 
-/* Animated Border */
+/* Animated Border — ARKA KATMAN */
 .login-box::before{
     content:"";
     position:absolute;
@@ -61,11 +61,7 @@ body::before{
     background:linear-gradient(90deg,#00ff88,#ff0000,#00ff88);
     background-size:300% 300%;
     animation:borderMove 4s linear infinite;
-    -webkit-mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;
-    mask-composite:exclude;
+    z-index:-1;
 }
 
 @keyframes borderMove{
@@ -95,7 +91,8 @@ h1{
     color:#fff;
     font-size:14px;
     outline:none;
-    transition:.3s;
+    position:relative;
+    z-index:2;
 }
 
 .input-group input:focus{
@@ -113,6 +110,8 @@ button{
     color:#fff;
     background:linear-gradient(90deg,#2563eb,#3b82f6);
     transition:.3s;
+    position:relative;
+    z-index:2;
 }
 
 button:hover{
