@@ -16,8 +16,9 @@ from telegram.constants import ParseMode
 # ======================================================
 
 load_dotenv()
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("PRIVATE_CHANNEL_ID")  # -100xxxx format
+CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")  # Flask ile aynı isim
 
 DB_PATH = "system.db"
 
@@ -83,35 +84,45 @@ async def send_invite(context: ContextTypes.DEFAULT_TYPE):
     conn = get_connection()
     cur = conn.cursor()
 
+    # SADECE approved ve aktif kullanıcılar
     cur.execute("""
         SELECT id, telegram_chat_id, subscription_end
         FROM users
         WHERE is_active=1
+        AND status='approved'
         AND invite_sent=0
         AND telegram_chat_id IS NOT NULL
+        AND subscription_end IS NOT NULL
     """)
 
     users = cur.fetchall()
 
     for user in users:
         try:
-            expire_date = int(
-                datetime.strptime(
-                    user["subscription_end"],
-                    "%Y-%m-%d %H:%M:%S"
-                ).timestamp()
+            expire_dt = datetime.strptime(
+                user["subscription_end"],
+                "%Y-%m-%d %H:%M:%S"
             )
+
+            # Eğer süresi geçmişse invite üretme
+            if expire_dt < datetime.now():
+                continue
+
+            expire_timestamp = int(expire_dt.timestamp())
 
             link = await context.bot.create_chat_invite_link(
                 chat_id=CHANNEL_ID,
                 member_limit=1,
-                expire_date=expire_date
+                expire_date=expire_timestamp
             )
 
             await context.bot.send_message(
                 chat_id=user["telegram_chat_id"],
-                text=f"🎉 <b>Ödeme Onaylandı</b>\n\n"
-                     f"Özel kanal linkiniz:\n{link.invite_link}",
+                text=(
+                    "🎉 <b>Ödeme Onaylandı</b>\n\n"
+                    "Özel kanal giriş linkiniz:\n"
+                    f"{link.invite_link}"
+                ),
                 parse_mode=ParseMode.HTML
             )
 
@@ -141,10 +152,11 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
     tomorrow = (now + timedelta(days=1)).date()
 
     cur.execute("""
-        SELECT id, telegram_chat_id, subscription_end
+        SELECT id, telegram_chat_id, subscription_end, status
         FROM users
         WHERE is_active=1
         AND telegram_chat_id IS NOT NULL
+        AND subscription_end IS NOT NULL
     """)
 
     users = cur.fetchall()
@@ -157,14 +169,14 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
             )
 
             # 1 Gün Kala Hatırlatma
-            if end.date() == tomorrow:
+            if user["status"] == "approved" and end.date() == tomorrow:
                 await context.bot.send_message(
                     chat_id=user["telegram_chat_id"],
                     text="⚠️ Yarın aboneliğiniz sona eriyor."
                 )
 
-            # Süre Bitti → Kick
-            if end < now:
+            # Süre Bitti → Kick + Status Güncelle
+            if end < now and user["status"] == "approved":
                 await context.bot.ban_chat_member(
                     chat_id=CHANNEL_ID,
                     user_id=user["telegram_chat_id"]
@@ -178,6 +190,7 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
                 cur.execute("""
                     UPDATE users
                     SET is_active=0,
+                        status='expired',
                         invite_sent=0
                     WHERE id=?
                 """, (user["id"],))
