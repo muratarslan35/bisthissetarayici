@@ -25,6 +25,12 @@ body{
     padding:30px;
 }
 
+.section-title{
+    font-size:18px;
+    font-weight:700;
+    margin:40px 0 15px 0;
+}
+
 .table{
     width:100%;
     border-collapse:collapse;
@@ -69,18 +75,31 @@ body{
     color:#fbbf24;
 }
 
+.badge.used{
+    background:#7c3aed;
+    color:#fff;
+}
+
+.badge.unused{
+    background:#1e3a8a;
+    color:#93c5fd;
+}
+
 .action-box{
     display:flex;
     gap:6px;
 }
 
-input[type=number]{
-    width:60px;
+input{
     padding:6px;
     border-radius:8px;
     border:none;
     background:#1f2937;
     color:#fff;
+}
+
+input[type=number]{
+    width:60px;
 }
 
 button{
@@ -111,6 +130,16 @@ button{
     font-size:14px;
 }
 
+.btn-generate{
+    background:#f59e0b;
+    color:#000;
+}
+
+.btn-delete{
+    background:#7f1d1d;
+    color:#fff;
+}
+
 .chatid{
     font-size:11px;
     opacity:0.8;
@@ -127,6 +156,8 @@ button{
 
 <button class="btn-refresh" onclick="loadUsers()">Yenile</button>
 
+<h2 class="section-title">👤 Kullanıcılar</h2>
+
 <table class="table">
 <thead>
 <tr>
@@ -140,6 +171,28 @@ button{
 </tr>
 </thead>
 <tbody id="userTable"></tbody>
+</table>
+
+
+<h2 class="section-title">🎟️ Davet Kodları</h2>
+
+<div style="margin-bottom:15px;">
+    <input type="number" id="codeCount" value="5">
+    <input type="number" id="expireDays" placeholder="Geçerlilik Gün (opsiyonel)">
+    <button class="btn-generate" onclick="generateCodes()">Kod Üret</button>
+</div>
+
+<table class="table">
+<thead>
+<tr>
+    <th>Kod</th>
+    <th>Kullanıldı mı</th>
+    <th>Kullanan</th>
+    <th>Oluşturulma</th>
+    <th>Sil</th>
+</tr>
+</thead>
+<tbody id="codeTable"></tbody>
 </table>
 
 </div>
@@ -170,21 +223,12 @@ function statusBadge(days){
 }
 
 async function updateSub(userId, days){
-    const res=await fetch("/admin/update-subscription",{
+    await fetch("/admin/update-subscription",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            user_id:userId,
-            days:days
-        })
+        body:JSON.stringify({ user_id:userId, days:days })
     });
-
-    const data=await res.json();
-    if(data.status==="updated"){
-        loadUsers();
-    }else{
-        alert("Hata oluştu");
-    }
+    loadUsers();
 }
 
 async function loadUsers(){
@@ -214,9 +258,55 @@ async function loadUsers(){
             </div>
         </td>
         `;
-
         tbody.appendChild(tr);
     });
+
+    loadCodes();
+}
+
+async function generateCodes(){
+    const count=document.getElementById("codeCount").value;
+    const expireDays=document.getElementById("expireDays").value;
+
+    await fetch("/admin/generate-codes",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            count:count,
+            expire_days:expireDays
+        })
+    });
+
+    loadCodes();
+}
+
+async function loadCodes(){
+    const res=await fetch("/admin/invite-codes");
+    const codes=await res.json();
+
+    const tbody=document.getElementById("codeTable");
+    tbody.innerHTML="";
+
+    codes.forEach(c=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`
+        <td>${c.code}</td>
+        <td>${c.is_used?'<span class="badge used">KULLANILDI</span>':'<span class="badge unused">AKTİF</span>'}</td>
+        <td>${c.used_by||"-"}</td>
+        <td>${formatDate(c.created_at)}</td>
+        <td><button class="btn-delete" onclick="deleteCode('${c.code}')">Sil</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function deleteCode(code){
+    await fetch("/admin/delete-code",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ code:code })
+    });
+    loadCodes();
 }
 
 loadUsers();
