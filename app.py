@@ -32,37 +32,21 @@ from dashboard import (
     push_success_signal
 )
 
-# ======================================================
-# ENV
-# ======================================================
 load_dotenv()
 ADMIN_PANEL_PATH = os.getenv("ADMIN_PANEL_PATH", "admin-hidden")
 
-# ======================================================
-# TIME
-# ======================================================
 TR_TZ = ZoneInfo("Europe/Istanbul")
 BIST_OPEN = dtime(9, 40)
 BIST_CLOSE = dtime(18, 5)
 SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
 
-# ======================================================
-# TELEGRAM
-# ======================================================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# ======================================================
-# FLASK
-# ======================================================
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "super-secret-key")
 app.register_blueprint(dashboard_bp)
 
 init_db()
-
-# ======================================================
-# HELPERS
-# ======================================================
 
 def now_tr():
     return datetime.now(TR_TZ)
@@ -119,24 +103,15 @@ def broadcast_signal(text):
 
     conn.close()
 
-# ======================================================
-# STARTUP MESSAGE
-# ======================================================
-
 def send_startup_message():
     broadcast_signal(
         "🟢 <b>HİSSE TARAMA SİSTEMİ BAŞLATILDI</b>\n"
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
     )
 
-# ======================================================
-# INVITE CODE CONTROL
-# ======================================================
-
 def validate_invite_code(code):
     if not code:
         return False
-
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -145,21 +120,17 @@ def validate_invite_code(code):
         WHERE code=?
     """, (code,))
     row = cur.fetchone()
-
     if not row:
         conn.close()
         return False
-
     if row["is_used"] == 1:
         conn.close()
         return False
-
     if row["expires_at"]:
         expire_time = datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
         if expire_time < datetime.now():
             conn.close()
             return False
-
     conn.close()
     return True
 
@@ -174,10 +145,6 @@ def mark_invite_code_used(code, username):
     """, (username, code))
     conn.commit()
     conn.close()
-
-# ======================================================
-# SESSION CONTROL
-# ======================================================
 
 def register_session(username):
     sid = str(uuid4())
@@ -203,43 +170,29 @@ def session_valid(username):
         return False
     return row["active_session_id"] == session.get("sid")
 
-# ======================================================
-# SECURITY
-# ======================================================
-
 @app.before_request
 def security():
     if request.path.startswith("/static"):
         return
-
     if request.path in ("/login", "/register"):
         return
-
-    if request.path.startswith(f"/{ADMIN_PANEL_PATH}"):
+    if request.path.startswith(f"/{ADMIN_PANEL_PATH}") or request.path.startswith("/admin"):
         if session.get("user") != "admin":
             return "Unauthorized", 403
         return
-
     if "user" not in session:
         return redirect("/login")
-
     if not session_valid(session["user"]):
         session.clear()
         return redirect("/login")
-
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("SELECT * FROM users WHERE username=?", (session["user"],))
     user = cur.fetchone()
     conn.close()
-
     if not user or not user["is_active"] or not subscription_valid(user):
         session.clear()
         return redirect("/login")
-
-# ======================================================
-# ADMIN DECORATOR
-# ======================================================
 
 def admin_required(f):
     @wraps(f)
@@ -249,27 +202,19 @@ def admin_required(f):
         return f(*args, **kwargs)
     return wrapper
 
-# ======================================================
-# AUTH ROUTES
-# ======================================================
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
         return render_template("login.html")
-
     username = request.form.get("username")
     password = request.form.get("password")
-
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("SELECT * FROM users WHERE username=?", (username,))
     user = cur.fetchone()
-
     if not user or not check_password_hash(user["password_hash"], password):
         conn.close()
         return "Login failed", 401
-
     register_session(username)
     conn.close()
     return redirect("/")
@@ -278,17 +223,13 @@ def login():
 def register():
     if request.method == "GET":
         return render_template("register.html")
-
     username = request.form.get("username")
     password = request.form.get("password")
     invite_code = request.form.get("invite_code")
-
     if not validate_invite_code(invite_code):
         return "Invalid or expired invite code", 400
-
     conn = get_connection()
     cur = conn.cursor()
-
     try:
         cur.execute(
             "INSERT INTO users (username, password_hash, subscription_end, status) VALUES (?, ?, ?, ?)",
@@ -299,7 +240,6 @@ def register():
     except:
         conn.close()
         return "Username exists", 400
-
     conn.close()
     return redirect("/login")
 
@@ -308,17 +248,9 @@ def logout():
     session.clear()
     return redirect("/login")
 
-# ======================================================
-# ADMIN PANEL ROUTE
-# ======================================================
-
 @app.route(f"/{ADMIN_PANEL_PATH}")
 def admin_panel():
     return render_template("admin.html")
-
-# ======================================================
-# ADMIN API ENDPOINTS
-# ======================================================
 
 @app.route("/admin/users")
 @admin_required
@@ -333,18 +265,10 @@ def admin_users():
     """)
     users = cur.fetchall()
     conn.close()
-
-    return jsonify([
-        dict(u) for u in users
-    ])
-
-# ======================================================
-# FULL PRODUCTION SCANNER
-# ======================================================
+    return jsonify([dict(u) for u in users])
 
 def scanner_loop():
     send_startup_message()
-
     last_daily_report = None
     last_weekly_report = None
     last_close_snapshot_date = None
@@ -362,7 +286,6 @@ def scanner_loop():
 
                 if now.time() >= dtime(18, 10) and last_close_snapshot_date != now.date():
                     try:
-                        print("📌 Snapshot alınıyor...", flush=True)
                         market_data = fetch_bist_data()
                         for item in market_data:
                             update_success_targets(
@@ -370,7 +293,6 @@ def scanner_loop():
                                 item["current_price"]
                             )
                         last_close_snapshot_date = now.date()
-                        print("✅ Snapshot tamamlandı", flush=True)
                     except Exception as e:
                         print("Snapshot error:", e)
 
@@ -418,10 +340,6 @@ def scanner_loop():
             print("🔥 Scanner genel hata:", e)
 
         time.sleep(SCAN_INTERVAL)
-
-# ======================================================
-# START
-# ======================================================
 
 if __name__ == "__main__":
     threading.Thread(target=scanner_loop, daemon=True).start()
