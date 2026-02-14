@@ -98,6 +98,56 @@ def send_user_telegram(chat_id, text):
         )
     except:
         pass
+# ======================================================
+# INVITE CODE CONTROL (YENİ EKLENDİ)
+# ======================================================
+
+def validate_invite_code(code):
+    if not code:
+        return False
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, is_used, expires_at
+        FROM invite_codes
+        WHERE code=?
+    """, (code,))
+
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        return False
+
+    if row["is_used"] == 1:
+        conn.close()
+        return False
+
+    if row["expires_at"]:
+        expire_time = datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
+        if expire_time < datetime.now():
+            conn.close()
+            return False
+
+    conn.close()
+    return True
+
+
+def mark_invite_code_used(code, username):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE invite_codes
+        SET is_used=1,
+            used_by=?
+        WHERE code=?
+    """, (username, code))
+
+    conn.commit()
+    conn.close()
 
 # ======================================================
 # TELEGRAM CHANNEL CONTROL
@@ -261,6 +311,10 @@ def register():
 
     username = request.form.get("username")
     password = request.form.get("password")
+    invite_code = request.form.get("invite_code")
+
+    if not validate_invite_code(invite_code):
+        return "Invalid or expired invite code", 400
 
     conn = get_connection()
     cur = conn.cursor()
@@ -276,6 +330,9 @@ def register():
             )
         )
         conn.commit()
+
+        mark_invite_code_used(invite_code, username)
+
     except:
         conn.close()
         return "Username exists", 400
