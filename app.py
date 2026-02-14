@@ -48,6 +48,7 @@ SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
 # TELEGRAM
 # ======================================================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
 # ======================================================
 # FLASK
@@ -98,15 +99,70 @@ def send_user_telegram(chat_id, text):
     except:
         pass
 
+# ======================================================
+# TELEGRAM CHANNEL CONTROL (YENİ EKLENDİ)
+# ======================================================
+
+def create_invite_link():
+    import requests
+    try:
+        res = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/createChatInviteLink",
+            json={
+                "chat_id": TELEGRAM_CHANNEL_ID,
+                "member_limit": 1
+            },
+            timeout=5
+        )
+        data = res.json()
+        if data.get("ok"):
+            return data["result"]["invite_link"]
+    except:
+        pass
+    return None
+
+
+def kick_from_channel(chat_id):
+    import requests
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/banChatMember",
+            json={
+                "chat_id": TELEGRAM_CHANNEL_ID,
+                "user_id": chat_id
+            },
+            timeout=5
+        )
+        # hemen unban ederek tekrar join ihtimali bırak
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/unbanChatMember",
+            json={
+                "chat_id": TELEGRAM_CHANNEL_ID,
+                "user_id": chat_id
+            },
+            timeout=5
+        )
+    except:
+        pass
+
+
 def broadcast_signal(text):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT telegram_chat_id, subscription_end FROM users WHERE is_active=1")
+    cur.execute("""
+        SELECT telegram_chat_id, subscription_end, status
+        FROM users
+        WHERE is_active=1
+    """)
     users = cur.fetchall()
+
     for u in users:
+        if u["status"] != "approved":
+            continue
         if not subscription_valid(u):
             continue
         send_user_telegram(u["telegram_chat_id"], text)
+
     conn.close()
 
 # ======================================================
@@ -212,11 +268,12 @@ def register():
 
     try:
         cur.execute(
-            "INSERT INTO users (username, password_hash, subscription_end) VALUES (?, ?, ?)",
+            "INSERT INTO users (username, password_hash, subscription_end, status) VALUES (?, ?, ?, ?)",
             (
                 username,
                 generate_password_hash(password),
-                (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+                None,
+                "pending"
             )
         )
         conn.commit()
@@ -233,136 +290,52 @@ def logout():
     return redirect("/login")
 
 # ======================================================
-# TELEGRAM CHAT ID SAVE
+# ADMIN APPROVAL & INVITE (YENİ EKLENDİ)
 # ======================================================
 
-@app.route("/api/save-chat-id", methods=["POST"])
-def save_chat_id():
-    chat_id = request.json.get("chat_id")
+@app.route("/admin/approve-user", methods=["POST"])
+@admin_required
+def approve_user():
+    data = request.json
+    user_id = data.get("user_id")
+    days = int(data.get("days", 30))
+
+    invite_link = create_invite_link()
 
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT id FROM users WHERE telegram_chat_id=?", (chat_id,))
-    if cur.fetchone():
-        conn.close()
-        return {"error": "Chat ID already used"}, 400
+    new_end = datetime.now() + timedelta(days=days)
 
-    cur.execute(
-        "UPDATE users SET telegram_chat_id=? WHERE username=?",
-        (chat_id, session["user"])
-    )
-    conn.commit()
-    conn.close()
-
-    send_user_telegram(chat_id, "🟢 Sistem başlatıldı. Sinyaller aktif.")
-    return {"status": "saved"}
-
-# ======================================================
-# ADMIN SUBSCRIPTION & USER MANAGEMENT
-# ======================================================
-
-def admin_required(f):
-    from functools import wraps
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if session.get("user") != "admin":
-            return "Unauthorized", 403
-        return f(*args, **kwargs)
-    return wrapper
-
-@app.route("/admin")
-@admin_required
-def admin_panel():
-    return render_template("admin.html")
-
-@app.route("/admin/users")
-@admin_required
-def admin_users():
-    conn = get_connection()
-    cur = conn.cursor()
     cur.execute("""
-        SELECT id, username, telegram_chat_id,
-               subscription_end, is_active
-        FROM users
-    """)
-    users = cur.fetchall()
-    conn.close()
-    return jsonify([dict(u) for u in users])
+        UPDATE users
+        SET status='approved',
+            subscription_end=?,
+            invite_sent=1,
+            invite_link=?
+        WHERE id=?
+    """, (
+        new_end.strftime("%Y-%m-%d %H:%M:%S"),
+        invite_link,
+        user_id
+    ))
 
-@app.route("/admin/update-user", methods=["POST"])
-@admin_required
-def admin_update_user():
-    data = request.json
-    user_id = data.get("user_id")
-    username = data.get("username")
-    password = data.get("password")
-    chat_id = data.get("telegram_chat_id")
-    is_active = data.get("is_active")
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    if username:
-        cur.execute("UPDATE users SET username=? WHERE id=?",
-                    (username, user_id))
-
-    if password:
-        cur.execute("UPDATE users SET password_hash=? WHERE id=?",
-                    (generate_password_hash(password), user_id))
-
-    if chat_id is not None:
-        cur.execute("UPDATE users SET telegram_chat_id=? WHERE id=?",
-                    (chat_id, user_id))
-
-    if is_active is not None:
-        cur.execute("UPDATE users SET is_active=? WHERE id=?",
-                    (1 if is_active else 0, user_id))
+    cur.execute("SELECT telegram_chat_id FROM users WHERE id=?", (user_id,))
+    user = cur.fetchone()
 
     conn.commit()
     conn.close()
 
-    return {"status": "updated"}
+    if user and user["telegram_chat_id"] and invite_link:
+        send_user_telegram(
+            user["telegram_chat_id"],
+            f"✅ Ödemeniz onaylandı.\n\nKanal giriş linkiniz:\n{invite_link}"
+        )
 
-@app.route("/admin/update-subscription", methods=["POST"])
-@admin_required
-def update_subscription():
-    data = request.json
-    user_id = data.get("user_id")
-    days = int(data.get("days", 0))
-
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT subscription_end FROM users WHERE id=?", (user_id,))
-    row = cur.fetchone()
-
-    if not row:
-        conn.close()
-        return {"error": "User not found"}, 404
-
-    now = datetime.now()
-    if row["subscription_end"]:
-        end = datetime.strptime(row["subscription_end"], "%Y-%m-%d %H:%M:%S")
-        if end < now:
-            end = now
-    else:
-        end = now
-
-    new_end = end + timedelta(days=days)
-    if new_end < now:
-        new_end = now
-
-    cur.execute(
-        "UPDATE users SET subscription_end=? WHERE id=?",
-        (new_end.strftime("%Y-%m-%d %H:%M:%S"), user_id)
-    )
-    conn.commit()
-    conn.close()
-
-    return {"status": "updated"}
+    return {"status": "approved"}
 
 # ======================================================
-# REMINDER
+# REMINDER + EXPIRE CONTROL
 # ======================================================
 
 def check_subscription_reminders():
@@ -376,12 +349,18 @@ def check_subscription_reminders():
     for u in users:
         if not u["subscription_end"]:
             continue
-        end = datetime.strptime(u["subscription_end"], "%Y-%m-%d %H:%M:%S").date()
-        if end == tomorrow:
+
+        end_date = datetime.strptime(u["subscription_end"], "%Y-%m-%d %H:%M:%S")
+
+        if end_date.date() == tomorrow:
             send_user_telegram(
                 u["telegram_chat_id"],
                 "⚠️ Yarın aboneliğiniz sona eriyor."
             )
+
+        if end_date < datetime.now():
+            kick_from_channel(u["telegram_chat_id"])
+
     conn.close()
 
 # ======================================================
