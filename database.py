@@ -57,7 +57,7 @@ def init_db():
     """)
 
     # ==================================================
-    # INVITE CODES TABLE (YENİ EKLENDİ)
+    # INVITE CODES TABLE
     # ==================================================
 
     cur.execute("""
@@ -69,8 +69,8 @@ def init_db():
         is_used INTEGER DEFAULT 0,
         used_by TEXT,
 
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        expires_at TEXT
+        expires_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
     """)
 
@@ -119,25 +119,20 @@ def init_db():
     conn.commit()
 
     # ==================================================
-    # SAFE COLUMN CHECK (ALTER TABLE IF MISSING)
+    # SAFE COLUMN CHECK (Backward Compatibility)
     # ==================================================
 
     ensure_column_exists(cur, "users", "telegram_chat_id", "TEXT UNIQUE")
     ensure_column_exists(cur, "users", "subscription_end", "TEXT")
     ensure_column_exists(cur, "users", "is_active", "INTEGER DEFAULT 1")
-
     ensure_column_exists(cur, "users", "status", "TEXT DEFAULT 'pending'")
     ensure_column_exists(cur, "users", "channel_status", "TEXT DEFAULT 'pending'")
-
     ensure_column_exists(cur, "users", "invite_sent", "INTEGER DEFAULT 0")
     ensure_column_exists(cur, "users", "invite_link", "TEXT")
-
     ensure_column_exists(cur, "users", "active_session_id", "TEXT")
     ensure_column_exists(cur, "users", "last_login_at", "TEXT")
-
     ensure_column_exists(cur, "users", "registered_ip", "TEXT")
 
-    # Invite codes için güvenlik (ileride kolon eklenirse)
     ensure_column_exists(cur, "invite_codes", "is_used", "INTEGER DEFAULT 0")
     ensure_column_exists(cur, "invite_codes", "used_by", "TEXT")
     ensure_column_exists(cur, "invite_codes", "expires_at", "TEXT")
