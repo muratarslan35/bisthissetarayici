@@ -21,8 +21,8 @@ body{
     background:url('/static/bist-bg.jpg') center center no-repeat fixed;
     background-size:cover;
     font-family:Segoe UI,Arial;
-    position:relative;
     color:#e6e6e6;
+    position:relative;
 }
 
 /* DARK OVERLAY */
@@ -30,7 +30,7 @@ body::before{
     content:"";
     position:fixed;
     inset:0;
-    background:linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.9));
+    background:linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.92));
     z-index:0;
     pointer-events:none;
 }
@@ -38,39 +38,44 @@ body::before{
 /* HEADER */
 .header{
     position:relative;
-    z-index:2;
+    z-index:5;
     background:rgba(15,23,42,.95);
     padding:20px 30px;
     font-size:22px;
     font-weight:800;
-    letter-spacing:1px;
     border-bottom:1px solid #1e293b;
     backdrop-filter:blur(10px);
 }
 
-/* CONTAINER */
+/* MAIN CONTAINER */
 .container{
     position:relative;
-    z-index:2;
+    z-index:5;
     padding:30px;
     max-width:1400px;
     margin:auto;
 }
 
-/* SECTION */
+/* SECTION TITLE */
 .section-title{
     font-size:18px;
     font-weight:700;
     margin:40px 0 15px 0;
 }
 
+/* TABLE WRAPPER */
+.table-wrapper{
+    overflow-x:auto;
+}
+
 /* TABLE */
 .table{
     width:100%;
     border-collapse:collapse;
-    background:rgba(15,23,42,.9);
+    background:rgba(15,23,42,.92);
     border-radius:12px;
     overflow:hidden;
+    min-width:900px;
 }
 
 .table th{
@@ -101,13 +106,13 @@ body::before{
 .badge.used{ background:#7c3aed; color:#fff; }
 .badge.unused{ background:#1e3a8a; color:#93c5fd; }
 
-/* ACTION */
+/* ACTION AREA */
 .action-box{
     display:flex;
     gap:6px;
 }
 
-/* INPUTS */
+/* INPUT */
 input{
     padding:6px;
     border-radius:8px;
@@ -138,6 +143,7 @@ button:hover{
 
 .btn-add{ background:#14532d; color:#22c55e; }
 .btn-sub{ background:#7f1d1d; color:#ef4444; }
+
 .btn-refresh{
     background:#2563eb;
     color:#fff;
@@ -146,6 +152,7 @@ button:hover{
     border-radius:10px;
     font-size:14px;
 }
+
 .btn-generate{ background:#f59e0b; color:#000; }
 .btn-delete{ background:#7f1d1d; color:#fff; }
 
@@ -155,11 +162,10 @@ button:hover{
     word-break:break-all;
 }
 
-/* Responsive */
+/* RESPONSIVE */
 @media(max-width:900px){
-    .table th, .table td{
-        font-size:11px;
-        padding:8px;
+    .container{
+        padding:15px;
     }
 }
 </style>
@@ -176,6 +182,7 @@ button:hover{
 
 <h2 class="section-title">👤 Kullanıcılar</h2>
 
+<div class="table-wrapper">
 <table class="table">
 <thead>
 <tr>
@@ -190,6 +197,7 @@ button:hover{
 </thead>
 <tbody id="userTable"></tbody>
 </table>
+</div>
 
 <h2 class="section-title">🎟️ Davet Kodları</h2>
 
@@ -199,6 +207,7 @@ button:hover{
     <button class="btn-generate" onclick="generateCodes()">Kod Üret</button>
 </div>
 
+<div class="table-wrapper">
 <table class="table">
 <thead>
 <tr>
@@ -211,6 +220,7 @@ button:hover{
 </thead>
 <tbody id="codeTable"></tbody>
 </table>
+</div>
 
 </div>
 
@@ -253,8 +263,8 @@ async function loadUsers(){
 
     users.forEach(u=>{
         const days=daysLeft(u.subscription_end);
-        const tr=document.createElement("tr");
 
+        const tr=document.createElement("tr");
         tr.innerHTML=`
         <td>${u.id}</td>
         <td>${u.username}</td>
