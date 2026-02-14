@@ -30,7 +30,7 @@ body::before{
     content:"";
     position:fixed;
     inset:0;
-    background:linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.92));
+    background:linear-gradient(180deg,rgba(0,0,0,.88),rgba(0,0,0,.95));
     z-index:0;
     pointer-events:none;
 }
@@ -44,7 +44,7 @@ body::before{
     border-radius:22px;
     background:linear-gradient(90deg,#00ff88,#ff0000,#00ff88);
     background-size:300% 300%;
-    animation:borderMove 5s linear infinite;
+    animation:borderMove 6s linear infinite;
     z-index:2;
 }
 
@@ -56,7 +56,7 @@ body::before{
 
 /* PANEL */
 .panel{
-    background:rgba(15,23,42,.96);
+    background:rgba(15,23,42,.97);
     border-radius:18px;
     backdrop-filter:blur(15px);
     padding-bottom:40px;
@@ -82,19 +82,18 @@ body::before{
     margin:40px 0 15px 0;
 }
 
-/* TABLE WRAPPER */
+/* TABLE */
 .table-wrapper{
     overflow-x:auto;
 }
 
-/* TABLE */
 .table{
     width:100%;
     border-collapse:collapse;
     background:rgba(15,23,42,.92);
     border-radius:12px;
     overflow:hidden;
-    min-width:900px;
+    min-width:1100px;
 }
 
 .table th{
@@ -122,14 +121,6 @@ body::before{
 .badge.active{ background:#14532d; color:#22c55e; }
 .badge.expired{ background:#7f1d1d; color:#ef4444; }
 .badge.warning{ background:#78350f; color:#fbbf24; }
-.badge.used{ background:#7c3aed; color:#fff; }
-.badge.unused{ background:#1e3a8a; color:#93c5fd; }
-
-/* ACTION AREA */
-.action-box{
-    display:flex;
-    gap:6px;
-}
 
 /* INPUT */
 input{
@@ -141,9 +132,8 @@ input{
     outline:none;
 }
 
-input[type=number]{
-    width:70px;
-}
+input[type=number]{ width:70px; }
+input[type=text]{ width:120px; }
 
 /* BUTTONS */
 button{
@@ -156,12 +146,12 @@ button{
     transition:.2s;
 }
 
-button:hover{
-    transform:translateY(-1px);
-}
+button:hover{ transform:translateY(-1px); }
 
 .btn-add{ background:#14532d; color:#22c55e; }
 .btn-sub{ background:#7f1d1d; color:#ef4444; }
+.btn-delete{ background:#7f1d1d; color:#fff; }
+.btn-reset{ background:#1e3a8a; color:#93c5fd; }
 
 .btn-refresh{
     background:#2563eb;
@@ -173,7 +163,6 @@ button:hover{
 }
 
 .btn-generate{ background:#f59e0b; color:#000; }
-.btn-delete{ background:#7f1d1d; color:#fff; }
 
 .chatid{
     font-size:11px;
@@ -181,11 +170,8 @@ button:hover{
     word-break:break-all;
 }
 
-/* RESPONSIVE */
 @media(max-width:900px){
-    .container{
-        padding:15px;
-    }
+    .container{ padding:15px; }
 }
 </style>
 </head>
@@ -195,7 +181,7 @@ button:hover{
 <div class="panel">
 
 <div class="header">
-    ⚙️ BIST TRADE ADMIN PANEL
+⚙️ BIST TRADE ADMIN PANEL
 </div>
 
 <div class="container">
@@ -208,13 +194,15 @@ button:hover{
 <table class="table">
 <thead>
 <tr>
-    <th>ID</th>
-    <th>Kullanıcı</th>
-    <th>Chat ID</th>
-    <th>Abonelik Bitiş</th>
-    <th>Kalan Gün</th>
-    <th>Durum</th>
-    <th>İşlem</th>
+<th>ID</th>
+<th>Kullanıcı</th>
+<th>Chat ID</th>
+<th>Durum</th>
+<th>Abonelik Bitiş</th>
+<th>Kalan Gün</th>
+<th>Gün Ekle/Çıkar</th>
+<th>Şifre Reset</th>
+<th>Sil</th>
 </tr>
 </thead>
 <tbody id="userTable"></tbody>
@@ -224,20 +212,20 @@ button:hover{
 <h2 class="section-title">🎟️ Davet Kodları</h2>
 
 <div style="margin-bottom:15px;">
-    <input type="number" id="codeCount" value="5">
-    <input type="number" id="expireDays" placeholder="Geçerlilik Gün (opsiyonel)">
-    <button class="btn-generate" onclick="generateCodes()">Kod Üret</button>
+<input type="number" id="codeCount" value="5">
+<input type="number" id="expireDays" placeholder="Geçerlilik Gün (opsiyonel)">
+<button class="btn-generate" onclick="generateCodes()">Kod Üret</button>
 </div>
 
 <div class="table-wrapper">
 <table class="table">
 <thead>
 <tr>
-    <th>Kod</th>
-    <th>Kullanıldı mı</th>
-    <th>Kullanan</th>
-    <th>Oluşturulma</th>
-    <th>Sil</th>
+<th>Kod</th>
+<th>Kullanıldı mı</th>
+<th>Kullanan</th>
+<th>Oluşturulma</th>
+<th>Sil</th>
 </tr>
 </thead>
 <tbody id="codeTable"></tbody>
@@ -251,106 +239,135 @@ button:hover{
 <script>
 
 function formatDate(dateStr){
-    if(!dateStr) return "-";
-    const d=new Date(dateStr);
-    return d.toLocaleString("tr-TR");
+if(!dateStr) return "-";
+const d=new Date(dateStr);
+return d.toLocaleString("tr-TR");
 }
 
 function daysLeft(dateStr){
-    if(!dateStr) return 0;
-    const now=new Date();
-    const end=new Date(dateStr);
-    return Math.ceil((end-now)/(1000*60*60*24));
+if(!dateStr) return 0;
+const now=new Date();
+const end=new Date(dateStr);
+return Math.ceil((end-now)/(1000*60*60*24));
 }
 
 function statusBadge(days){
-    if(days<=0) return `<span class="badge expired">SÜRE BİTTİ</span>`;
-    if(days<=1) return `<span class="badge warning">1 GÜN</span>`;
-    return `<span class="badge active">AKTİF</span>`;
+if(days<=0) return `<span class="badge expired">SÜRE BİTTİ</span>`;
+if(days<=1) return `<span class="badge warning">1 GÜN</span>`;
+return `<span class="badge active">AKTİF</span>`;
 }
 
 async function updateSub(userId, days){
-    await fetch("/admin/update-subscription",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ user_id:userId, days:days })
-    });
-    loadUsers();
+await fetch("/admin/update-subscription",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({ user_id:userId, days:days })
+});
+loadUsers();
+}
+
+async function deleteUser(userId){
+if(!confirm("Kullanıcı silinsin mi?")) return;
+
+await fetch("/admin/delete-user",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({ user_id:userId })
+});
+loadUsers();
+}
+
+async function resetPassword(userId){
+const newPass=prompt("Yeni şifre giriniz:");
+if(!newPass) return;
+
+await fetch("/admin/reset-password",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({ user_id:userId, new_password:newPass })
+});
+
+alert("Şifre güncellendi");
 }
 
 async function loadUsers(){
-    const res=await fetch("/admin/users");
-    const users=await res.json();
-    const tbody=document.getElementById("userTable");
-    tbody.innerHTML="";
+const res=await fetch("/admin/users");
+const users=await res.json();
+const tbody=document.getElementById("userTable");
+tbody.innerHTML="";
 
-    users.forEach(u=>{
-        const days=daysLeft(u.subscription_end);
-        const tr=document.createElement("tr");
+users.forEach(u=>{
+const days=daysLeft(u.subscription_end);
+const tr=document.createElement("tr");
 
-        tr.innerHTML=`
-        <td>${u.id}</td>
-        <td>${u.username}</td>
-        <td class="chatid">${u.telegram_chat_id||"-"}</td>
-        <td>${formatDate(u.subscription_end)}</td>
-        <td>${days>0?days:0}</td>
-        <td>${statusBadge(days)}</td>
-        <td>
-            <div class="action-box">
-                <input type="number" id="days-${u.id}" value="7">
-                <button class="btn-add" onclick="updateSub(${u.id}, parseInt(document.getElementById('days-${u.id}').value))">+ Gün</button>
-                <button class="btn-sub" onclick="updateSub(${u.id}, -parseInt(document.getElementById('days-${u.id}').value))">- Gün</button>
-            </div>
-        </td>
-        `;
-        tbody.appendChild(tr);
-    });
+tr.innerHTML=`
+<td>${u.id}</td>
+<td>${u.username}</td>
+<td class="chatid">${u.telegram_chat_id||"-"}</td>
+<td>${u.status}</td>
+<td>${formatDate(u.subscription_end)}</td>
+<td>${days>0?days:0}</td>
+<td>
+<input type="number" id="days-${u.id}" value="7">
+<button class="btn-add" onclick="updateSub(${u.id}, parseInt(document.getElementById('days-${u.id}').value))">+</button>
+<button class="btn-sub" onclick="updateSub(${u.id}, -parseInt(document.getElementById('days-${u.id}').value))">-</button>
+</td>
+<td>
+<button class="btn-reset" onclick="resetPassword(${u.id})">Reset</button>
+</td>
+<td>
+<button class="btn-delete" onclick="deleteUser(${u.id})">Sil</button>
+</td>
+`;
 
-    loadCodes();
+tbody.appendChild(tr);
+});
+
+loadCodes();
 }
 
 async function generateCodes(){
-    const count=document.getElementById("codeCount").value;
-    const expireDays=document.getElementById("expireDays").value;
+const count=document.getElementById("codeCount").value;
+const expireDays=document.getElementById("expireDays").value;
 
-    await fetch("/admin/generate-codes",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            count:count,
-            expire_days:expireDays
-        })
-    });
+await fetch("/admin/generate-codes",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+count:count,
+expire_days:expireDays
+})
+});
 
-    loadCodes();
+loadCodes();
 }
 
 async function loadCodes(){
-    const res=await fetch("/admin/invite-codes");
-    const codes=await res.json();
-    const tbody=document.getElementById("codeTable");
-    tbody.innerHTML="";
+const res=await fetch("/admin/invite-codes");
+const codes=await res.json();
+const tbody=document.getElementById("codeTable");
+tbody.innerHTML="";
 
-    codes.forEach(c=>{
-        const tr=document.createElement("tr");
-        tr.innerHTML=`
-        <td>${c.code}</td>
-        <td>${c.is_used?'<span class="badge used">KULLANILDI</span>':'<span class="badge unused">AKTİF</span>'}</td>
-        <td>${c.used_by||"-"}</td>
-        <td>${formatDate(c.created_at)}</td>
-        <td><button class="btn-delete" onclick="deleteCode('${c.code}')">Sil</button></td>
-        `;
-        tbody.appendChild(tr);
-    });
+codes.forEach(c=>{
+const tr=document.createElement("tr");
+tr.innerHTML=`
+<td>${c.code}</td>
+<td>${c.is_used?"KULLANILDI":"AKTİF"}</td>
+<td>${c.used_by||"-"}</td>
+<td>${formatDate(c.created_at)}</td>
+<td><button class="btn-delete" onclick="deleteCode('${c.code}')">Sil</button></td>
+`;
+tbody.appendChild(tr);
+});
 }
 
 async function deleteCode(code){
-    await fetch("/admin/delete-code",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ code:code })
-    });
-    loadCodes();
+await fetch("/admin/delete-code",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({ code:code })
+});
+loadCodes();
 }
 
 loadUsers();
