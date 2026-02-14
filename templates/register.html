@@ -37,14 +37,34 @@ body::before{
     pointer-events:none;
 }
 
-/* ANIMATED BORDER WRAPPER */
-.border-wrap{
+/* WRAPPER */
+.panel-wrapper{
     position:relative;
-    padding:3px;
+    width:360px;
+    max-width:90%;
+    z-index:2;
+}
+
+/* ANIMATED BORDER */
+.panel-wrapper::before{
+    content:"";
+    position:absolute;
+    inset:-3px;
     border-radius:22px;
     background:linear-gradient(90deg,#00ff88,#ff0000,#00ff88);
     background-size:300% 300%;
     animation:borderMove 4s linear infinite;
+    z-index:1;
+}
+
+/* PANEL */
+.register-box{
+    position:relative;
+    padding:40px 30px;
+    background:rgba(15,23,42,.95);
+    backdrop-filter:blur(15px);
+    border-radius:18px;
+    box-shadow:0 0 40px rgba(0,0,0,.8);
     z-index:2;
 }
 
@@ -52,16 +72,6 @@ body::before{
     0%{background-position:0% 50%;}
     50%{background-position:100% 50%;}
     100%{background-position:0% 50%;}
-}
-
-/* PANEL */
-.register-box{
-    width:360px;
-    max-width:90%;
-    padding:40px 30px;
-    background:rgba(15,23,42,.95);
-    backdrop-filter:blur(15px);
-    border-radius:18px;
 }
 
 /* TITLE */
@@ -86,12 +96,14 @@ h1{
     color:#fff;
     font-size:14px;
     outline:none;
+    transition:.3s;
 }
 
 .input-group input:focus{
     box-shadow:0 0 10px #22c55e;
 }
 
+/* NOTE */
 .invite-note{
     font-size:12px;
     color:#94a3b8;
@@ -133,7 +145,7 @@ button:hover{
 
 <body>
 
-<div class="border-wrap">
+<div class="panel-wrapper">
 <form class="register-box" method="POST">
     <h1>BIST TRADE PANELİ</h1>
 
