@@ -1,5 +1,4 @@
 import os
-import asyncio
 import sqlite3
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -79,7 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ======================================================
-# INVITE LINK GENERATION
+# INVITE JOB
 # ======================================================
 
 async def send_invite(context: ContextTypes.DEFAULT_TYPE):
@@ -118,7 +117,6 @@ async def send_invite(context: ContextTypes.DEFAULT_TYPE):
                 chat_id=user["telegram_chat_id"],
                 text=(
                     "🎉 <b>Ödeme Onaylandı</b>\n\n"
-                    "Özel kanal giriş linkiniz:\n"
                     f"{link.invite_link}"
                 ),
                 parse_mode=ParseMode.HTML
@@ -140,7 +138,7 @@ async def send_invite(context: ContextTypes.DEFAULT_TYPE):
 
 
 # ======================================================
-# SUBSCRIPTION CHECK
+# SUB CHECK JOB
 # ======================================================
 
 async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
@@ -195,16 +193,16 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
                 conn.commit()
 
         except Exception as e:
-            print("Subscription check error:", e)
+            print("Subscription error:", e)
 
     conn.close()
 
 
 # ======================================================
-# MAIN
+# MAIN (NO ASYNCIO.RUN)
 # ======================================================
 
-async def main():
+def main():
 
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN bulunamadı.")
@@ -215,28 +213,24 @@ async def main():
         .build()
     )
 
-    # START handler
     application.add_handler(CommandHandler("start", start))
 
-    # 🔥 JOB QUEUE GARANTİ
+    # JobQueue garanti
     if application.job_queue is None:
         raise RuntimeError(
             "JobQueue aktif değil. Şunu yükle:\n"
             "pip install python-telegram-bot[job-queue]"
         )
 
-    # Scheduled tasks
     application.job_queue.run_repeating(send_invite, interval=15, first=10)
     application.job_queue.run_repeating(subscription_checker, interval=3600, first=20)
 
     print("🤖 Bot aktif...")
 
-    await application.run_polling(close_loop=False)
+    application.run_polling()
 
 
-# ======================================================
-# ENTRY
 # ======================================================
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
