@@ -42,11 +42,15 @@ def init_db():
         is_active INTEGER DEFAULT 1,
 
         status TEXT DEFAULT 'pending',
+        channel_status TEXT DEFAULT 'pending',
+
         invite_sent INTEGER DEFAULT 0,
         invite_link TEXT,
 
         active_session_id TEXT,
         last_login_at TEXT,
+
+        registered_ip TEXT,
 
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
@@ -103,11 +107,17 @@ def init_db():
     ensure_column_exists(cur, "users", "telegram_chat_id", "TEXT UNIQUE")
     ensure_column_exists(cur, "users", "subscription_end", "TEXT")
     ensure_column_exists(cur, "users", "is_active", "INTEGER DEFAULT 1")
+
     ensure_column_exists(cur, "users", "status", "TEXT DEFAULT 'pending'")
+    ensure_column_exists(cur, "users", "channel_status", "TEXT DEFAULT 'pending'")
+
     ensure_column_exists(cur, "users", "invite_sent", "INTEGER DEFAULT 0")
     ensure_column_exists(cur, "users", "invite_link", "TEXT")
+
     ensure_column_exists(cur, "users", "active_session_id", "TEXT")
     ensure_column_exists(cur, "users", "last_login_at", "TEXT")
+
+    ensure_column_exists(cur, "users", "registered_ip", "TEXT")
 
     conn.commit()
     conn.close()
