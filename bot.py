@@ -1,15 +1,17 @@
 import os
+import asyncio
 import sqlite3
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-
 from telegram import Update
-from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
+    MessageHandler,
     ContextTypes,
+    filters,
 )
+from telegram.constants import ParseMode
 
 # ======================================================
 # ENV
@@ -31,9 +33,8 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-
 # ======================================================
-# START COMMAND
+# /START
 # ======================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -42,43 +43,77 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_connection()
     cur = conn.cursor()
 
+    # Bu telegram zaten bağlı mı?
     cur.execute("SELECT * FROM users WHERE telegram_chat_id=?", (chat_id,))
     existing = cur.fetchone()
 
     if existing:
         await update.message.reply_text(
-            "ℹ️ Sistem zaten kayıtlı.\nÖdeme onayı bekleniyor olabilir."
+            "✅ Telegram hesabınız zaten sisteme bağlı."
         )
         conn.close()
         return
 
-    cur.execute("""
-        INSERT INTO users (
-            username,
-            password_hash,
-            telegram_chat_id,
-            is_active,
-            status,
-            invite_sent
+    conn.close()
+
+    context.user_data["awaiting_username"] = True
+
+    await update.message.reply_text(
+        "👤 Lütfen dashboard kullanıcı adınızı yazınız:"
+    )
+
+# ======================================================
+# USERNAME BAĞLAMA
+# ======================================================
+
+async def link_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get("awaiting_username"):
+        return
+
+    username = update.message.text.strip()
+    chat_id = str(update.effective_chat.id)
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Username var mı?
+    cur.execute("SELECT * FROM users WHERE username=?", (username,))
+    user = cur.fetchone()
+
+    if not user:
+        await update.message.reply_text(
+            "❌ Böyle bir dashboard kullanıcı adı bulunamadı."
         )
-        VALUES (?, ?, ?, 0, 'pending', 0)
-    """, (
-        f"tg_{chat_id}",
-        "telegram_only",
-        chat_id
-    ))
+        conn.close()
+        return
+
+    # Başka telegrama bağlı mı?
+    if user["telegram_chat_id"]:
+        await update.message.reply_text(
+            "⚠️ Bu hesap zaten başka bir Telegram hesabına bağlı."
+        )
+        conn.close()
+        return
+
+    # Bağlama işlemi
+    cur.execute("""
+        UPDATE users
+        SET telegram_chat_id=?
+        WHERE username=?
+    """, (chat_id, username))
 
     conn.commit()
     conn.close()
 
+    context.user_data["awaiting_username"] = False
+
     await update.message.reply_text(
-        "✅ Kayıt alındı.\n\n"
-        "💳 Ödemeniz onaylandığında özel kanal davet linkiniz gönderilecektir."
+        "✅ Telegram hesabınız başarıyla bağlandı.\n\n"
+        "Ödeme onaylandığında kanal davetiniz gönderilecektir."
     )
 
-
 # ======================================================
-# INVITE JOB
+# INVITE GÖNDERME
 # ======================================================
 
 async def send_invite(context: ContextTypes.DEFAULT_TYPE):
@@ -107,16 +142,19 @@ async def send_invite(context: ContextTypes.DEFAULT_TYPE):
             if expire_dt < datetime.now():
                 continue
 
+            expire_timestamp = int(expire_dt.timestamp())
+
             link = await context.bot.create_chat_invite_link(
                 chat_id=CHANNEL_ID,
                 member_limit=1,
-                expire_date=expire_dt
+                expire_date=expire_timestamp
             )
 
             await context.bot.send_message(
                 chat_id=user["telegram_chat_id"],
                 text=(
                     "🎉 <b>Ödeme Onaylandı</b>\n\n"
+                    "Özel kanal giriş linkiniz:\n"
                     f"{link.invite_link}"
                 ),
                 parse_mode=ParseMode.HTML
@@ -136,9 +174,8 @@ async def send_invite(context: ContextTypes.DEFAULT_TYPE):
 
     conn.close()
 
-
 # ======================================================
-# SUB CHECK JOB
+# ABONELİK KONTROL
 # ======================================================
 
 async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
@@ -146,10 +183,9 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
     cur = conn.cursor()
 
     now = datetime.now()
-    tomorrow = (now + timedelta(days=1)).date()
 
     cur.execute("""
-        SELECT id, telegram_chat_id, subscription_end, status
+        SELECT id, telegram_chat_id, subscription_end
         FROM users
         WHERE is_active=1
         AND telegram_chat_id IS NOT NULL
@@ -165,21 +201,15 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
                 "%Y-%m-%d %H:%M:%S"
             )
 
-            if user["status"] == "approved" and end.date() == tomorrow:
-                await context.bot.send_message(
-                    chat_id=user["telegram_chat_id"],
-                    text="⚠️ Yarın aboneliğiniz sona eriyor."
-                )
-
-            if end < now and user["status"] == "approved":
+            if end < now:
                 await context.bot.ban_chat_member(
                     chat_id=CHANNEL_ID,
-                    user_id=int(user["telegram_chat_id"])
+                    user_id=user["telegram_chat_id"]
                 )
 
                 await context.bot.unban_chat_member(
                     chat_id=CHANNEL_ID,
-                    user_id=int(user["telegram_chat_id"])
+                    user_id=user["telegram_chat_id"]
                 )
 
                 cur.execute("""
@@ -193,44 +223,29 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
                 conn.commit()
 
         except Exception as e:
-            print("Subscription error:", e)
+            print("Subscription check error:", e)
 
     conn.close()
 
-
 # ======================================================
-# MAIN (NO ASYNCIO.RUN)
+# MAIN
 # ======================================================
 
-def main():
-
-    if not BOT_TOKEN:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN bulunamadı.")
-
-    application = (
+async def main():
+    app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
         .build()
     )
 
-    application.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, link_username))
 
-    # JobQueue garanti
-    if application.job_queue is None:
-        raise RuntimeError(
-            "JobQueue aktif değil. Şunu yükle:\n"
-            "pip install python-telegram-bot[job-queue]"
-        )
-
-    application.job_queue.run_repeating(send_invite, interval=15, first=10)
-    application.job_queue.run_repeating(subscription_checker, interval=3600, first=20)
+    app.job_queue.run_repeating(send_invite, interval=15, first=10)
+    app.job_queue.run_repeating(subscription_checker, interval=3600, first=20)
 
     print("🤖 Bot aktif...")
-
-    application.run_polling()
-
-
-# ======================================================
+    await app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
