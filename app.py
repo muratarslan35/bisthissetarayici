@@ -36,7 +36,6 @@ from dashboard import (
 # ENV
 # ======================================================
 load_dotenv()
-
 ADMIN_PANEL_PATH = os.getenv("ADMIN_PANEL_PATH", "admin-hidden")
 
 # ======================================================
@@ -98,8 +97,8 @@ def send_user_telegram(chat_id, text):
             },
             timeout=5
         )
-    except Exception:
-        pass
+    except Exception as e:
+        print("Telegram send error:", e)
 
 def broadcast_signal(text):
     conn = get_connection()
@@ -237,6 +236,7 @@ def security():
     if not user or not user["is_active"] or not subscription_valid(user):
         session.clear()
         return redirect("/login")
+
 # ======================================================
 # ADMIN DECORATOR
 # ======================================================
@@ -250,7 +250,7 @@ def admin_required(f):
     return wrapper
 
 # ======================================================
-# AUTH
+# AUTH ROUTES
 # ======================================================
 
 @app.route("/login", methods=["GET", "POST"])
@@ -309,250 +309,97 @@ def logout():
     return redirect("/login")
 
 # ======================================================
-# ADMIN PANEL (HIDDEN URL)
+# ADMIN PANEL ROUTE
 # ======================================================
 
 @app.route(f"/{ADMIN_PANEL_PATH}")
 def admin_panel():
     return render_template("admin.html")
-@app.route("/admin/reset-password", methods=["POST"])
-@admin_required
-def reset_password():
-    data = request.json
-    user_id = data.get("user_id")
-    new_password = data.get("new_password")
 
-    if not new_password or len(new_password) < 4:
-        return {"error": "Invalid password"}, 400
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(
-        "UPDATE users SET password_hash=? WHERE id=?",
-        (generate_password_hash(new_password), user_id)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return {"status": "password_updated"}
-
-@app.route("/admin/delete-user", methods=["POST"])
-@admin_required
-def delete_user():
-    data = request.json
-    user_id = data.get("user_id")
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM users WHERE id=?", (user_id,))
-    conn.commit()
-    conn.close()
-
-    return {"status": "deleted"}
 # ======================================================
 # ADMIN API ENDPOINTS
 # ======================================================
 
 @app.route("/admin/users")
+@admin_required
 def admin_users():
-    if session.get("user") != "admin":
-        return "Unauthorized", 403
-
     conn = get_connection()
     cur = conn.cursor()
-
     cur.execute("""
         SELECT id, username, telegram_chat_id,
                subscription_end, status, is_active
         FROM users
         ORDER BY id DESC
     """)
-
     users = cur.fetchall()
     conn.close()
 
-    result = []
-
-    for u in users:
-        result.append({
-            "id": u["id"],
-            "username": u["username"],
-            "telegram_chat_id": u["telegram_chat_id"],
-            "subscription_end": u["subscription_end"],
-            "status": u["status"],
-            "is_active": u["is_active"]
-        })
-
-    return jsonify(result)
-
-
-@app.route("/admin/update-subscription", methods=["POST"])
-def admin_update_subscription():
-    if session.get("user") != "admin":
-        return "Unauthorized", 403
-
-    data = request.json
-    user_id = data.get("user_id")
-    days = int(data.get("days", 0))
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("SELECT subscription_end FROM users WHERE id=?", (user_id,))
-    row = cur.fetchone()
-
-    now = datetime.now()
-
-    if row and row["subscription_end"]:
-        current_end = datetime.strptime(
-            row["subscription_end"], "%Y-%m-%d %H:%M:%S"
-        )
-        if current_end > now:
-            new_end = current_end + timedelta(days=days)
-        else:
-            new_end = now + timedelta(days=days)
-    else:
-        new_end = now + timedelta(days=days)
-
-    cur.execute("""
-        UPDATE users
-        SET subscription_end=?,
-            status='approved',
-            is_active=1
-        WHERE id=?
-    """, (
-        new_end.strftime("%Y-%m-%d %H:%M:%S"),
-        user_id
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return {"status": "ok"}
-
-
-@app.route("/admin/generate-codes", methods=["POST"])
-def admin_generate_codes():
-    if session.get("user") != "admin":
-        return "Unauthorized", 403
-
-    data = request.json
-    count = int(data.get("count", 1))
-    expire_days = data.get("expire_days")
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    created_codes = []
-
-    for _ in range(count):
-        code = str(uuid4())[:8]
-
-        expires_at = None
-        if expire_days:
-            expire_dt = datetime.now() + timedelta(days=int(expire_days))
-            expires_at = expire_dt.strftime("%Y-%m-%d %H:%M:%S")
-
-        cur.execute("""
-            INSERT INTO invite_codes
-            (code, is_used, created_at, expires_at)
-            VALUES (?, 0, ?, ?)
-        """, (
-            code,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            expires_at
-        ))
-
-        created_codes.append(code)
-
-    conn.commit()
-    conn.close()
-
-    return {"codes": created_codes}
-
-
-@app.route("/admin/invite-codes")
-def admin_invite_codes():
-    if session.get("user") != "admin":
-        return "Unauthorized", 403
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT code, is_used, used_by, created_at
-        FROM invite_codes
-        ORDER BY created_at DESC
-    """)
-
-    codes = cur.fetchall()
-    conn.close()
-
-    result = []
-
-    for c in codes:
-        result.append({
-            "code": c["code"],
-            "is_used": c["is_used"],
-            "used_by": c["used_by"],
-            "created_at": c["created_at"]
-        })
-
-    return jsonify(result)
-
-
-@app.route("/admin/delete-code", methods=["POST"])
-def admin_delete_code():
-    if session.get("user") != "admin":
-        return "Unauthorized", 403
-
-    data = request.json
-    code = data.get("code")
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM invite_codes WHERE code=?", (code,))
-    conn.commit()
-    conn.close()
-
-    return {"status": "deleted"}
+    return jsonify([
+        dict(u) for u in users
+    ])
 
 # ======================================================
-# ROUTES
-# ======================================================
-
-@app.route("/")
-def index():
-    return render_template("dashboard.html")
-
-@app.route("/health")
-def health():
-    return jsonify({
-        "status": "ok",
-        "time": now_tr().isoformat(),
-        "market_open": is_market_open()
-    })
-
-# ======================================================
-# SCANNER LOOP
+# FULL PRODUCTION SCANNER
 # ======================================================
 
 def scanner_loop():
     send_startup_message()
 
+    last_daily_report = None
+    last_weekly_report = None
+    last_close_snapshot_date = None
+
     while True:
+        now = now_tr()
+        print(f"\n⏱ Döngü: {now.strftime('%H:%M:%S')}", flush=True)
+
+        reset_daily_success_if_needed()
+        reset_weekly_success_if_needed()
+
         try:
-            if is_market_open():
-                market_data = fetch_bist_data()
+            if not is_market_open(now):
+                print("⏹ Market kapalı", flush=True)
 
-                for item in market_data:
-                    symbol = item.get("symbol")
-                    price = item.get("current_price")
+                if now.time() >= dtime(18, 10) and last_close_snapshot_date != now.date():
+                    try:
+                        print("📌 Snapshot alınıyor...", flush=True)
+                        market_data = fetch_bist_data()
+                        for item in market_data:
+                            update_success_targets(
+                                item["symbol"],
+                                item["current_price"]
+                            )
+                        last_close_snapshot_date = now.date()
+                        print("✅ Snapshot tamamlandı", flush=True)
+                    except Exception as e:
+                        print("Snapshot error:", e)
 
+                if last_daily_report != now.date() and now.time() > BIST_CLOSE:
+                    report = build_daily_success_report()
+                    if report:
+                        broadcast_signal(report)
+                    last_daily_report = now.date()
+
+                if now.weekday() == 4 and now.time() >= dtime(18, 10):
+                    week_id = now.strftime("%Y-%W")
+                    if last_weekly_report != week_id:
+                        report = build_weekly_success_report()
+                        if report:
+                            broadcast_signal(report)
+                        last_weekly_report = week_id
+
+                time.sleep(30)
+                continue
+
+            print("✅ MARKET AÇIK → TARAMA", flush=True)
+
+            market_data = fetch_bist_data()
+
+            for item in market_data:
+                symbol = item.get("symbol")
+                price = item.get("current_price")
+
+                try:
                     signals = process_symbol_signals(item)
                     success_hits = update_success_targets(symbol, price)
 
@@ -564,8 +411,11 @@ def scanner_loop():
                         push_signal(s)
                         broadcast_signal(format_signal_message(s))
 
+                except Exception as e:
+                    print(f"⚠ {symbol} hata:", e)
+
         except Exception as e:
-            print("Scanner error:", e)
+            print("🔥 Scanner genel hata:", e)
 
         time.sleep(SCAN_INTERVAL)
 
