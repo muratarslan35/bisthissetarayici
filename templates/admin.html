@@ -35,25 +35,44 @@ body::before{
     pointer-events:none;
 }
 
+/* ANIMATED BORDER WRAPPER */
+.border-wrap{
+    position:relative;
+    margin:40px auto;
+    max-width:1500px;
+    padding:3px;
+    border-radius:22px;
+    background:linear-gradient(90deg,#00ff88,#ff0000,#00ff88);
+    background-size:300% 300%;
+    animation:borderMove 5s linear infinite;
+    z-index:2;
+}
+
+@keyframes borderMove{
+    0%{background-position:0% 50%;}
+    50%{background-position:100% 50%;}
+    100%{background-position:0% 50%;}
+}
+
+/* PANEL */
+.panel{
+    background:rgba(15,23,42,.96);
+    border-radius:18px;
+    backdrop-filter:blur(15px);
+    padding-bottom:40px;
+}
+
 /* HEADER */
 .header{
-    position:relative;
-    z-index:5;
-    background:rgba(15,23,42,.95);
     padding:20px 30px;
     font-size:22px;
     font-weight:800;
     border-bottom:1px solid #1e293b;
-    backdrop-filter:blur(10px);
 }
 
-/* MAIN CONTAINER */
+/* CONTAINER */
 .container{
-    position:relative;
-    z-index:5;
     padding:30px;
-    max-width:1400px;
-    margin:auto;
 }
 
 /* SECTION TITLE */
@@ -172,6 +191,9 @@ button:hover{
 </head>
 <body>
 
+<div class="border-wrap">
+<div class="panel">
+
 <div class="header">
     ⚙️ BIST TRADE ADMIN PANEL
 </div>
@@ -223,6 +245,8 @@ button:hover{
 </div>
 
 </div>
+</div>
+</div>
 
 <script>
 
@@ -257,14 +281,13 @@ async function updateSub(userId, days){
 async function loadUsers(){
     const res=await fetch("/admin/users");
     const users=await res.json();
-
     const tbody=document.getElementById("userTable");
     tbody.innerHTML="";
 
     users.forEach(u=>{
         const days=daysLeft(u.subscription_end);
-
         const tr=document.createElement("tr");
+
         tr.innerHTML=`
         <td>${u.id}</td>
         <td>${u.username}</td>
@@ -305,7 +328,6 @@ async function generateCodes(){
 async function loadCodes(){
     const res=await fetch("/admin/invite-codes");
     const codes=await res.json();
-
     const tbody=document.getElementById("codeTable");
     tbody.innerHTML="";
 
