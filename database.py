@@ -57,6 +57,24 @@ def init_db():
     """)
 
     # ==================================================
+    # INVITE CODES TABLE (YENİ EKLENDİ)
+    # ==================================================
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS invite_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        code TEXT UNIQUE NOT NULL,
+
+        is_used INTEGER DEFAULT 0,
+        used_by TEXT,
+
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT
+    )
+    """)
+
+    # ==================================================
     # LOGIN LOGS
     # ==================================================
 
@@ -71,7 +89,7 @@ def init_db():
     """)
 
     # ==================================================
-    # RATE LIMIT TABLE (Future Use)
+    # RATE LIMIT TABLE
     # ==================================================
 
     cur.execute("""
@@ -84,7 +102,7 @@ def init_db():
     """)
 
     # ==================================================
-    # SIGNAL LOGS (Optional Analytics)
+    # SIGNAL LOGS
     # ==================================================
 
     cur.execute("""
@@ -118,6 +136,11 @@ def init_db():
     ensure_column_exists(cur, "users", "last_login_at", "TEXT")
 
     ensure_column_exists(cur, "users", "registered_ip", "TEXT")
+
+    # Invite codes için güvenlik (ileride kolon eklenirse)
+    ensure_column_exists(cur, "invite_codes", "is_used", "INTEGER DEFAULT 0")
+    ensure_column_exists(cur, "invite_codes", "used_by", "TEXT")
+    ensure_column_exists(cur, "invite_codes", "expires_at", "TEXT")
 
     conn.commit()
     conn.close()
