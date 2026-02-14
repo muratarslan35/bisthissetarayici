@@ -98,8 +98,9 @@ def send_user_telegram(chat_id, text):
         )
     except:
         pass
+
 # ======================================================
-# INVITE CODE CONTROL (YENİ EKLENDİ)
+# INVITE CODE CONTROL
 # ======================================================
 
 def validate_invite_code(code):
@@ -152,48 +153,6 @@ def mark_invite_code_used(code, username):
 # ======================================================
 # TELEGRAM CHANNEL CONTROL
 # ======================================================
-
-def create_invite_link():
-    import requests
-    try:
-        res = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/createChatInviteLink",
-            json={
-                "chat_id": TELEGRAM_CHANNEL_ID,
-                "member_limit": 1
-            },
-            timeout=5
-        )
-        data = res.json()
-        if data.get("ok"):
-            return data["result"]["invite_link"]
-    except:
-        pass
-    return None
-
-
-def kick_from_channel(chat_id):
-    import requests
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/banChatMember",
-            json={
-                "chat_id": TELEGRAM_CHANNEL_ID,
-                "user_id": chat_id
-            },
-            timeout=5
-        )
-        requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/unbanChatMember",
-            json={
-                "chat_id": TELEGRAM_CHANNEL_ID,
-                "user_id": chat_id
-            },
-            timeout=5
-        )
-    except:
-        pass
-
 
 def broadcast_signal(text):
     conn = get_connection()
@@ -256,6 +215,10 @@ def security():
 
     if "user" not in session:
         return redirect("/login")
+
+    # ADMIN MUAF
+    if session.get("user") == "admin":
+        return
 
     if not session_valid(session["user"]):
         session.clear()
@@ -330,7 +293,6 @@ def register():
             )
         )
         conn.commit()
-
         mark_invite_code_used(invite_code, username)
 
     except:
@@ -346,7 +308,7 @@ def logout():
     return redirect("/login")
 
 # ======================================================
-# ADMIN REQUIRED (EKSİKTİ EKLENDİ)
+# ADMIN REQUIRED
 # ======================================================
 
 def admin_required(f):
@@ -357,91 +319,9 @@ def admin_required(f):
             return "Unauthorized", 403
         return f(*args, **kwargs)
     return wrapper
+
 # ======================================================
-# ADMIN INVITE CODE MANAGEMENT
-# ======================================================
-
-import secrets
-import string
-
-def generate_random_code(length=12):
-    chars = string.ascii_uppercase + string.digits
-    return ''.join(secrets.choice(chars) for _ in range(length))
-
-
-@app.route("/admin/generate-codes", methods=["POST"])
-@admin_required
-def admin_generate_codes():
-    data = request.json
-    count = int(data.get("count", 1))
-    expire_days = data.get("expire_days")
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    created_codes = []
-
-    for _ in range(count):
-        code = generate_random_code()
-
-        expires_at = None
-        if expire_days:
-            expires_at = (
-                datetime.now() + timedelta(days=int(expire_days))
-            ).strftime("%Y-%m-%d %H:%M:%S")
-
-        cur.execute("""
-            INSERT INTO invite_codes (
-                code,
-                is_used,
-                expires_at
-            )
-            VALUES (?, 0, ?)
-        """, (code, expires_at))
-
-        created_codes.append(code)
-
-    conn.commit()
-    conn.close()
-
-    return {"status": "created", "codes": created_codes}
-
-
-@app.route("/admin/invite-codes")
-@admin_required
-def admin_list_codes():
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT code, is_used, used_by, created_at
-        FROM invite_codes
-        ORDER BY created_at DESC
-    """)
-
-    codes = cur.fetchall()
-    conn.close()
-
-    return jsonify([dict(c) for c in codes])
-
-
-@app.route("/admin/delete-code", methods=["POST"])
-@admin_required
-def admin_delete_code():
-    data = request.json
-    code = data.get("code")
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM invite_codes WHERE code=?", (code,))
-
-    conn.commit()
-    conn.close()
-
-    return {"status": "deleted"}
-# ======================================================
-# ADMIN APPROVAL (TEKRAR ÖDEME SENARYOSU DAHİL)
+# ADMIN APPROVAL (BOT UYUMLU)
 # ======================================================
 
 @app.route("/admin/approve-user", methods=["POST"])
@@ -450,8 +330,6 @@ def approve_user():
     data = request.json
     user_id = data.get("user_id")
     days = int(data.get("days", 30))
-
-    invite_link = create_invite_link()
 
     conn = get_connection()
     cur = conn.cursor()
@@ -462,109 +340,26 @@ def approve_user():
         UPDATE users
         SET status='approved',
             subscription_end=?,
-            invite_sent=1,
-            invite_link=?,
+            invite_sent=0,
             is_active=1
         WHERE id=?
     """, (
         new_end.strftime("%Y-%m-%d %H:%M:%S"),
-        invite_link,
         user_id
     ))
 
-    cur.execute("SELECT telegram_chat_id FROM users WHERE id=?", (user_id,))
-    user = cur.fetchone()
-
     conn.commit()
     conn.close()
-
-    if user and user["telegram_chat_id"] and invite_link:
-        send_user_telegram(
-            user["telegram_chat_id"],
-            f"✅ Aboneliğiniz aktif edildi.\n\nYeni giriş linkiniz:\n{invite_link}"
-        )
 
     return {"status": "approved"}
-
-# ======================================================
-# EXPIRE KONTROLÜ (YENİ EKLENDİ)
-# ======================================================
-
-def remove_expired_users():
-    conn = get_connection()
-    cur = conn.cursor()
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    cur.execute("""
-        SELECT id, telegram_chat_id
-        FROM users
-        WHERE subscription_end IS NOT NULL
-        AND subscription_end < ?
-        AND status='approved'
-    """, (now,))
-
-    expired = cur.fetchall()
-
-    for u in expired:
-        if u["telegram_chat_id"]:
-            kick_from_channel(u["telegram_chat_id"])
-
-        cur.execute("""
-            UPDATE users
-            SET status='expired',
-                invite_sent=0
-            WHERE id=?
-        """, (u["id"],))
-
-    conn.commit()
-    conn.close()
-
-# ======================================================
-# REMINDER + EXPIRE
-# ======================================================
-
-def check_subscription_reminders():
-    conn = get_connection()
-    cur = conn.cursor()
-    tomorrow = (datetime.now() + timedelta(days=1)).date()
-
-    cur.execute("""
-        SELECT telegram_chat_id, subscription_end
-        FROM users
-        WHERE is_active=1 AND status='approved'
-    """)
-    users = cur.fetchall()
-
-    for u in users:
-        if not u["subscription_end"]:
-            continue
-
-        end_date = datetime.strptime(u["subscription_end"], "%Y-%m-%d %H:%M:%S")
-
-        if end_date.date() == tomorrow:
-            send_user_telegram(
-                u["telegram_chat_id"],
-                "⚠️ Yarın aboneliğiniz sona eriyor."
-            )
-
-    conn.close()
 
 # ======================================================
 # SCANNER LOOP
 # ======================================================
 
 def scanner_loop():
-    last_reminder = None
-
     while True:
         now = now_tr()
-
-        remove_expired_users()
-
-        if last_reminder != now.date():
-            check_subscription_reminders()
-            last_reminder = now.date()
 
         reset_daily_success_if_needed()
         reset_weekly_success_if_needed()
