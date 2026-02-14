@@ -304,6 +304,174 @@ def logout():
 @app.route(f"/{ADMIN_PANEL_PATH}")
 def admin_panel():
     return render_template("admin.html")
+# ======================================================
+# ADMIN API ENDPOINTS
+# ======================================================
+
+@app.route("/admin/users")
+def admin_users():
+    if session.get("user") != "admin":
+        return "Unauthorized", 403
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, username, telegram_chat_id,
+               subscription_end, status, is_active
+        FROM users
+        ORDER BY id DESC
+    """)
+
+    users = cur.fetchall()
+    conn.close()
+
+    result = []
+
+    for u in users:
+        result.append({
+            "id": u["id"],
+            "username": u["username"],
+            "telegram_chat_id": u["telegram_chat_id"],
+            "subscription_end": u["subscription_end"],
+            "status": u["status"],
+            "is_active": u["is_active"]
+        })
+
+    return jsonify(result)
+
+
+@app.route("/admin/update-subscription", methods=["POST"])
+def admin_update_subscription():
+    if session.get("user") != "admin":
+        return "Unauthorized", 403
+
+    data = request.json
+    user_id = data.get("user_id")
+    days = int(data.get("days", 0))
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT subscription_end FROM users WHERE id=?", (user_id,))
+    row = cur.fetchone()
+
+    now = datetime.now()
+
+    if row and row["subscription_end"]:
+        current_end = datetime.strptime(
+            row["subscription_end"], "%Y-%m-%d %H:%M:%S"
+        )
+        if current_end > now:
+            new_end = current_end + timedelta(days=days)
+        else:
+            new_end = now + timedelta(days=days)
+    else:
+        new_end = now + timedelta(days=days)
+
+    cur.execute("""
+        UPDATE users
+        SET subscription_end=?,
+            status='approved',
+            is_active=1
+        WHERE id=?
+    """, (
+        new_end.strftime("%Y-%m-%d %H:%M:%S"),
+        user_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok"}
+
+
+@app.route("/admin/generate-codes", methods=["POST"])
+def admin_generate_codes():
+    if session.get("user") != "admin":
+        return "Unauthorized", 403
+
+    data = request.json
+    count = int(data.get("count", 1))
+    expire_days = data.get("expire_days")
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    created_codes = []
+
+    for _ in range(count):
+        code = str(uuid4())[:8]
+
+        expires_at = None
+        if expire_days:
+            expire_dt = datetime.now() + timedelta(days=int(expire_days))
+            expires_at = expire_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        cur.execute("""
+            INSERT INTO invite_codes
+            (code, is_used, created_at, expires_at)
+            VALUES (?, 0, ?, ?)
+        """, (
+            code,
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            expires_at
+        ))
+
+        created_codes.append(code)
+
+    conn.commit()
+    conn.close()
+
+    return {"codes": created_codes}
+
+
+@app.route("/admin/invite-codes")
+def admin_invite_codes():
+    if session.get("user") != "admin":
+        return "Unauthorized", 403
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT code, is_used, used_by, created_at
+        FROM invite_codes
+        ORDER BY created_at DESC
+    """)
+
+    codes = cur.fetchall()
+    conn.close()
+
+    result = []
+
+    for c in codes:
+        result.append({
+            "code": c["code"],
+            "is_used": c["is_used"],
+            "used_by": c["used_by"],
+            "created_at": c["created_at"]
+        })
+
+    return jsonify(result)
+
+
+@app.route("/admin/delete-code", methods=["POST"])
+def admin_delete_code():
+    if session.get("user") != "admin":
+        return "Unauthorized", 403
+
+    data = request.json
+    code = data.get("code")
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM invite_codes WHERE code=?", (code,))
+    conn.commit()
+    conn.close()
+
+    return {"status": "deleted"}
 
 # ======================================================
 # ROUTES
