@@ -304,6 +304,43 @@ def logout():
 @app.route(f"/{ADMIN_PANEL_PATH}")
 def admin_panel():
     return render_template("admin.html")
+@app.route("/admin/reset-password", methods=["POST"])
+@admin_required
+def reset_password():
+    data = request.json
+    user_id = data.get("user_id")
+    new_password = data.get("new_password")
+
+    if not new_password or len(new_password) < 4:
+        return {"error": "Invalid password"}, 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        "UPDATE users SET password_hash=? WHERE id=?",
+        (generate_password_hash(new_password), user_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "password_updated"}
+
+@app.route("/admin/delete-user", methods=["POST"])
+@admin_required
+def delete_user():
+    data = request.json
+    user_id = data.get("user_id")
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM users WHERE id=?", (user_id,))
+    conn.commit()
+    conn.close()
+
+    return {"status": "deleted"}
 # ======================================================
 # ADMIN API ENDPOINTS
 # ======================================================
