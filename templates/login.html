@@ -21,13 +21,13 @@ body{
     display:flex;
     justify-content:center;
     align-items:center;
-    background:url('/static/bist-bg.jpg') center center no-repeat;
+    background:url('/static/bist-bg.jpg') center center no-repeat fixed;
     background-size:cover;
     font-family:Segoe UI,Arial;
     position:relative;
 }
 
-/* DARK OVERLAY — TIKLAMAYI ENGELLEMEZ */
+/* DARK OVERLAY */
 body::before{
     content:"";
     position:fixed;
@@ -37,31 +37,15 @@ body::before{
     pointer-events:none;
 }
 
-/* LOGIN PANEL */
-.login-box{
+/* BORDER WRAPPER */
+.border-wrap{
     position:relative;
-    width:360px;
-    max-width:90%;
-    padding:40px 30px;
-    background:rgba(15,23,42,.78);
-    backdrop-filter:blur(15px);
-    border-radius:18px;
-    box-shadow:0 0 40px rgba(0,0,0,.8);
-    z-index:5;
-    overflow:hidden;
-}
-
-/* Animated Border — ARKA KATMAN */
-.login-box::before{
-    content:"";
-    position:absolute;
-    inset:-3px;
-    border-radius:20px;
     padding:3px;
+    border-radius:22px;
     background:linear-gradient(90deg,#00ff88,#ff0000,#00ff88);
     background-size:300% 300%;
     animation:borderMove 4s linear infinite;
-    z-index:-1;
+    z-index:2;
 }
 
 @keyframes borderMove{
@@ -70,14 +54,25 @@ body::before{
     100%{background-position:0% 50%;}
 }
 
+/* PANEL */
+.login-box{
+    width:360px;
+    max-width:90%;
+    padding:40px 30px;
+    background:rgba(15,23,42,.95);
+    backdrop-filter:blur(15px);
+    border-radius:18px;
+}
+
+/* TITLE */
 h1{
     text-align:center;
     color:#ffffff;
     margin-bottom:25px;
     font-size:22px;
-    letter-spacing:1px;
 }
 
+/* INPUTS */
 .input-group{
     margin-bottom:18px;
 }
@@ -91,14 +86,13 @@ h1{
     color:#fff;
     font-size:14px;
     outline:none;
-    position:relative;
-    z-index:2;
 }
 
 .input-group input:focus{
     box-shadow:0 0 10px #3b82f6;
 }
 
+/* BUTTON */
 button{
     width:100%;
     padding:12px;
@@ -110,8 +104,6 @@ button{
     color:#fff;
     background:linear-gradient(90deg,#2563eb,#3b82f6);
     transition:.3s;
-    position:relative;
-    z-index:2;
 }
 
 button:hover{
@@ -130,15 +122,12 @@ button:hover{
     color:#3b82f6;
     text-decoration:none;
 }
-
-.register-link a:hover{
-    text-decoration:underline;
-}
 </style>
 </head>
 
 <body>
 
+<div class="border-wrap">
 <form class="login-box" method="POST">
     <h1>BIST TRADE PANELİ</h1>
 
@@ -156,6 +145,7 @@ button:hover{
         Hesabın yok mu? <a href="/register">Kayıt Ol</a>
     </div>
 </form>
+</div>
 
 </body>
 </html>
