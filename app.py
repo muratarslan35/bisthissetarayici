@@ -380,36 +380,58 @@ def admin_delete_code():
     conn.close()
     return jsonify({"status": "deleted"})
 
-@app.route("/admin/create-code", methods=["POST"])
+@app.route("/admin/generate-codes", methods=["POST"])
 @admin_required
-def create_invite_code():
+def generate_invite_codes():
     data = request.json or {}
-    days = int(data.get("days", 7))
 
-    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-    created_at = datetime.now()
-    expires_at = created_at + timedelta(days=days)
+    count = int(data.get("count", 5))
+    expire_days = data.get("expire_days")
+
+    try:
+        expire_days = int(expire_days) if expire_days else None
+    except:
+        expire_days = None
 
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO invite_codes
-        (code, is_used, created_at, expires_at)
-        VALUES (?, 0, ?, ?)
-    """, (
-        code,
-        created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        expires_at.strftime("%Y-%m-%d %H:%M:%S")
-    ))
+    created_codes = []
+
+    for _ in range(count):
+
+        # 🔒 Çakışma engelle
+        while True:
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            cur.execute("SELECT id FROM invite_codes WHERE code=?", (code,))
+            if not cur.fetchone():
+                break
+
+        created_at = datetime.now()
+
+        expires_at = None
+        if expire_days:
+            expires_at = created_at + timedelta(days=expire_days)
+
+        cur.execute("""
+            INSERT INTO invite_codes
+            (code, is_used, created_at, expires_at)
+            VALUES (?, 0, ?, ?)
+        """, (
+            code,
+            created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            expires_at.strftime("%Y-%m-%d %H:%M:%S") if expires_at else None
+        ))
+
+        created_codes.append(code)
 
     conn.commit()
     conn.close()
 
     return jsonify({
         "status": "created",
-        "code": code,
-        "expires_at": expires_at.strftime("%Y-%m-%d %H:%M:%S")
+        "count": len(created_codes),
+        "codes": created_codes
     })
 
 # ======================================================
