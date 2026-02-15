@@ -31,7 +31,7 @@ from dashboard import (
     push_signal,
     push_success_signal
 )
-
+import dashboard
 # ======================================================
 # ENV
 # ======================================================
@@ -384,6 +384,7 @@ def admin_delete_code():
 
 def scanner_loop():
     send_startup_message()
+
     last_daily_report = None
     last_weekly_report = None
     last_close_snapshot_date = None
@@ -391,38 +392,93 @@ def scanner_loop():
     while True:
         now = now_tr()
         print(f"\n⏱ Döngü: {now.strftime('%H:%M:%S')}", flush=True)
+
         reset_daily_success_if_needed()
         reset_weekly_success_if_needed()
 
         try:
+            # --------------------------------------------------
+            # MARKET KAPALI BLOK
+            # --------------------------------------------------
             if not is_market_open(now):
                 print("⏹ Market kapalı", flush=True)
+
+                # 📌 CUMA SNAPSHOT
+                if now.time() >= dtime(18, 10) and last_close_snapshot_date != now.date():
+                    try:
+                        print("📌 Cuma kapanış snapshot alınıyor...", flush=True)
+
+                        market_data = fetch_bist_data()
+
+                        for item in market_data:
+                            symbol = item.get("symbol")
+                            price = item.get("current_price")
+
+                            if symbol and isinstance(price, (int, float)):
+                                dashboard.LIVE_PRICES[symbol] = price
+                                update_success_targets(symbol, price)
+
+                        last_close_snapshot_date = now.date()
+                        print("✅ Snapshot tamamlandı", flush=True)
+
+                    except Exception as e:
+                        print("🔥 Snapshot hata:", e, flush=True)
+
+                # 📊 Günlük Rapor
+                if last_daily_report != now.date() and now.time() > BIST_CLOSE:
+                    report = build_daily_success_report()
+                    if report:
+                        broadcast_signal(report)
+                    last_daily_report = now.date()
+
+                # 📅 Haftalık Rapor
+                if now.weekday() == 4 and now.time() >= dtime(18, 10):
+                    week_id = now.strftime("%Y-%W")
+                    if last_weekly_report != week_id:
+                        report = build_weekly_success_report()
+                        if report:
+                            broadcast_signal(report)
+                        last_weekly_report = week_id
+
                 time.sleep(30)
                 continue
 
+            # --------------------------------------------------
+            # MARKET AÇIK BLOK
+            # --------------------------------------------------
             print("✅ MARKET AÇIK → TARAMA", flush=True)
+
             market_data = fetch_bist_data()
+
+            print(f"📈 Hisse sayısı: {len(market_data)}", flush=True)
 
             for item in market_data:
                 symbol = item.get("symbol")
                 price = item.get("current_price")
 
-                signals = process_symbol_signals(item)
-                success_hits = update_success_targets(symbol, price)
+                # 🔥 CANLI FİYAT AKTAR
+                if symbol and isinstance(price, (int, float)):
+                    dashboard.LIVE_PRICES[symbol] = price
 
-                for s in success_hits:
-                    push_success_signal(s)
-                    broadcast_signal(format_signal_message(s))
+                try:
+                    signals = process_symbol_signals(item)
+                    success_hits = update_success_targets(symbol, price)
 
-                for s in signals:
-                    push_signal(s)
-                    broadcast_signal(format_signal_message(s))
+                    for s in success_hits:
+                        push_success_signal(s)
+                        broadcast_signal(format_signal_message(s))
+
+                    for s in signals:
+                        push_signal(s)
+                        broadcast_signal(format_signal_message(s))
+
+                except Exception as e:
+                    print(f"⚠ {symbol} hata:", e, flush=True)
 
         except Exception as e:
-            print("🔥 Scanner genel hata:", e)
+            print("🔥 Scanner genel hata:", e, flush=True)
 
         time.sleep(SCAN_INTERVAL)
-
 # ======================================================
 # START
 # ======================================================
