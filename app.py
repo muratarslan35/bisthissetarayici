@@ -5,6 +5,8 @@ from datetime import datetime, time as dtime, timedelta
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 from functools import wraps
+import random
+import string
 
 from dotenv import load_dotenv
 from flask import (
@@ -377,6 +379,38 @@ def admin_delete_code():
     conn.commit()
     conn.close()
     return jsonify({"status": "deleted"})
+
+@app.route("/admin/create-code", methods=["POST"])
+@admin_required
+def create_invite_code():
+    data = request.json or {}
+    days = int(data.get("days", 7))
+
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    created_at = datetime.now()
+    expires_at = created_at + timedelta(days=days)
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO invite_codes
+        (code, is_used, created_at, expires_at)
+        VALUES (?, 0, ?, ?)
+    """, (
+        code,
+        created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        expires_at.strftime("%Y-%m-%d %H:%M:%S")
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "created",
+        "code": code,
+        "expires_at": expires_at.strftime("%Y-%m-%d %H:%M:%S")
+    })
 
 # ======================================================
 # SCANNER
