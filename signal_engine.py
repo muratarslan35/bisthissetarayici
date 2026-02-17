@@ -84,9 +84,9 @@ def save_daily_state():
 # ======================================================
 
 REPEAT_BLOCK_MINUTES = 45
-TARGET_PCT = 0.015
+TARGET_PCT = 0.01
 POWER_STRENGTH_THRESHOLD = 20
-TP1_PCT = 0.015    # %1.5
+TP1_PCT = 0.01    # %1
 TP2_PCT = 0.03    # %3
 TP3_PCT = 0.05    # %5
 
