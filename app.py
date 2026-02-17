@@ -293,6 +293,13 @@ def logout():
 def index():
     return render_template("dashboard.html")
 
+@app.route("/health")
+def health():
+    return jsonify({
+        "market_open": is_market_open(),
+        "server_time": now_tr().strftime("%H:%M:%S")
+    })
+
 # ======================================================
 # ADMIN PANEL
 # ======================================================
