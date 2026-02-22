@@ -355,7 +355,7 @@ def update_subscription():
         new_end = now + timedelta(days=days)
     cur.execute("""
         UPDATE users
-        SET subscription_end=?, status='approved', is_active=1
+        SET subscription_end=?, status='approved', is_active=1, expiry_warning_sent=0
         WHERE id=?
     """, (new_end.strftime("%Y-%m-%d %H:%M:%S"), user_id))
     conn.commit()
