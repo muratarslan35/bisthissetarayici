@@ -230,8 +230,8 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
                     UPDATE users
                     SET is_active=0,
                         status='expired',
-                        invite_sent=0
-                        expiry_warning_sent
+                        invite_sent=0,
+                        expiry_warning_sent=0
                     WHERE id=?
                 """, (user["id"],))
 
