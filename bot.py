@@ -180,7 +180,7 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now()
 
     cur.execute("""
-        SELECT id, telegram_chat_id, subscription_end
+        SELECT id, telegram_chat_id, subscription_end, expiry_warning_sent
         FROM users
         WHERE is_active=1
         AND telegram_chat_id IS NOT NULL
@@ -195,6 +195,25 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
                 user["subscription_end"],
                 "%Y-%m-%d %H:%M:%S"
             )
+            remaining = end - now
+
+            # 🔔 24 saat kala uyarı
+            if timedelta(hours=0) < remaining <= timedelta(days=1) and user["expiry_warning_sent"] == 0:
+                await context.bot.send_message(
+                    chat_id=user["telegram_chat_id"],
+                    text=(
+                        "⚠️ <b>Aboneliğinizin bitmesine 24 saatten az kaldı.</b>\n\n"
+                        "Devam etmek için yenileme yapmayı unutmayın."
+                    ),
+                    parse_mode=ParseMode.HTML
+                )
+
+                cur.execute("""
+                    UPDATE users
+                    SET expiry_warning_sent=1
+                    WHERE id=?
+                """, (user["id"],))
+                conn.commit()
 
             if end < now:
                 await context.bot.ban_chat_member(
@@ -212,6 +231,7 @@ async def subscription_checker(context: ContextTypes.DEFAULT_TYPE):
                     SET is_active=0,
                         status='expired',
                         invite_sent=0
+                        expiry_warning_sent
                     WHERE id=?
                 """, (user["id"],))
 
