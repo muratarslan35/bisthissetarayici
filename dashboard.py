@@ -25,6 +25,9 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 LIVE_PRICES = {}
 
 SIGNALS = []
+SCALPING_SIGNALS = []
+MAX_SCALPING_SIGNALS = 200
+
 SUCCESS_SIGNALS = []
 
 MAX_SIGNALS = 200
@@ -48,6 +51,7 @@ def reset_dashboard_if_needed(now):
 
     SIGNALS.clear()
     SUCCESS_SIGNALS.clear()
+    SCALPING_SIGNALS.clear()
     LAST_DASHBOARD_RESET_DATE = now.date()
 
 
@@ -56,8 +60,12 @@ def reset_dashboard_if_needed(now):
 # ======================================================
 
 def push_signal(signal):
-    SIGNALS.insert(0, signal)
-    del SIGNALS[MAX_SIGNALS:]
+    if signal.get("main_algorithm") == "SCALPING":
+        SCALPING_SIGNALS.insert(0, signal)
+        del SCALPING_SIGNALS[MAX_SCALPING_SIGNALS:]
+    else:
+        SIGNALS.insert(0, signal)
+        del SIGNALS[MAX_SIGNALS:]
 
     symbol = signal.get("symbol")
     price = signal.get("price")
@@ -309,6 +317,7 @@ def dashboard_api():
         "system_active": system_active,
         "server_time": now.strftime("%H:%M:%S"),
         "signals": enrich_live_gain(all_signals),
+        "scalping_signals": enrich_live_gain(SCALPING_SIGNALS),
         "weekly_report": {
             "week_id": week_key(),
             "text": weekly_text,
