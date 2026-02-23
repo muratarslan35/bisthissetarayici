@@ -56,6 +56,8 @@ SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
+
 # ======================================================
 # FLASK
 # ======================================================
@@ -535,6 +537,11 @@ def scanner_loop():
                         push_signal(s)
                         broadcast_signal(format_signal_message(s))
 
+                        if s["main_algorithm"] == "SCALPING":
+                    send_to_channel(format_signal_message(s))
+                        else:
+                    broadcast_signal(format_signal_message(s))
+
                 except Exception as e:
                     print(f"⚠ {symbol} hata:", e, flush=True)
 
@@ -542,6 +549,25 @@ def scanner_loop():
             print("🔥 Scanner genel hata:", e, flush=True)
 
         time.sleep(SCAN_INTERVAL)
+def send_to_channel(text):
+    if not TELEGRAM_TOKEN:
+        return
+
+    import requests
+
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={
+                "chat_id": CHANNEL_ID,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True
+            },
+            timeout=5
+        )
+    except Exception as e:
+        print("Channel send error:", e)
 # ======================================================
 # START
 # ======================================================
