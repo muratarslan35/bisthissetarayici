@@ -474,6 +474,8 @@ def scanner_loop():
         reset_daily_success_if_needed()
         reset_weekly_success_if_needed()
 
+        dashboard.SYSTEM_ACTIVE = False
+
         try:
 
             # --------------------------------------------------
@@ -481,6 +483,7 @@ def scanner_loop():
             # --------------------------------------------------
             if not is_market_open(now):
                 print("⏹ Market kapalı", flush=True)
+                dashboard.SYSTEM_ACTIVE = False
 
                 if last_daily_report != now.date() and now.time() > BIST_CLOSE:
                     report = build_daily_success_report()
@@ -502,7 +505,7 @@ def scanner_loop():
             # --------------------------------------------------
             # MARKET AÇIK
             # --------------------------------------------------
-
+            dashboard.SYSTEM_ACTIVE = True
             print("✅ MARKET AÇIK → TARAMA", flush=True)
 
             market_data = fetch_bist_data()
