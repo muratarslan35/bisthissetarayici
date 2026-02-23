@@ -244,17 +244,17 @@ def dashboard_api():
 
     reset_dashboard_if_needed(now)
 
-# --------------------------------------------------
-# MARKET & SCANNER STATUS (INTERNAL STATE)
-# --------------------------------------------------
+    # --------------------------------------------------
+    # MARKET & SCANNER STATUS (INTERNAL STATE)
+    # --------------------------------------------------
 
-market_open = now.weekday() < 5 and dtime(9, 40) <= now.time() <= dtime(18, 5)
+    market_open = now.weekday() < 5 and dtime(9, 40) <= now.time() <= dtime(18, 5)
 
-# scanner_loop içinden set edilen global state
-import dashboard
-system_active = getattr(dashboard, "SYSTEM_ACTIVE", False)
+    import dashboard
+    system_active = getattr(dashboard, "SYSTEM_ACTIVE", False)
 
     daily_success = []
+
     t_key = today_key()
 
     for d in DAILY_SUCCESS_TRACKER.get(t_key, {}).values():
