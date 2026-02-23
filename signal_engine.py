@@ -1027,7 +1027,7 @@ def process_symbol_signals(item):
     LAST_PUBLISHED_STATE[key] = tr_now()
     mark_sent(symbol, algo)
 
-    if not is_reentry:
+    if not is_reentry and algo != "SCALPING":
         d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
         w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
