@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
 
