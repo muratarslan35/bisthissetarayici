@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, current_app
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
-import requests
 
 from signal_engine import (
     build_weekly_success_report,
@@ -245,21 +244,15 @@ def dashboard_api():
 
     reset_dashboard_if_needed(now)
 
-    market_open = False
-    system_active = False
+# --------------------------------------------------
+# MARKET & SCANNER STATUS (INTERNAL STATE)
+# --------------------------------------------------
 
-    try:
-        health_url = current_app.config.get(
-            "SELF_URL", "http://127.0.0.1:5000"
-        ) + "/health"
+market_open = now.weekday() < 5 and dtime(9, 40) <= now.time() <= dtime(18, 5)
 
-        r = requests.get(health_url, timeout=2)
-        if r.status_code == 200:
-            h = r.json()
-            market_open = h.get("market_open", False)
-            system_active = True
-    except Exception:
-        pass
+# scanner_loop içinden set edilen global state
+import dashboard
+system_active = getattr(dashboard, "SYSTEM_ACTIVE", False)
 
     daily_success = []
     t_key = today_key()
