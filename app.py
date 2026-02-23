@@ -227,8 +227,13 @@ def session_valid(username):
 def security():
     if request.path.startswith("/static"):
         return
+
     if request.path in ("/login", "/register"):
         return
+
+    if request.path.startswith("/api/dashboard") or request.path == "/health":
+        return
+
     if request.path.startswith(f"/{ADMIN_PANEL_PATH}") or request.path.startswith("/admin"):
         if session.get("user") != "admin":
             return "Unauthorized", 403
