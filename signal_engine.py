@@ -759,17 +759,11 @@ def process_symbol_signals(item):
     helper_map = {h[0]: h[1] for h in helpers}
     helper_names = set(helper_map.keys())
 
-    helper_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
-
     base_strength = main.get("base_strength", 0)
 
-    total_power = base_strength + helper_power
-    
     key = (symbol, algo)
     prev = LAST_SIGNAL_STATE.get(key, {})
-
     prev_power = prev.get("power", 0)
-    power_delta = total_power - prev_power
 
     prev_helpers = set(prev.get("helpers", []))
     added_helpers = list(helper_names - prev_helpers)
@@ -786,14 +780,22 @@ def process_symbol_signals(item):
     most_downgrade = prev_most_4h == "UP" and most_4h == "DOWN"
     most_upgrade = prev_most_4h == "DOWN" and most_4h == "UP"
 
+    # -----------------------------------------------------
+    # MOST DOWNGRADE ETKİSİ
+    # -----------------------------------------------------
     if most_downgrade:
-    helper_names.add("MOST KIRILIMI")
-    helper_map["MOST KIRILIMI"] = -50
+        helper_names.add("MOST KIRILIMI")
+        helper_map["MOST KIRILIMI"] = -50
 
-    # MOST etkisi eklendiyse power yeniden hesaplanmalı
-    helper_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
+    # -----------------------------------------------------
+    # FINAL POWER HESABI
+    # -----------------------------------------------------
+    helper_power = sum(
+        v for v in helper_map.values()
+        if isinstance(v, (int, float))
+    )
+
     total_power = base_strength + helper_power
-
     power_delta = total_power - prev_power
 
     levels = {"A": 0, "B": 0, "C": 0}
