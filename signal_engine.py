@@ -444,13 +444,19 @@ def confirm_breakout(df, level):
 def classify_level(lvl, tf):
     t = lvl["touches"]
 
+    # 4H ve 1D'de 3 temas varsa majör
     if t >= 3 and tf in ("4h", "1d"):
         return ("L4 MAJÖR KIRILIM", 18)
-    if t == 2 and tf in ("4h", "1d") and lvl["volume"] > np.mean(volumes):
+
+    # 4H ve 1D'de 2 temas varsa da majör kabul et
+    if t == 2 and tf in ("4h", "1d"):
         return ("L4 MAJÖR KIRILIM", 18)
 
+    # Diğer timeframe'lerde 3 temas güçlü
     if t >= 3:
         return ("L3 GÜÇLÜ KIRILIM", 12)
+
+    # 2 temas normal kırılım
     if t >= 2:
         return ("L2 KIRILIM", 6)
 
@@ -753,8 +759,12 @@ def process_symbol_signals(item):
     helper_map = {h[0]: h[1] for h in helpers}
     helper_names = set(helper_map.keys())
 
-    total_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
+    helper_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
 
+    base_strength = main.get("base_strength", 0)
+
+    total_power = base_strength + helper_power
+    
     key = (symbol, algo)
     prev = LAST_SIGNAL_STATE.get(key, {})
 
