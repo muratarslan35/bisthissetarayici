@@ -86,6 +86,7 @@ def save_daily_state():
 REPEAT_BLOCK_MINUTES = 45
 TARGET_PCT = 0.01
 POWER_STRENGTH_THRESHOLD = 20
+SCALPING_STRENGTH_THRESHOLD = 35
 TP1_PCT = 0.01    # %1
 TP2_PCT = 0.03    # %3
 TP3_PCT = 0.05    # %5
@@ -635,6 +636,96 @@ def super_kombine_signal(item):
 
     return {"main_type": "SÜPER KOMBİNE", "base_strength": 75}
 
+def scalping_signal(item):
+    tf15 = item["tf"]["15m"]
+    tf1h = item["tf"].get("1h")
+    tf4h = item["tf"].get("4h")
+    tf1d = item["tf"].get("1d")
+
+    if not tf1h or not tf4h or not tf1d:
+        return None
+
+    # ================================
+    # 1️⃣ TREND FİLTRESİ
+    # ================================
+
+    most_4h = detect_most_trend(tf4h["df"])
+    most_1d = detect_most_trend(tf1d["df"])
+
+    if most_4h == "DOWN":
+        return None
+    if most_1d == "DOWN":
+        return None
+
+    if not (tf1h["ema20"] > tf1h["ema50"]):
+        return None
+
+    if not (tf15["ema20"] > tf15["ema50"]):
+        return None
+
+    # ================================
+    # 2️⃣ EMA LIVE HİZALAMA
+    # ================================
+
+    e20 = tf15.get("ema20_live")
+    e50 = tf15.get("ema50_live")
+    e200 = tf15.get("ema200_live")
+
+    if not (e20 and e50 and e200 and e20 > e50 > e200):
+        return None
+
+    # ================================
+    # 3️⃣ MOMENTUM BREAKOUT
+    # ================================
+
+    df15 = tf15["df"]
+
+    if df15 is None or len(df15) < 25:
+        return None
+
+    last = df15.iloc[-1]
+    prev_range = df15.iloc[-21:-1]
+
+    highest_high = prev_range["High"].max()
+
+    # 🔥 20 bar kırılım
+    if last["Close"] <= highest_high:
+        return None
+
+    # 🔥 HACİM PATLAMASI
+    vol_ma = df15["Volume"].rolling(20).mean().iloc[-1]
+    if last["Volume"] < vol_ma * 1.8:
+        return None
+
+    # 🔥 RSI kontrol
+    rsi = tf15.get("rsi")
+    if rsi is None or rsi < 50 or rsi > 68:
+        return None
+
+    # 🔥 GÜÇLÜ GÖVDE
+    body = abs(last["Close"] - last["Open"])
+    full = last["High"] - last["Low"]
+    if full == 0:
+        return None
+
+    if body / full < 0.6:
+        return None
+
+    # ================================
+    # 4️⃣ DİRENCE ÇOK YAKINSA GİRME
+    # ================================
+
+    r1h = get_last_resistance(tf1h["df"])
+    if r1h:
+        dist_pct = ((r1h - item["current_price"]) / item["current_price"]) * 100
+        if dist_pct < 1:
+            return None
+
+    return {
+        "main_type": "SCALPING",
+        "base_strength": 42
+    }
+
 # ======================================================
 # PROCESS SYMBOL SIGNALS
 # ======================================================
@@ -648,7 +739,11 @@ def process_symbol_signals(item):
     reset_daily_success_if_needed()
     reset_weekly_success_if_needed()
 
-    main = super_kombine_signal(item) or kombine_signal(item)
+    main = (
+        super_kombine_signal(item)
+        or kombine_signal(item)
+        or scalping_signal(item)
+    )
     if not main:
         return []
 
@@ -736,14 +831,20 @@ def process_symbol_signals(item):
     strengthened = False
     weakened = False
 
-    if prev:
-        if power_delta >= POWER_STRENGTH_THRESHOLD:
-            strengthened = True
-            title = "🔥 GÜÇLENEN SİNYAL"
-        elif power_delta <= -POWER_STRENGTH_THRESHOLD:
-            weakened = True
-            title = "⚠️ ZAYIFLAYAN SİNYAL"
-            category = "watch"
+    threshold = (
+        SCALPING_STRENGTH_THRESHOLD
+        if algo == "SCALPING"
+        else POWER_STRENGTH_THRESHOLD
+    )
+
+    if power_delta >= threshold:
+        strengthened = True
+        title = "🔥 GÜÇLENEN SİNYAL"
+
+    elif power_delta <= -threshold:
+        weakened = True
+        title = "⚠️ ZAYIFLAYAN SİNYAL"
+        category = "watch"
 
     
 
@@ -795,7 +896,10 @@ def process_symbol_signals(item):
         if WEEKLY_SUCCESS_TRACKER[w_key][k].get("hit"):
             after_target = True
 
-    is_reentry = allow_reentry({
+    if algo == "SCALPING":
+        is_reentry = False
+    else:
+        is_reentry = allow_reentry({
         "tf1h": tf1h,
         "tf4h": tf4h,
         "most_4h": most_4h,
