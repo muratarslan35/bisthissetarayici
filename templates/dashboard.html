@@ -184,6 +184,7 @@ body {
     <div class="filter-btn" onclick="setFilter('super',event)">Süper Kombine</div>
     <div class="filter-btn" onclick="setFilter('success',event)">Günlük Başarı</div>
     <div class="filter-btn" onclick="setFilter('weekly',event)">Haftalık Başarı</div>
+    <div class="filter-btn" onclick="setFilter('scalping',event)">⚡ Scalping</div>
 </div>
 
 <div class="container" id="signals"></div>
@@ -273,6 +274,7 @@ function matchFilter(s){
     if(CURRENT_FILTER==="kombine") return s.main_algorithm==="KOMBİNE";
     if(CURRENT_FILTER==="super") return s.main_algorithm==="SÜPER KOMBİNE";
     if(CURRENT_FILTER==="success") return s.category==="success";
+    if(CURRENT_FILTER==="scalping") return false;
     return true;
 }
 
@@ -337,6 +339,34 @@ async function loadSignals(){
         `;
         tbody.appendChild(tr);
     });
+    return;
+    }
+
+    if(CURRENT_FILTER==="scalping"){
+    weekly.style.display="none";
+    document.getElementById("reentry-section").style.display="none";
+    box.style.display="grid";
+    box.innerHTML="";
+
+    (data.scalping_signals || []).forEach(s=>{
+        const c=document.createElement("div");
+        c.className="card signal-combo";
+
+        c.innerHTML=`
+        <div class="signal-title">⚡ SCALPING</div>
+        <div class="symbol">${s.symbol}</div>
+        <div class="price">💰 ${s.price}</div>
+        <div class="row">⚡ ${s.action}</div>
+        ${s.entry_price?`<div class="row">🎯 Giriş: ${s.entry_price}</div>`:""}
+        ${s.live_gain_pct!=null?`<div class="row">📊 %{s.live_gain_pct}</div>`:""}
+        <div class="time">
+            <span class="helper-chip ${hourChip(s.time)}">${s.time}</span>
+        </div>
+        `;
+
+        box.appendChild(c);
+    });
+
     return;
     }
 
