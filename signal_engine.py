@@ -787,8 +787,14 @@ def process_symbol_signals(item):
     most_upgrade = prev_most_4h == "DOWN" and most_4h == "UP"
 
     if most_downgrade:
-        helper_names.add("MOST KIRILIMI")
-        helper_map["MOST KIRILIMI"] = -50
+    helper_names.add("MOST KIRILIMI")
+    helper_map["MOST KIRILIMI"] = -50
+
+    # MOST etkisi eklendiyse power yeniden hesaplanmalı
+    helper_power = sum(v for v in helper_map.values() if isinstance(v, (int, float)))
+    total_power = base_strength + helper_power
+
+    power_delta = total_power - prev_power
 
     levels = {"A": 0, "B": 0, "C": 0}
     for h in helper_names:
