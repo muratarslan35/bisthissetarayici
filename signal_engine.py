@@ -1200,6 +1200,44 @@ def update_success_targets(symbol, price):
             r["hit_price"] = price
             r["hit_time"] = tr_now().strftime("%H:%M:%S")
             r["gain_pct"] = round(((price - entry) / entry) * 100, 2)
+        # ---------- SCALPING TP1 ----------
+    from dashboard import SCALPING_SIGNALS
+
+    for s in SCALPING_SIGNALS:
+        if s.get("symbol") != symbol:
+            continue
+
+        if s.get("main_algorithm") != "SCALPING":
+            continue
+
+        if s.get("tp1") is None:
+            continue
+
+        if s.get("tp1_hit"):
+            continue  # daha önce vurmuşsa tekrar gönderme
+
+        if price >= s["tp1"]:
+            s["tp1_hit"] = True
+
+            success_signals.append({
+                "symbol": symbol,
+                "title": "⚡ SCALPING TP1 GELDİ",
+                "price": price,
+                "action": "TP1 BAŞARILI",
+                "category": "success",
+                "main_algorithm": "SCALPING",
+                "entry_price": s.get("entry_price"),
+                "target_price": s.get("tp1"),
+                "hit_price": price,
+                "gain_pct": round(((price - s.get("entry_price")) / s.get("entry_price")) * 100, 2) if s.get("entry_price") else None,
+                "time": tr_now().strftime("%H:%M:%S"),
+                "helpers": s.get("helpers", []),
+                "history": [
+                    ("ENTRY", str(s.get("entry_price"))),
+                    ("TP1", str(s.get("tp1"))),
+                    ("HIT", str(price)),
+                ],
+            })
 
     return success_signals 
 
