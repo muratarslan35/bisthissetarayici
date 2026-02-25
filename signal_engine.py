@@ -1065,7 +1065,11 @@ def process_symbol_signals(item):
             }
             save_weekly_state()
 
-    return [signal]
+        # SADECE STRONG publish edilir
+        if signal["category"] == "strong":
+            return [signal]
+
+        return []
 
 
 
