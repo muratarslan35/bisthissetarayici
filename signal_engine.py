@@ -785,7 +785,7 @@ def process_symbol_signals(item):
     # -----------------------------------------------------
     if most_downgrade:
         helper_names.add("MOST KIRILIMI")
-        helper_map["MOST KIRILIMI"] = -50
+        helper_map["MOST KIRILIMI"] = -40
 
     # -----------------------------------------------------
     # FINAL POWER HESABI
@@ -805,7 +805,7 @@ def process_symbol_signals(item):
             levels[lvl] += 1
 
     if levels["A"] >= 1:
-        action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL – A Seviye"
+        action, category, title = "GÜÇLÜ AL", "strong", "🚀 GÜÇLÜ AL"
     elif levels["B"] >= 1:
         action, category, title = "AL", "combo", "📈 AL – B Seviye"
     elif levels["C"] >= 1:
