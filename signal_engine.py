@@ -929,11 +929,7 @@ def process_symbol_signals(item):
     })
 
     if is_reentry:
-        prev_state = LAST_SIGNAL_STATE.get(key)
-        if prev_state and "entry" in prev_state:
-            base_entry = prev_state["entry"]
-        else:
-            base_entry = price
+        base_entry = price
     else:
         base_entry = entry_price if entry_price is not None else price
     
