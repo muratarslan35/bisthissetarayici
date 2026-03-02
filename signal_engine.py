@@ -651,27 +651,28 @@ def scalping_signal(item):
     if not tf1h or not tf4h or not tf1d:
         return None
 
-    # ================================
-    # 1️⃣ TREND FİLTRESİ
-    # ================================
+    # ==================================================
+    # 1️⃣ ÜST ZAMAN TREND
+    # ==================================================
 
     most_4h = detect_most_trend(tf4h["df"])
     most_1d = detect_most_trend(tf1d["df"])
 
-    if most_4h == "DOWN":
+    if most_4h != "UP":
         return None
+
     if most_1d == "DOWN":
         return None
 
     if not (tf1h["ema20"] > tf1h["ema50"]):
         return None
 
+    # ==================================================
+    # 2️⃣ 15M EMA HİZALAMA
+    # ==================================================
+
     if not (tf15["ema20"] > tf15["ema50"]):
         return None
-
-    # ================================
-    # 2️⃣ EMA LIVE HİZALAMA
-    # ================================
 
     e20 = tf15.get("ema20_live")
     e50 = tf15.get("ema50_live")
@@ -680,58 +681,99 @@ def scalping_signal(item):
     if not (e20 and e50 and e200 and e20 > e50 > e200):
         return None
 
-    # ================================
-    # 3️⃣ MOMENTUM BREAKOUT
-    # ================================
+    # ==================================================
+    # 3️⃣ VWAP HESABI (İNTRADAY)
+    # ==================================================
 
     df15 = tf15["df"]
-
-    if df15 is None or len(df15) < 25:
+    if df15 is None or len(df15) < 30:
         return None
 
+    typical_price = (df15["High"] + df15["Low"] + df15["Close"]) / 3
+    cumulative_tp_vol = (typical_price * df15["Volume"]).cumsum()
+    cumulative_vol = df15["Volume"].cumsum()
+
+    vwap_series = cumulative_tp_vol / cumulative_vol
+    current_vwap = vwap_series.iloc[-1]
+    vwap_prev = vwap_series.iloc[-5]
+
+    current_price = item["current_price"]
+
+    # 🔹 Fiyat VWAP üstünde
+    if current_price < current_vwap:
+        return None
+
+    # 🔹 VWAP yukarı eğimli
+    if current_vwap <= vwap_prev:
+        return None
+
+    # ==================================================
+    # 4️⃣ BREAKOUT + CONTINUATION
+    # ==================================================
+
+    prev = df15.iloc[-2]
     last = df15.iloc[-1]
-    prev_range = df15.iloc[-21:-1]
+    prev_range = df15.iloc[-22:-2]
 
     highest_high = prev_range["High"].max()
 
-    # 🔥 20 bar kırılım
-    if last["Close"] <= highest_high:
+    if prev["Close"] <= highest_high:
         return None
 
-    # 🔥 HACİM PATLAMASI
-    vol_ma = df15["Volume"].rolling(20).mean().iloc[-1]
-    if last["Volume"] < vol_ma * 1.8:
+    vol_ma_prev = df15["Volume"].rolling(20).mean().iloc[-2]
+    if prev["Volume"] < vol_ma_prev * 1.5:
         return None
 
-    # 🔥 RSI kontrol
+    if last["Close"] <= prev["Close"]:
+        return None
+
+    move_pct = (last["Close"] - prev["Close"]) / prev["Close"]
+    if move_pct > 0.007:
+        return None
+
+    vol_ma_last = df15["Volume"].rolling(20).mean().iloc[-1]
+    if last["Volume"] < vol_ma_last * 1.2:
+        return None
+
+    # ==================================================
+    # 5️⃣ RSI BANDI
+    # ==================================================
+
     rsi = tf15.get("rsi")
-    if rsi is None or rsi < 50 or rsi > 68:
+    if rsi is None or rsi < 55 or rsi > 65:
         return None
 
-    # 🔥 GÜÇLÜ GÖVDE
-    body = abs(last["Close"] - last["Open"])
-    full = last["High"] - last["Low"]
-    if full == 0:
-        return None
-
-    if body / full < 0.6:
-        return None
-
-    # ================================
-    # 4️⃣ DİRENCE ÇOK YAKINSA GİRME
-    # ================================
+    # ==================================================
+    # 6️⃣ DİRENÇ FİLTRESİ
+    # ==================================================
 
     r1h = get_last_resistance(tf1h["df"])
     if r1h:
-        dist_pct = ((r1h - item["current_price"]) / item["current_price"]) * 100
+        dist_pct = ((r1h - current_price) / current_price) * 100
         if dist_pct < 1:
             return None
 
+    # ==================================================
+    # 7️⃣ GÜÇ SKORU
+    # ==================================================
+
+    base_strength = 50
+    volume_boost = 0
+
+    if prev["Volume"] > vol_ma_prev * 2:
+        volume_boost += 5
+
+    if last["Volume"] > vol_ma_last * 1.5:
+        volume_boost += 3
+
     return {
         "main_type": "SCALPING",
-        "base_strength": 42
+        "base_strength": base_strength + volume_boost
     }
 
+
+
+    
 # ======================================================
 # PROCESS SYMBOL SIGNALS
 # ======================================================
