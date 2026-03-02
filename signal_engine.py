@@ -878,6 +878,9 @@ def process_symbol_signals(item):
         history.append((now_h, f"Güç arttı (+{power_delta})"))
     if weakened:
         history.append((now_h, f"Güç düştü ({power_delta})"))
+    # 🔎 Repeat sonrası basit yapı sadeleşmesi
+    if removed_helpers and not strengthened and not weakened and levels["A"] >= 1 and not most_downgrade:
+        history.append((now_h, "Mevcut sinyal zayıfladı (Trend korunuyor)"))
 
     
     r1h = get_last_resistance(tf1h["df"]) if tf1h else None
