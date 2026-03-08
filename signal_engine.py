@@ -643,12 +643,25 @@ def super_kombine_signal(item):
     return {"main_type": "SÜPER KOMBİNE", "base_strength": 75}
 
 def scalping_signal(item):
+
     tf15 = item["tf"]["15m"]
     tf1h = item["tf"].get("1h")
     tf4h = item["tf"].get("4h")
     tf1d = item["tf"].get("1d")
 
     if not tf1h or not tf4h or not tf1d:
+        return None
+
+    # ==================================================
+    # 0️⃣ SAAT FİLTRESİ (OPENING MOMENTUM)
+    # ==================================================
+
+    now = tr_now()
+
+    if now.hour < 10:
+        return None
+
+    if now.hour >= 13:
         return None
 
     # ==================================================
@@ -668,8 +681,10 @@ def scalping_signal(item):
         return None
 
     # ==================================================
-    # 2️⃣ 15M EMA HİZALAMA
+    # 2️⃣ EMA HİZALAMA
     # ==================================================
+
+    tf15 = item["tf"]["15m"]
 
     if not (tf15["ema20"] > tf15["ema50"]):
         return None
@@ -682,93 +697,171 @@ def scalping_signal(item):
         return None
 
     # ==================================================
-    # 3️⃣ VWAP HESABI (İNTRADAY)
+    # 3️⃣ DATA
     # ==================================================
 
     df15 = tf15["df"]
-    if df15 is None or len(df15) < 30:
+
+    if df15 is None or len(df15) < 40:
         return None
+
+    prev = df15.iloc[-2]
+    last = df15.iloc[-1]
+
+    price = item["current_price"]
+
+    # ==================================================
+    # 4️⃣ RVOL (RELATIVE VOLUME)
+    # ==================================================
+
+    avg_volume_30 = df15["Volume"].rolling(30).mean().iloc[-1]
+
+    if avg_volume_30 == 0:
+        return None
+
+    rvol = last["Volume"] / avg_volume_30
+
+    if rvol < 1.5:
+        return None
+
+    # ==================================================
+    # 5️⃣ VWAP HESABI
+    # ==================================================
 
     typical_price = (df15["High"] + df15["Low"] + df15["Close"]) / 3
     cumulative_tp_vol = (typical_price * df15["Volume"]).cumsum()
     cumulative_vol = df15["Volume"].cumsum()
 
     vwap_series = cumulative_tp_vol / cumulative_vol
+
     current_vwap = vwap_series.iloc[-1]
     vwap_prev = vwap_series.iloc[-5]
 
-    current_price = item["current_price"]
-
-    # 🔹 Fiyat VWAP üstünde
-    if current_price < current_vwap:
+    if price < current_vwap:
         return None
 
-    # 🔹 VWAP yukarı eğimli
     if current_vwap <= vwap_prev:
         return None
 
+    vwap_distance = (price - current_vwap) / current_vwap
+
+    if vwap_distance > 0.015:
+        return None
+
     # ==================================================
-    # 4️⃣ BREAKOUT + CONTINUATION
+    # 6️⃣ LIQUIDITY SWEEP
     # ==================================================
 
-    prev = df15.iloc[-2]
-    last = df15.iloc[-1]
     prev_range = df15.iloc[-22:-2]
 
     highest_high = prev_range["High"].max()
 
+    sweep_detected = False
+
+    if last["High"] > highest_high and last["Close"] < last["High"]:
+        sweep_detected = True
+
+    # ==================================================
+    # 7️⃣ BREAKOUT
+    # ==================================================
+
     if prev["Close"] <= highest_high:
+        if not sweep_detected:
+            return None
+
+    breakout_move = (prev["Close"] - highest_high) / highest_high
+
+    if breakout_move > 0.01:
         return None
 
+    # ==================================================
+    # 8️⃣ HACİM ANOMALİSİ
+    # ==================================================
+
     vol_ma_prev = df15["Volume"].rolling(20).mean().iloc[-2]
-    if prev["Volume"] < vol_ma_prev * 1.5:
+
+    if prev["Volume"] < vol_ma_prev * 2:
         return None
+
+    vol_ma_last = df15["Volume"].rolling(20).mean().iloc[-1]
+
+    if last["Volume"] < vol_ma_last * 1.5:
+        return None
+
+    # ==================================================
+    # 9️⃣ MOMENTUM CANDLE
+    # ==================================================
+
+    body = abs(prev["Close"] - prev["Open"])
+    full = prev["High"] - prev["Low"]
+
+    if full == 0:
+        return None
+
+    if body / full < 0.6:
+        return None
+
+    # ==================================================
+    # 🔟 CONTINUATION
+    # ==================================================
 
     if last["Close"] <= prev["Close"]:
         return None
 
     move_pct = (last["Close"] - prev["Close"]) / prev["Close"]
+
     if move_pct > 0.007:
         return None
 
-    vol_ma_last = df15["Volume"].rolling(20).mean().iloc[-1]
-    if last["Volume"] < vol_ma_last * 1.2:
-        return None
-
     # ==================================================
-    # 5️⃣ RSI BANDI
+    # 1️⃣1️⃣ RSI MOMENTUM
     # ==================================================
 
     rsi = tf15.get("rsi")
-    if rsi is None or rsi < 55 or rsi > 65:
+
+    if rsi is None:
+        return None
+
+    if rsi < 55 or rsi > 65:
         return None
 
     # ==================================================
-    # 6️⃣ DİRENÇ FİLTRESİ
+    # 1️⃣2️⃣ DİRENÇ FİLTRESİ
     # ==================================================
 
     r1h = get_last_resistance(tf1h["df"])
+
     if r1h:
-        dist_pct = ((r1h - current_price) / current_price) * 100
+
+        dist_pct = ((r1h - price) / price) * 100
+
         if dist_pct < 1:
             return None
 
     # ==================================================
-    # 7️⃣ GÜÇ SKORU
+    # 1️⃣3️⃣ GÜÇ SKORU
     # ==================================================
 
-    base_strength = 50
+    base_strength = 55
     volume_boost = 0
+    rvol_boost = 0
+    sweep_boost = 0
 
-    if prev["Volume"] > vol_ma_prev * 2:
-        volume_boost += 5
+    if prev["Volume"] > vol_ma_prev * 2.5:
+        volume_boost += 6
 
-    if last["Volume"] > vol_ma_last * 1.5:
-        volume_boost += 3
+    if last["Volume"] > vol_ma_last * 2:
+        volume_boost += 4
+
+    if rvol > 2:
+        rvol_boost += 5
+
+    if sweep_detected:
+        sweep_boost += 4
 
     return {
         "main_type": "SCALPING",
-        "base_strength": base_strength + volume_boost
+        "base_strength": base_strength + volume_boost + rvol_boost + sweep_boost
     }
 
 
