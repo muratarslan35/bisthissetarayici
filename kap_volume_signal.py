@@ -1,5 +1,6 @@
 from datetime import datetime
 
+
 def detect_kap_volume_momentum(item, kap_cache):
 
     symbol = item["symbol"]
@@ -14,11 +15,27 @@ def detect_kap_volume_momentum(item, kap_cache):
         return None
 
     last = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    # -------------------------------------------------
+    # HACİM PATLAMASI
+    # -------------------------------------------------
 
     vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
 
-    if last["Volume"] < vol_ma * 2:
+    if last["Volume"] < vol_ma * 2.5:
         return None
+
+    # -------------------------------------------------
+    # GAP MOMENTUM
+    # -------------------------------------------------
+
+    if last["Close"] < prev["Close"] * 1.01:
+        return None
+
+    # -------------------------------------------------
+    # KAP ZAMAN KONTROL
+    # -------------------------------------------------
 
     kap = kap_cache[symbol]
 
@@ -26,6 +43,10 @@ def detect_kap_volume_momentum(item, kap_cache):
 
     if minutes > 3:
         return None
+
+    # -------------------------------------------------
+    # SİNYAL
+    # -------------------------------------------------
 
     return {
         "symbol": symbol,
