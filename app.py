@@ -464,6 +464,7 @@ def generate_invite_codes():
         "codes": created_codes
     })
 
+
 # ======================================================
 # SCANNER
 # ======================================================
@@ -525,7 +526,6 @@ def scanner_loop():
                         last_weekly_report = week_id
 
                 time.sleep(30)
-
                 continue
 
             # --------------------------------------------------
@@ -533,7 +533,6 @@ def scanner_loop():
             # --------------------------------------------------
 
             dashboard.SYSTEM_ACTIVE = True
-
             print("✅ MARKET AÇIK → TARAMA", flush=True)
 
             now_ts = time.time()
@@ -544,14 +543,14 @@ def scanner_loop():
 
                     new_kaps = check_kap(FALLBACK_SYMBOLS)
 
-                if new_kaps:
-                    kap_cache.update(new_kaps)
+                    if new_kaps:
+                        kap_cache.update(new_kaps)
 
                 except Exception as e:
 
-                   print("KAP tarama hatası:", e)
+                    print("KAP tarama hatası:", e)
 
-                    last_kap_check = now_ts
+                last_kap_check = now_ts
 
             market_data = fetch_bist_data()
 
@@ -624,7 +623,6 @@ def scanner_loop():
             print("🔥 Scanner genel hata:", e, flush=True)
 
         time.sleep(SCAN_INTERVAL)
-
 
 # ======================================================
 # START
