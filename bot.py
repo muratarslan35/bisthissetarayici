@@ -12,9 +12,7 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 
-from kap_monitor import check_kap
-from kap_volume_signal import detect_kap_volume_momentum
-from utils import FALLBACK_SYMBOLS
+
 
 # ======================================================
 # ENV
