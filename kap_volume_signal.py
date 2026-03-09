@@ -1,4 +1,5 @@
 from datetime import datetime
+import pandas as pd
 
 
 def detect_kap_volume_momentum(item, kap_cache):
@@ -11,42 +12,58 @@ def detect_kap_volume_momentum(item, kap_cache):
     tf15 = item["tf"]["15m"]
     df = tf15["df"]
 
-    if df is None or len(df) < 20:
+    if df is None or len(df) < 30:
         return None
 
     last = df.iloc[-1]
-    prev = df.iloc[-2]
 
-    # -------------------------------------------------
+    # -----------------------------
     # HACİM PATLAMASI
-    # -------------------------------------------------
+    # -----------------------------
 
     vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
 
-    if last["Volume"] < vol_ma * 2.5:
+    if last["Volume"] < vol_ma * 2:
         return None
 
-    # -------------------------------------------------
-    # GAP MOMENTUM
-    # -------------------------------------------------
+    # -----------------------------
+    # VWAP HESABI
+    # -----------------------------
 
-    if last["Close"] < prev["Close"] * 1.01:
+    typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
+
+    vwap = (typical_price * df["Volume"]).cumsum() / df["Volume"].cumsum()
+
+    last_vwap = vwap.iloc[-1]
+
+    if last["Close"] < last_vwap:
         return None
 
-    # -------------------------------------------------
-    # KAP ZAMAN KONTROL
-    # -------------------------------------------------
+    # -----------------------------
+    # MOMENTUM
+    # -----------------------------
+
+    prev_close = df["Close"].iloc[-2]
+
+    momentum = (last["Close"] - prev_close) / prev_close
+
+    if momentum < 0.01:
+        return None
+
+    # -----------------------------
+    # KAP ZAMAN KONTROLÜ
+    # -----------------------------
 
     kap = kap_cache[symbol]
 
-    minutes = (datetime.now() - kap["time"]).total_seconds() / 60
+    minutes = (datetime.now() - kap["time"]).seconds / 60
 
-    if minutes > 3:
+    if minutes > 5:
         return None
 
-    # -------------------------------------------------
+    # -----------------------------
     # SİNYAL
-    # -------------------------------------------------
+    # -----------------------------
 
     return {
         "symbol": symbol,
