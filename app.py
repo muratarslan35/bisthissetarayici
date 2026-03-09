@@ -540,11 +540,18 @@ def scanner_loop():
 
             if now_ts - last_kap_check > KAP_INTERVAL:
 
-                new_kaps = check_kap(FALLBACK_SYMBOLS)
+                try:
 
-                kap_cache.update(new_kaps)
+                    new_kaps = check_kap(FALLBACK_SYMBOLS)
 
-                last_kap_check = now_ts
+                if new_kaps:
+                    kap_cache.update(new_kaps)
+
+                except Exception as e:
+
+                   print("KAP tarama hatası:", e)
+
+                    last_kap_check = now_ts
 
             market_data = fetch_bist_data()
 
