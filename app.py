@@ -465,6 +465,7 @@ def generate_invite_codes():
     })
 
 
+
 # ======================================================
 # SCANNER
 # ======================================================
@@ -622,7 +623,8 @@ def scanner_loop():
 
             print("🔥 Scanner genel hata:", e, flush=True)
 
-        time.sleep(SCAN_INTERVAL)
+        time.sleep(SCAN_INTERVAL)                    
+
 
 # ======================================================
 # START
