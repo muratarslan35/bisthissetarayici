@@ -95,7 +95,7 @@ def check_kap(fallback_symbols):
         results[symbol]={
             "title":title,
             "link":link,
-            "time":datetime.now()
+            "time":datetime.now(), 
             "alert_sent": False
         }
 
