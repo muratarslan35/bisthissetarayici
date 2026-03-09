@@ -96,6 +96,7 @@ def check_kap(fallback_symbols):
             "title":title,
             "link":link,
             "time":datetime.now()
+            "alert_sent": False
         }
 
         sent.add(kap_id)
