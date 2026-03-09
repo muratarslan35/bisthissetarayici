@@ -22,7 +22,7 @@ def detect_kap_volume_momentum(item,kap_cache):
 
     kap=kap_cache[symbol]
 
-    minutes=(datetime.now()-kap["time"]).seconds/60
+    minutes = (datetime.now() - kap["time"]).total_seconds() / 60
 
     if minutes>3:
         return None
