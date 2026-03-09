@@ -33,6 +33,9 @@ from dashboard import (
     push_signal,
     push_success_signal
 )
+from kap_monitor import check_kap
+from kap_volume_signal import detect_kap_volume_momentum
+from utils import FALLBACK_SYMBOLS
 import dashboard
 
 # ======================================================
@@ -466,17 +469,20 @@ def generate_invite_codes():
 # ======================================================
 
 def scanner_loop():
+
     send_startup_message()
-    kap_cache={}
-    last_kap_check=0
-    KAP_INTERVAL=45
+
+    kap_cache = {}
+    last_kap_check = 0
+    KAP_INTERVAL = 45
 
     last_daily_report = None
     last_weekly_report = None
-    last_close_snapshot_date = None
 
     while True:
+
         now = now_tr()
+
         print(f"\n⏱ Döngü: {now.strftime('%H:%M:%S')}", flush=True)
 
         reset_daily_success_if_needed()
@@ -489,69 +495,78 @@ def scanner_loop():
             # --------------------------------------------------
             # MARKET KAPALI
             # --------------------------------------------------
+
             if not is_market_open(now):
+
                 print("⏹ Market kapalı", flush=True)
+
                 dashboard.SYSTEM_ACTIVE = False
 
                 if last_daily_report != now.date() and now.time() > BIST_CLOSE:
+
                     report = build_daily_success_report()
+
                     if report:
                         broadcast_signal(report)
+
                     last_daily_report = now.date()
 
                 if now.weekday() == 4 and now.time() >= dtime(18, 10):
+
                     week_id = now.strftime("%Y-%W")
+
                     if last_weekly_report != week_id:
+
                         report = build_weekly_success_report()
+
                         if report:
                             broadcast_signal(report)
+
                         last_weekly_report = week_id
 
                 time.sleep(30)
+
                 continue
 
             # --------------------------------------------------
-# MARKET AÇIK
-# --------------------------------------------------
-dashboard.SYSTEM_ACTIVE = True
-print("✅ MARKET AÇIK → TARAMA", flush=True)
+            # MARKET AÇIK
+            # --------------------------------------------------
 
-# -------------------------------
-# KAP CACHE CHECK
-# -------------------------------
-now_ts = time.time()
+            dashboard.SYSTEM_ACTIVE = True
 
-if now_ts - last_kap_check > KAP_INTERVAL:
+            print("✅ MARKET AÇIK → TARAMA", flush=True)
 
-    new_kaps = check_kap(FALLBACK_SYMBOLS)
+            now_ts = time.time()
 
-    kap_cache.update(new_kaps)
+            if now_ts - last_kap_check > KAP_INTERVAL:
 
-    last_kap_check = now_ts
+                new_kaps = check_kap(FALLBACK_SYMBOLS)
 
-market_data = fetch_bist_data()
+                kap_cache.update(new_kaps)
 
-for item in market_data:
-    symbol = item.get("symbol")
-    price = item.get("current_price")
+                last_kap_check = now_ts
 
-    if symbol and isinstance(price, (int, float)):
-        dashboard.LIVE_PRICES[symbol] = price
+            market_data = fetch_bist_data()
 
-    try:
+            for item in market_data:
 
-        # --------------------------------
-        # KAP MOMENTUM KONTROLÜ
-        # --------------------------------
-        kap_signal = detect_kap_volume_momentum(item, kap_cache)
+                symbol = item.get("symbol")
+                price = item.get("current_price")
 
-        if kap_signal:
+                if symbol and isinstance(price, (int, float)):
+                    dashboard.LIVE_PRICES[symbol] = price
 
-            kap_symbol = kap_signal["symbol"]
+                try:
 
-            if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
+                    kap_signal = detect_kap_volume_momentum(item, kap_cache)
 
-                msg = f"""
+                    if kap_signal:
+
+                        kap_symbol = kap_signal["symbol"]
+
+                        if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
+
+                            msg = f"""
 🚨 KAP DESTEKLİ MOMENTUM
 
 📊 {kap_signal['symbol']}
@@ -563,49 +578,53 @@ for item in market_data:
 🔗 {kap_signal['link']}
 """
 
-                send_to_channel(msg)
+                            send_to_channel(msg)
 
-                kap_cache[kap_symbol]["alert_sent"] = True
+                            kap_cache[kap_symbol]["alert_sent"] = True
 
-        # --------------------------------
-        # NORMAL SİNYAL MOTORU
-        # --------------------------------
-        signals = process_symbol_signals(item)
+                    signals = process_symbol_signals(item)
 
-        success_hits = update_success_targets(symbol, price)
+                    success_hits = update_success_targets(symbol, price)
 
-        for s in success_hits:
-            push_success_signal(s)
+                    for s in success_hits:
 
-            msg = format_signal_message(s)
+                        push_success_signal(s)
 
-            if s.get("main_algorithm") == "SCALPING":
-                send_to_channel(msg)
-            else:
-                broadcast_signal(msg)
+                        msg = format_signal_message(s)
 
-        for s in signals:
-            push_signal(s)
+                        if s.get("main_algorithm") == "SCALPING":
+                            send_to_channel(msg)
+                        else:
+                            broadcast_signal(msg)
 
-            msg = format_signal_message(s)
+                    for s in signals:
 
-            if s.get("main_algorithm") == "SCALPING":
-                send_to_channel(msg)
-            else:
-                broadcast_signal(msg)
+                        push_signal(s)
 
-    except Exception as e:
-        print(f"⚠ {symbol} hata:", e, flush=True)
+                        msg = format_signal_message(s)
 
-except Exception as e:
-    print("🔥 Scanner genel hata:", e, flush=True)
+                        if s.get("main_algorithm") == "SCALPING":
+                            send_to_channel(msg)
+                        else:
+                            broadcast_signal(msg)
 
-time.sleep(SCAN_INTERVAL)
+                except Exception as e:
+
+                    print(f"⚠ {symbol} hata:", e, flush=True)
+
+        except Exception as e:
+
+            print("🔥 Scanner genel hata:", e, flush=True)
+
+        time.sleep(SCAN_INTERVAL)
+
 
 # ======================================================
 # START
 # ======================================================
 
 if __name__ == "__main__":
+
     threading.Thread(target=scanner_loop, daemon=True).start()
+
     app.run(host="0.0.0.0", port=5000, debug=False)
