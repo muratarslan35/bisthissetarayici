@@ -467,6 +467,9 @@ def generate_invite_codes():
 
 def scanner_loop():
     send_startup_message()
+    kap_cache={}
+    last_kap_check=0
+    KAP_INTERVAL=45
 
     last_daily_report = None
     last_weekly_report = None
@@ -508,47 +511,96 @@ def scanner_loop():
                 continue
 
             # --------------------------------------------------
-            # MARKET AÇIK
-            # --------------------------------------------------
-            dashboard.SYSTEM_ACTIVE = True
-            print("✅ MARKET AÇIK → TARAMA", flush=True)
+# MARKET AÇIK
+# --------------------------------------------------
+dashboard.SYSTEM_ACTIVE = True
+print("✅ MARKET AÇIK → TARAMA", flush=True)
 
-            market_data = fetch_bist_data()
+# -------------------------------
+# KAP CACHE CHECK
+# -------------------------------
+now_ts = time.time()
 
-            for item in market_data:
-                symbol = item.get("symbol")
-                price = item.get("current_price")
+if now_ts - last_kap_check > KAP_INTERVAL:
 
-                if symbol and isinstance(price, (int, float)):
-                    dashboard.LIVE_PRICES[symbol] = price
+    new_kaps = check_kap(FALLBACK_SYMBOLS)
 
-                try:
-                    signals = process_symbol_signals(item)
-                    success_hits = update_success_targets(symbol, price)
+    kap_cache.update(new_kaps)
 
-                    for s in success_hits:
-                        push_success_signal(s)
-                        msg = format_signal_message(s)
-                        if s.get("main_algorithm") == "SCALPING":
-                            send_to_channel(msg)
-                        else:
-                            broadcast_signal(msg)
+    last_kap_check = now_ts
 
-                    for s in signals:
-                        push_signal(s)
-                        msg = format_signal_message(s)
-                        if s.get("main_algorithm") == "SCALPING":
-                            send_to_channel(msg)
-                        else:
-                            broadcast_signal(msg)
+market_data = fetch_bist_data()
 
-                except Exception as e:
-                    print(f"⚠ {symbol} hata:", e, flush=True)
+for item in market_data:
+    symbol = item.get("symbol")
+    price = item.get("current_price")
 
-        except Exception as e:
-            print("🔥 Scanner genel hata:", e, flush=True)
+    if symbol and isinstance(price, (int, float)):
+        dashboard.LIVE_PRICES[symbol] = price
 
-        time.sleep(SCAN_INTERVAL)
+    try:
+
+        # --------------------------------
+        # KAP MOMENTUM KONTROLÜ
+        # --------------------------------
+        kap_signal = detect_kap_volume_momentum(item, kap_cache)
+
+        if kap_signal:
+
+            kap_symbol = kap_signal["symbol"]
+
+            if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
+
+                msg = f"""
+🚨 KAP DESTEKLİ MOMENTUM
+
+📊 {kap_signal['symbol']}
+
+📄 {kap_signal['title']}
+
+⚡ Hacim patlaması
+
+🔗 {kap_signal['link']}
+"""
+
+                send_to_channel(msg)
+
+                kap_cache[kap_symbol]["alert_sent"] = True
+
+        # --------------------------------
+        # NORMAL SİNYAL MOTORU
+        # --------------------------------
+        signals = process_symbol_signals(item)
+
+        success_hits = update_success_targets(symbol, price)
+
+        for s in success_hits:
+            push_success_signal(s)
+
+            msg = format_signal_message(s)
+
+            if s.get("main_algorithm") == "SCALPING":
+                send_to_channel(msg)
+            else:
+                broadcast_signal(msg)
+
+        for s in signals:
+            push_signal(s)
+
+            msg = format_signal_message(s)
+
+            if s.get("main_algorithm") == "SCALPING":
+                send_to_channel(msg)
+            else:
+                broadcast_signal(msg)
+
+    except Exception as e:
+        print(f"⚠ {symbol} hata:", e, flush=True)
+
+except Exception as e:
+    print("🔥 Scanner genel hata:", e, flush=True)
+
+time.sleep(SCAN_INTERVAL)
 
 # ======================================================
 # START
