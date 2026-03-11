@@ -10,6 +10,7 @@ from utils import (
     detect_support_resistance_break,
     get_last_resistance
 )
+from bist_market_filters import get_brut_list
 
 _STORE_LOCK = Lock()
 
@@ -103,6 +104,8 @@ WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
+BRUT_MAP = {}
+LAST_BRUT_UPDATE = None
 # ======================================================
 # ZAMAN
 # ======================================================
@@ -128,7 +131,25 @@ def fmt(v):
 def is_market_close_final_window():
     now = tr_now()
     return now.hour == 18 and now.minute >= 10
+# ======================================================
+# BRÜT TAKAS KONTROL
+# ======================================================
 
+def refresh_brut_list():
+
+    global BRUT_MAP, LAST_BRUT_UPDATE
+
+    now = tr_now()
+
+    # saatlik kontrol yeterli
+    if LAST_BRUT_UPDATE and (now - LAST_BRUT_UPDATE).seconds < 3600:
+        return
+
+    try:
+        BRUT_MAP = get_brut_list()
+        LAST_BRUT_UPDATE = now
+    except:
+        pass
 # ======================================================
 # RESET MEKANİZMALARI
 # ======================================================
@@ -872,8 +893,13 @@ def scalping_signal(item):
 # ======================================================
 
 def process_symbol_signals(item):
+    
+    refresh_brut_list()
+    
     symbol = item["symbol"]
     price = item["current_price"]
+
+    brut_info = BRUT_MAP.get(symbol)
 
     base_entry = None
     
@@ -1110,6 +1136,7 @@ def process_symbol_signals(item):
 
     signal = {
         "symbol": symbol,
+        "brut": brut_info,
         "entry_price": fmt(base_entry),
         "reentry": is_reentry,
         "price": fmt(price),
@@ -1522,6 +1549,13 @@ def format_signal_message(signal):
 
     lines = []
     lines.append(f"📊 {signal['symbol']}")
+
+    if signal.get("brut"):
+
+    days = signal["brut"].get("days_left")
+
+    if days is not None and days >= 0:
+        lines.append(f"‼️‼️ BRÜT TAKAS VAR({days} gün kaldı)")
 
     if signal.get("signal_type") == "reentry":
         lines.append("♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)")
