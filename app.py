@@ -154,7 +154,7 @@ def broadcast_signal(text):
 
 def send_startup_message():
     broadcast_signal(
-        "🟢 <b>HİSSE TARAMA SİSTEMİ BAŞLATILDI</b>\n"
+        "🟢 <b>KAP ve BRUT TAKAS eklenerek Bot Başlatıldı</b>\n"
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
     )
 
