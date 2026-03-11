@@ -1552,7 +1552,7 @@ def format_signal_message(signal):
 
     if signal.get("brut"):
 
-    days = signal["brut"].get("days_left")
+        days = signal["brut"].get("days_left")
 
     if days is not None and days >= 0:
         lines.append(f"‼️‼️ BRÜT TAKAS VAR({days} gün kaldı)")
