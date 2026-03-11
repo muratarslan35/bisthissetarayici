@@ -476,7 +476,7 @@ def scanner_loop():
 
     kap_cache = {}
     last_kap_check = 0
-    KAP_INTERVAL = 45
+    KAP_INTERVAL = 25
 
     last_daily_report = None
     last_weekly_report = None
@@ -538,6 +538,10 @@ def scanner_loop():
 
             now_ts = time.time()
 
+            # --------------------------------------------------
+            # KAP TARAMA
+            # --------------------------------------------------
+
             if now_ts - last_kap_check > KAP_INTERVAL:
 
                 try:
@@ -545,13 +549,22 @@ def scanner_loop():
                     new_kaps = check_kap(FALLBACK_SYMBOLS)
 
                     if new_kaps:
+
                         kap_cache.update(new_kaps)
+
+                        # cache büyümesini engelle
+                        if len(kap_cache) > 500:
+                            kap_cache.clear()
 
                 except Exception as e:
 
                     print("KAP tarama hatası:", e)
 
                 last_kap_check = now_ts
+
+            # --------------------------------------------------
+            # MARKET DATA
+            # --------------------------------------------------
 
             market_data = fetch_bist_data()
 
@@ -565,6 +578,10 @@ def scanner_loop():
 
                 try:
 
+                    # --------------------------------------------------
+                    # KAP MOMENTUM ENGINE
+                    # --------------------------------------------------
+
                     kap_signal = detect_kap_volume_momentum(item, kap_cache)
 
                     if kap_signal:
@@ -573,6 +590,17 @@ def scanner_loop():
 
                         if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
+                            flags = ""
+
+                            if kap_signal.get("brut"):
+                                flags += "⚠️ BRÜT TAKAS\n"
+
+                            if kap_signal.get("halt"):
+                                flags += "⛔ DEVRE KESİCİ\n"
+
+                            if kap_signal.get("smart_money"):
+                                flags += "🐋 SMART MONEY\n"
+
                             msg = f"""
 🚨 KAP DESTEKLİ MOMENTUM
 
@@ -580,7 +608,9 @@ def scanner_loop():
 
 📄 {kap_signal['title']}
 
-⚡ Hacim patlaması
+{flags}
+
+📈 RVOL: {kap_signal.get('rvol')}
 
 🔗 {kap_signal['link']}
 """
@@ -589,9 +619,17 @@ def scanner_loop():
 
                             kap_cache[kap_symbol]["alert_sent"] = True
 
+                    # --------------------------------------------------
+                    # NORMAL SIGNAL ENGINE
+                    # --------------------------------------------------
+
                     signals = process_symbol_signals(item)
 
                     success_hits = update_success_targets(symbol, price)
+
+                    # -----------------------
+                    # SUCCESS SIGNALS
+                    # -----------------------
 
                     for s in success_hits:
 
@@ -603,6 +641,10 @@ def scanner_loop():
                             send_to_channel(msg)
                         else:
                             broadcast_signal(msg)
+
+                    # -----------------------
+                    # NORMAL SIGNALS
+                    # -----------------------
 
                     for s in signals:
 
@@ -623,7 +665,8 @@ def scanner_loop():
 
             print("🔥 Scanner genel hata:", e, flush=True)
 
-        time.sleep(SCAN_INTERVAL)                    
+        time.sleep(SCAN_INTERVAL)
+                    
 
 
 # ======================================================
