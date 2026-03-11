@@ -1550,12 +1550,13 @@ def format_signal_message(signal):
     lines = []
     lines.append(f"📊 {signal['symbol']}")
 
+    # BRÜT TAKAS UYARISI
     if signal.get("brut"):
 
         days = signal["brut"].get("days_left")
 
-    if days is not None and days >= 0:
-        lines.append(f"‼️‼️ BRÜT TAKAS VAR({days} gün kaldı)")
+        if days is not None and days >= 0:
+            lines.append(f"‼️‼️ BRÜT TAKAS VAR ({days} gün kaldı)")
 
     if signal.get("signal_type") == "reentry":
         lines.append("♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)")
