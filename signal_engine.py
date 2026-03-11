@@ -141,15 +141,22 @@ def refresh_brut_list():
 
     now = tr_now()
 
-    # saatlik kontrol yeterli
-    if LAST_BRUT_UPDATE and (now - LAST_BRUT_UPDATE).seconds < 3600:
+    # aynı gün tekrar çekme
+    if LAST_BRUT_UPDATE and LAST_BRUT_UPDATE.date() == now.date():
         return
 
     try:
+
+        print("📡 BRÜT TAKAS LİSTESİ GÜNCELLENİYOR...")
+
         BRUT_MAP = get_brut_list()
+
         LAST_BRUT_UPDATE = now
-    except:
-        pass
+
+        print(f"✅ BRÜT TAKAS YÜKLENDİ → {len(BRUT_MAP)} hisse")
+
+    except Exception as e:
+        print(f"⚠ BRÜT TAKAS ÇEKİLEMEDİ → {e}")
 # ======================================================
 # RESET MEKANİZMALARI
 # ======================================================
