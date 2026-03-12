@@ -570,7 +570,11 @@ def scanner_loop():
             # BRUT TAKAS RAPORU (09:40)
             # --------------------------------------------------
 
-            if last_brut_report != now.date() and now.time() >= dtime(9, 40):
+            if (
+                last_brut_report != now.date()
+                and now.weekday() < 5
+                and now.time() >= dtime(9, 40)
+            ):
 
                 brut_report = build_brut_report()
 
@@ -578,7 +582,6 @@ def scanner_loop():
                     send_to_channel(brut_report)
 
                 last_brut_report = now.date()
-
             now_ts = time.time()
 
             
