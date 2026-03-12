@@ -607,11 +607,6 @@ def scanner_loop():
                 except Exception as e:
 
                     print("KAP tarama hatası:", e)
-                        
-
-                except Exception as e:
-
-                    print("KAP tarama hatası:", e)
 
                 last_kap_check = now_ts
 
