@@ -1,10 +1,12 @@
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 
+# ======================================================
+# CACHE
+# ======================================================
 
 BRUT_CACHE = {}
-HALT_CACHE = {}
+HALT_CACHE = set()
 
 LAST_BRUT_UPDATE = None
 LAST_HALT_UPDATE = None
@@ -24,53 +26,50 @@ def get_brut_list():
     if LAST_BRUT_UPDATE and (now - LAST_BRUT_UPDATE).days == 0:
         return BRUT_CACHE
 
-    url = "https://www.kap.org.tr/tr/BistTedbirleri"
-
     brut_map = {}
 
     try:
 
+        url = "https://www.kap.org.tr/tr/api/trading-halts"
+
         r = requests.get(url, timeout=10)
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        if r.status_code == 200:
 
-        tables = soup.find_all("table")
+            data = r.json()
 
-        for table in tables:
+            for item in data:
 
-            rows = table.find_all("tr")
+                code = item.get("stockCode")
 
-            for row in rows:
-
-                cols = row.find_all("td")
-
-                if len(cols) < 4:
+                if not code:
                     continue
 
-                try:
+                symbol = code + ".IS"
 
-                    symbol = cols[0].text.strip().split(".")[0] + ".IS"
+                end_date = item.get("endDate")
 
-                    end_date_text = cols[3].text.strip()
+                days_left = None
 
-                    end_date = datetime.strptime(end_date_text, "%d.%m.%Y")
+                if end_date:
+                    try:
+                        end_dt = datetime.strptime(end_date[:10], "%Y-%m-%d")
+                        days_left = (end_dt - now).days
+                    except:
+                        pass
 
-                    days_left = (end_date - now).days
-
-                    brut_map[symbol] = {
-                        "end_date": end_date_text,
-                        "days_left": days_left
-                    }
-
-                except:
-                    continue
+                brut_map[symbol] = {
+                    "end_date": end_date,
+                    "days_left": days_left
+                }
 
     except Exception as e:
-
         print(f"⚠ BRÜT TAKAS ÇEKİLEMEDİ → {e}")
 
     BRUT_CACHE = brut_map
     LAST_BRUT_UPDATE = now
+
+    print(f"📊 BRÜT TAKAS SAYISI: {len(brut_map)}")
 
     return brut_map
 
