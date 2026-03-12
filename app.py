@@ -37,6 +37,7 @@ from kap_monitor import check_kap
 from kap_volume_signal import detect_kap_volume_momentum
 from utils import FALLBACK_SYMBOLS
 import dashboard
+from bist_market_filters import get_brut_list
 
 # ======================================================
 # ENV
@@ -147,7 +148,35 @@ def broadcast_signal(text):
         send_user_telegram(u["telegram_chat_id"], text)
 
     conn.close()
+# ======================================================
+# BRUT TAKAS RAPORU
+# ======================================================
 
+def build_brut_report():
+
+    brut_map = get_brut_list()
+
+    if not brut_map:
+        return None
+
+    lines = []
+
+    lines.append("⚠️ BUGÜN BRÜT TAKAS OLAN HİSSELER")
+    lines.append("")
+
+    for symbol, data in sorted(brut_map.items()):
+
+        days = data.get("days_left")
+
+        if days is None:
+            continue
+
+        lines.append(f"{symbol.replace('.IS','')} → {days} gün")
+
+    lines.append("")
+    lines.append(f"🕒 {now_tr().strftime('%H:%M')}")
+
+    return "\n".join(lines)
 # ======================================================
 # STARTUP MESSAGE
 # ======================================================
@@ -478,6 +507,7 @@ def scanner_loop():
     last_kap_check = 0
     KAP_INTERVAL = 25
 
+    last_brut_report = None
     last_daily_report = None
     last_weekly_report = None
 
@@ -536,7 +566,22 @@ def scanner_loop():
             dashboard.SYSTEM_ACTIVE = True
             print("✅ MARKET AÇIK → TARAMA", flush=True)
 
+            # --------------------------------------------------
+            # BRUT TAKAS RAPORU (09:40)
+            # --------------------------------------------------
+
+            if last_brut_report != now.date() and now.time() >= dtime(9, 40):
+
+                brut_report = build_brut_report()
+
+                if brut_report:
+                    send_to_channel(brut_report)
+
+                last_brut_report = now.date()
+
             now_ts = time.time()
+
+            
 
             # --------------------------------------------------
             # KAP TARAMA
