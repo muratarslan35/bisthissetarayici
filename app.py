@@ -602,7 +602,12 @@ def scanner_loop():
 
                         # cache büyümesini engelle
                         if len(kap_cache) > 500:
-                            kap_cache.clear()
+                            kap_cache = dict(list(kap_cache.items())[-200:])
+
+                except Exception as e:
+
+                    print("KAP tarama hatası:", e)
+                        
 
                 except Exception as e:
 
