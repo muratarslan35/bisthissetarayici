@@ -53,7 +53,7 @@ ADMIN_PANEL_PATH = os.getenv("ADMIN_PANEL_PATH", "admin-hidden")
 TR_TZ = ZoneInfo("Europe/Istanbul")
 BIST_OPEN = dtime(9, 40)
 BIST_CLOSE = dtime(18, 5)
-SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "60"))
+SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "25"))
 
 # ======================================================
 # TELEGRAM
