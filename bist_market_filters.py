@@ -1,5 +1,7 @@
 import requests
 from datetime import datetime
+from bs4 import BeautifulSoup
+
 
 # ======================================================
 # CACHE
@@ -28,6 +30,10 @@ def get_brut_list():
 
     brut_map = {}
 
+    # --------------------------------------------------
+    # 1️⃣ KAP API (birinci kaynak)
+    # --------------------------------------------------
+
     try:
 
         url = "https://www.kap.org.tr/tr/api/trading-halts"
@@ -52,11 +58,18 @@ def get_brut_list():
                 days_left = None
 
                 if end_date:
+
                     try:
-                        end_dt = datetime.strptime(end_date[:10], "%Y-%m-%d")
-                        days_left = (end_dt - now).days
+
+                        end_dt = datetime.strptime(end_date[:10], "%Y-%m-%d").date()
+
+                        days_left = (end_dt - now.date()).days
+
+                        if days_left < 0:
+                            continue
+
                     except:
-                        pass
+                        continue
 
                 brut_map[symbol] = {
                     "end_date": end_date,
@@ -64,7 +77,65 @@ def get_brut_list():
                 }
 
     except Exception as e:
-        print(f"⚠ BRÜT TAKAS ÇEKİLEMEDİ → {e}")
+        print(f"⚠ KAP API BRÜT TAKAS HATASI → {e}")
+
+
+    # --------------------------------------------------
+    # 2️⃣ KAP TEDBİRLERİ SAYFASI (fallback)
+    # --------------------------------------------------
+
+    if len(brut_map) == 0:
+
+        try:
+
+            url = "https://www.kap.org.tr/tr/BistTedbirleri"
+
+            r = requests.get(url, timeout=10)
+
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            tables = soup.find_all("table")
+
+            for table in tables:
+
+                rows = table.find_all("tr")
+
+                for row in rows:
+
+                    cols = row.find_all("td")
+
+                    if len(cols) < 4:
+                        continue
+
+                    try:
+
+                        symbol = cols[0].text.strip().split(".")[0] + ".IS"
+
+                        end_date_text = cols[3].text.strip()
+
+                        end_dt = datetime.strptime(end_date_text, "%d.%m.%Y").date()
+
+                        days_left = (end_dt - now.date()).days
+
+                        if days_left < 0:
+                            continue
+
+                        brut_map[symbol] = {
+                            "end_date": end_date_text,
+                            "days_left": days_left
+                        }
+
+                    except:
+                        continue
+
+        except Exception as e:
+
+            print(f"⚠ KAP SAYFA BRÜT TAKAS HATASI → {e}")
+
+
+    # --------------------------------------------------
+    # CACHE
+    # --------------------------------------------------
 
     BRUT_CACHE = brut_map
     LAST_BRUT_UPDATE = now
