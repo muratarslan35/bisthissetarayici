@@ -183,7 +183,7 @@ def build_brut_report():
 
 def send_startup_message():
     broadcast_signal(
-        "🟢 <b>KAP ve BRUT TAKAS eklenerek Bot Başlatıldı</b>\n"
+        "🟢 <b> Brüt takas iyilestirmesi ile Bot Başlatıldı</b>\n"
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
     )
 
