@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime
+from dateutil import parser
 from bs4 import BeautifulSoup
-
 
 # ======================================================
 # CACHE
@@ -12,6 +12,10 @@ HALT_CACHE = set()
 
 LAST_BRUT_UPDATE = None
 LAST_HALT_UPDATE = None
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
 
 # ======================================================
@@ -24,21 +28,70 @@ def get_brut_list():
 
     now = datetime.now()
 
-    # günde 1 kez çek
+    # cache (günde 1 kez)
     if LAST_BRUT_UPDATE and (now - LAST_BRUT_UPDATE).days == 0:
         return BRUT_CACHE
 
     brut_map = {}
 
-    # --------------------------------------------------
-    # 1️⃣ KAP API (birinci kaynak)
-    # --------------------------------------------------
+    # ======================================================
+    # 1️⃣ BIST VBTS API (ANA KAYNAK)
+    # ======================================================
+
+    try:
+
+        url = "https://www.kap.org.tr/tr/api/vbts"
+
+        r = requests.get(url, headers=HEADERS, timeout=10)
+
+        if r.status_code == 200:
+
+            data = r.json()
+
+            for item in data:
+
+                text = str(item).upper()
+
+                if "BRÜT" not in text and "BRUT" not in text:
+                    continue
+
+                code = item.get("stockCode")
+
+                end_date = item.get("endDate")
+
+                if not code or not end_date:
+                    continue
+
+                try:
+
+                    end_dt = parser.parse(end_date).date()
+
+                    days_left = (end_dt - now.date()).days
+
+                    if days_left < 0:
+                        continue
+
+                except:
+                    continue
+
+                brut_map[code + ".IS"] = {
+                    "end_date": end_date,
+                    "days_left": days_left
+                }
+
+    except Exception as e:
+
+        print("⚠ VBTS API okunamadı:", e)
+
+    # ======================================================
+    # 2️⃣ KAP HALT API (İKİNCİ KAYNAK)
+    # ======================================================
 
     try:
 
         url = "https://www.kap.org.tr/tr/api/trading-halts"
 
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, headers=HEADERS, timeout=10)
 
         if r.status_code == 200:
 
@@ -48,41 +101,35 @@ def get_brut_list():
 
                 code = item.get("stockCode")
 
-                if not code:
-                    continue
-
-                symbol = code + ".IS"
-
                 end_date = item.get("endDate")
 
-                days_left = None
+                if not code or not end_date:
+                    continue
 
-                if end_date:
+                try:
 
-                    try:
+                    end_dt = parser.parse(end_date).date()
 
-                        end_dt = datetime.strptime(end_date[:10], "%Y-%m-%d").date()
+                    days_left = (end_dt - now.date()).days
 
-                        days_left = (end_dt - now.date()).days
-
-                        if days_left < 0:
-                            continue
-
-                    except:
+                    if days_left < 0:
                         continue
 
-                brut_map[symbol] = {
+                except:
+                    continue
+
+                brut_map.setdefault(code + ".IS", {
                     "end_date": end_date,
                     "days_left": days_left
-                }
+                })
 
     except Exception as e:
-        print(f"⚠ KAP API BRÜT TAKAS HATASI → {e}")
 
+        print("⚠ HALT API okunamadı:", e)
 
-    # --------------------------------------------------
-    # 2️⃣ KAP TEDBİRLERİ SAYFASI (fallback)
-    # --------------------------------------------------
+    # ======================================================
+    # 3️⃣ KAP WEB FALLBACK
+    # ======================================================
 
     if len(brut_map) == 0:
 
@@ -90,7 +137,7 @@ def get_brut_list():
 
             url = "https://www.kap.org.tr/tr/BistTedbirleri"
 
-            r = requests.get(url, timeout=10)
+            r = requests.get(url, headers=HEADERS, timeout=10)
 
             soup = BeautifulSoup(r.text, "html.parser")
 
@@ -113,7 +160,7 @@ def get_brut_list():
 
                         end_date_text = cols[3].text.strip()
 
-                        end_dt = datetime.strptime(end_date_text, "%d.%m.%Y").date()
+                        end_dt = parser.parse(end_date_text).date()
 
                         days_left = (end_dt - now.date()).days
 
@@ -130,12 +177,11 @@ def get_brut_list():
 
         except Exception as e:
 
-            print(f"⚠ KAP SAYFA BRÜT TAKAS HATASI → {e}")
+            print("⚠ KAP WEB fallback hatası:", e)
 
-
-    # --------------------------------------------------
+    # ======================================================
     # CACHE
-    # --------------------------------------------------
+    # ======================================================
 
     BRUT_CACHE = brut_map
     LAST_BRUT_UPDATE = now
@@ -155,7 +201,7 @@ def get_halt_list():
 
     now = datetime.now()
 
-    # 5 dakikada bir çek
+    # cache 5 dakika
     if LAST_HALT_UPDATE and (now - LAST_HALT_UPDATE).seconds < 300:
         return HALT_CACHE
 
@@ -165,7 +211,7 @@ def get_halt_list():
 
         url = "https://www.kap.org.tr/tr/api/trading-halts"
 
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, headers=HEADERS, timeout=10)
 
         if r.status_code == 200:
 
@@ -180,7 +226,7 @@ def get_halt_list():
 
     except Exception as e:
 
-        print(f"⚠ HALT LİSTESİ ÇEKİLEMEDİ → {e}")
+        print("⚠ HALT LISTESI OKUNAMADI:", e)
 
     HALT_CACHE = halt_set
     LAST_HALT_UPDATE = now
