@@ -493,8 +493,6 @@ def generate_invite_codes():
         "codes": created_codes
     })
 
-
-
 # ======================================================
 # SCANNER
 # ======================================================
@@ -582,9 +580,8 @@ def scanner_loop():
                     send_to_channel(brut_report)
 
                 last_brut_report = now.date()
-            now_ts = time.time()
 
-            
+            now_ts = time.time()
 
             # --------------------------------------------------
             # KAP TARAMA
@@ -615,6 +612,29 @@ def scanner_loop():
             # --------------------------------------------------
 
             market_data = fetch_bist_data()
+
+            # 🔒 VERİ KONTROLÜ (EKLENEN KISIM - HATASIZ)
+            if not isinstance(market_data, list) or len(market_data) == 0:
+                print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
+                time.sleep(60)
+                continue
+
+            valid_count = 0
+
+            for x in market_data:
+                try:
+                    price = x.get("current_price")
+                    symbol = x.get("symbol")
+
+                    if symbol and isinstance(price, (int, float)) and price > 0:
+                        valid_count += 1
+                except:
+                    continue
+
+            if valid_count < 50:
+                print(f"⚠ Sağlıklı veri yok ({valid_count}) → sinyal durduruldu", flush=True)
+                time.sleep(60)
+                continue
 
             for item in market_data:
 
@@ -714,6 +734,7 @@ def scanner_loop():
             print("🔥 Scanner genel hata:", e, flush=True)
 
         time.sleep(SCAN_INTERVAL)
+
                     
 
 
