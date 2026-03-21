@@ -1,234 +1,233 @@
 import requests
+import re
+import time
 from datetime import datetime
 from dateutil import parser
-from bs4 import BeautifulSoup
 
-# ======================================================
-# CACHE
-# ======================================================
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+CACHE_TTL = 60
 
 BRUT_CACHE = {}
-HALT_CACHE = set()
-
-LAST_BRUT_UPDATE = None
-LAST_HALT_UPDATE = None
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+LAST_UPDATE = None
 
 
 # ======================================================
-# BRÜT TAKAS LİSTESİ
+# SAFE HELPERS
+# ======================================================
+
+def normalize_symbol(code):
+    return code.strip().upper().replace(".IS", "") + ".IS"
+
+
+def parse_date_safe(date_str):
+    try:
+        return parser.parse(date_str).date()
+    except:
+        return None
+
+
+def days_left_calc(dt):
+    if not dt:
+        return None
+    return (dt - datetime.now().date()).days
+
+
+# ======================================================
+# 1️⃣ VBTS API (structured)
+# ======================================================
+
+def fetch_vbts():
+
+    url = "https://www.kap.org.tr/tr/api/vbts"
+
+    results = {}
+
+    try:
+
+        r = requests.get(url, headers=HEADERS, timeout=8)
+
+        if r.status_code != 200:
+            return results
+
+        data = r.json()
+
+        for item in data:
+
+            text = (
+                str(item.get("title","")) +
+                str(item.get("decisionText","")) +
+                str(item)
+            ).upper()
+
+            if "BRÜT" not in text and "BRUT" not in text:
+                continue
+
+            code = item.get("stockCode")
+            end_date = item.get("endDate")
+
+            if not code:
+                continue
+
+            end_dt = parse_date_safe(end_date)
+            days_left = days_left_calc(end_dt)
+
+            if days_left is not None and days_left < 0:
+                continue
+
+            results[normalize_symbol(code)] = {
+                "end_date": str(end_dt),
+                "days_left": days_left,
+                "source": "VBTS"
+            }
+
+    except Exception as e:
+        print("⚠ VBTS FAIL:", e)
+
+    return results
+
+
+# ======================================================
+# 2️⃣ DISCLOSURE API (EN KRİTİK)
+# ======================================================
+
+def fetch_disclosures():
+
+    url = "https://www.kap.org.tr/tr/api/disclosures"
+
+    results = {}
+
+    try:
+
+        r = requests.get(url, headers=HEADERS, timeout=8)
+
+        if r.status_code != 200:
+            return results
+
+        data = r.json()
+
+        for item in data[:200]:
+
+            title = str(item.get("title","")).upper()
+
+            if "BRÜT" not in title and "BRUT" not in title:
+                continue
+
+            codes = item.get("stockCodes")
+
+            if not codes:
+                continue
+
+            symbol = normalize_symbol(codes.split(",")[0])
+
+            results[symbol] = {
+                "end_date": None,
+                "days_left": None,
+                "source": "DISCLOSURE",
+                "title": title
+            }
+
+    except Exception as e:
+        print("⚠ DISCLOSURE FAIL:", e)
+
+    return results
+
+
+# ======================================================
+# 3️⃣ HTML + REGEX (backup)
+# ======================================================
+
+def fetch_regex():
+
+    url = "https://www.kap.org.tr/tr/BistTedbirleri"
+
+    results = {}
+
+    try:
+
+        r = requests.get(url, headers=HEADERS, timeout=8)
+
+        matches = re.findall(
+            r'([A-Z]{3,5})\s*</td>\s*<td>.*?</td>\s*<td>.*?</td>\s*<td>(\d{2}\.\d{2}\.\d{4})',
+            r.text
+        )
+
+        for sym, end_date in matches:
+
+            end_dt = parse_date_safe(end_date)
+            days_left = days_left_calc(end_dt)
+
+            if days_left is not None and days_left < 0:
+                continue
+
+            results[normalize_symbol(sym)] = {
+                "end_date": end_date,
+                "days_left": days_left,
+                "source": "REGEX"
+            }
+
+    except Exception as e:
+        print("⚠ REGEX FAIL:", e)
+
+    return results
+
+
+# ======================================================
+# 🔥 MAIN ENGINE
 # ======================================================
 
 def get_brut_list():
 
-    global BRUT_CACHE, LAST_BRUT_UPDATE
+    global BRUT_CACHE, LAST_UPDATE
 
     now = datetime.now()
 
-    # cache (günde 1 kez)
-    if LAST_BRUT_UPDATE and (now - LAST_BRUT_UPDATE).days == 0:
+    if LAST_UPDATE and (now - LAST_UPDATE).seconds < CACHE_TTL:
         return BRUT_CACHE
 
-    brut_map = {}
+    final = {}
 
-    # ======================================================
-    # 1️⃣ BIST VBTS API (ANA KAYNAK)
-    # ======================================================
+    # 1️⃣ VBTS
+    vbts = fetch_vbts()
+    final.update(vbts)
 
-    try:
+    # 2️⃣ DISCLOSURE (kritik)
+    disc = fetch_disclosures()
+    for k, v in disc.items():
+        final.setdefault(k, v)
 
-        url = "https://www.kap.org.tr/tr/api/vbts"
+    # 3️⃣ REGEX (her zaman çalışır)
+    regex = fetch_regex()
+    for k, v in regex.items():
+        final.setdefault(k, v)
 
-        r = requests.get(url, headers=HEADERS, timeout=10)
+    # --------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------
 
-        if r.status_code == 200:
+    clean = {}
 
-            data = r.json()
+    for k, v in final.items():
 
-            for item in data:
+        if not k.endswith(".IS"):
+            continue
 
-                text = str(item).upper()
+        # brute kesin veri yoksa bile dahil et (disclosure)
+        if v.get("days_left") is not None:
 
-                if "BRÜT" not in text and "BRUT" not in text:
-                    continue
+            if v["days_left"] < 0:
+                continue
 
-                code = item.get("stockCode")
+            if v["days_left"] > 90:
+                continue
 
-                end_date = item.get("endDate")
+        clean[k] = v
 
-                if not code or not end_date:
-                    continue
+    # --------------------------------------------------
 
-                try:
+    BRUT_CACHE = clean
+    LAST_UPDATE = now
 
-                    end_dt = parser.parse(end_date).date()
+    print(f"📊 BRÜT TAKAS SAYISI: {len(clean)}")
 
-                    days_left = (end_dt - now.date()).days
-
-                    if days_left < 0:
-                        continue
-
-                except:
-                    continue
-
-                brut_map[code + ".IS"] = {
-                    "end_date": end_date,
-                    "days_left": days_left
-                }
-
-    except Exception as e:
-
-        print("⚠ VBTS API okunamadı:", e)
-
-    # ======================================================
-    # 2️⃣ KAP HALT API (İKİNCİ KAYNAK)
-    # ======================================================
-
-    try:
-
-        url = "https://www.kap.org.tr/tr/api/trading-halts"
-
-        r = requests.get(url, headers=HEADERS, timeout=10)
-
-        if r.status_code == 200:
-
-            data = r.json()
-
-            for item in data:
-
-                code = item.get("stockCode")
-
-                end_date = item.get("endDate")
-
-                if not code or not end_date:
-                    continue
-
-                try:
-
-                    end_dt = parser.parse(end_date).date()
-
-                    days_left = (end_dt - now.date()).days
-
-                    if days_left < 0:
-                        continue
-
-                except:
-                    continue
-
-                brut_map.setdefault(code + ".IS", {
-                    "end_date": end_date,
-                    "days_left": days_left
-                })
-
-    except Exception as e:
-
-        print("⚠ HALT API okunamadı:", e)
-
-    # ======================================================
-    # 3️⃣ KAP WEB FALLBACK
-    # ======================================================
-
-    if len(brut_map) == 0:
-
-        try:
-
-            url = "https://www.kap.org.tr/tr/BistTedbirleri"
-
-            r = requests.get(url, headers=HEADERS, timeout=10)
-
-            soup = BeautifulSoup(r.text, "html.parser")
-
-            tables = soup.find_all("table")
-
-            for table in tables:
-
-                rows = table.find_all("tr")
-
-                for row in rows:
-
-                    cols = row.find_all("td")
-
-                    if len(cols) < 4:
-                        continue
-
-                    try:
-
-                        symbol = cols[0].text.strip().split(".")[0] + ".IS"
-
-                        end_date_text = cols[3].text.strip()
-
-                        end_dt = parser.parse(end_date_text).date()
-
-                        days_left = (end_dt - now.date()).days
-
-                        if days_left < 0:
-                            continue
-
-                        brut_map[symbol] = {
-                            "end_date": end_date_text,
-                            "days_left": days_left
-                        }
-
-                    except:
-                        continue
-
-        except Exception as e:
-
-            print("⚠ KAP WEB fallback hatası:", e)
-
-    # ======================================================
-    # CACHE
-    # ======================================================
-
-    BRUT_CACHE = brut_map
-    LAST_BRUT_UPDATE = now
-
-    print(f"📊 BRÜT TAKAS SAYISI: {len(brut_map)}")
-
-    return brut_map
-
-
-# ======================================================
-# DEVRE KESİCİ / HALT LİSTESİ
-# ======================================================
-
-def get_halt_list():
-
-    global HALT_CACHE, LAST_HALT_UPDATE
-
-    now = datetime.now()
-
-    # cache 5 dakika
-    if LAST_HALT_UPDATE and (now - LAST_HALT_UPDATE).seconds < 300:
-        return HALT_CACHE
-
-    halt_set = set()
-
-    try:
-
-        url = "https://www.kap.org.tr/tr/api/trading-halts"
-
-        r = requests.get(url, headers=HEADERS, timeout=10)
-
-        if r.status_code == 200:
-
-            data = r.json()
-
-            for item in data:
-
-                code = item.get("stockCode")
-
-                if code:
-                    halt_set.add(code + ".IS")
-
-    except Exception as e:
-
-        print("⚠ HALT LISTESI OKUNAMADI:", e)
-
-    HALT_CACHE = halt_set
-    LAST_HALT_UPDATE = now
-
-    return halt_set
+    return clean
