@@ -1,6 +1,6 @@
 from datetime import datetime
 from kap_watchlist_engine import in_watchlist
-from bist_market_filters import get_brut_list, get_halt_list
+from bist_market_filters import get_brut_list
 
 BRUT_LIST=set()
 HALT_LIST=set()
