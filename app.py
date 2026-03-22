@@ -61,6 +61,7 @@ SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "25"))
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 
 # ======================================================
 # FLASK
@@ -182,10 +183,16 @@ def build_brut_report():
 # ======================================================
 
 def send_startup_message():
-    broadcast_signal(
-        "🟢 <b> Brüt takas iyilestirmesi ile Bot Başlatıldı</b>\n"
+
+    if not ADMIN_CHAT_ID:
+        return
+
+    msg = (
+        "🟢 <b> Bot Başlatıldı</b>\n"
         f"🕒 {now_tr().strftime('%H:%M:%S')} | {now_tr().strftime('%d.%m.%Y')}"
     )
+
+    send_user_telegram(ADMIN_CHAT_ID, msg)
 
 # ======================================================
 # INVITE CODE
