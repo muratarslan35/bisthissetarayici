@@ -1,6 +1,5 @@
 import requests
 import re
-import time
 from datetime import datetime
 from dateutil import parser
 
@@ -40,281 +39,201 @@ def days_left_calc(dt):
 
 
 # ======================================================
-# 1️⃣ VBTS API (structured)
+# VBTS
 # ======================================================
 
 def fetch_vbts():
 
     url = "https://www.kap.org.tr/tr/api/vbts"
-
     results = {}
 
     try:
-
         r = requests.get(url, headers=HEADERS, timeout=10)
-
         if r.status_code != 200:
-            print("⚠ VBTS status:", r.status_code)
             return results
 
         data = r.json()
 
-        if not isinstance(data, list):
-            return results
-
         for item in data:
 
-            try:
+            text = (str(item) or "").upper()
 
-                text = (
-                    str(item.get("title","")) +
-                    str(item.get("decisionText","")) +
-                    str(item)
-                ).upper()
-
-                if "BRÜT" not in text and "BRUT" not in text:
-                    continue
-
-                code = item.get("stockCode")
-                end_date = item.get("endDate")
-
-                if not code:
-                    continue
-
-                symbol = normalize_symbol(code)
-                if not symbol:
-                    continue
-
-                end_dt = parse_date_safe(end_date)
-                days_left = days_left_calc(end_dt)
-
-                if days_left is not None and days_left < 0:
-                    continue
-
-                results[symbol] = {
-                    "end_date": str(end_dt),
-                    "days_left": days_left,
-                    "source": "VBTS"
-                }
-
-            except Exception as e:
-                print("VBTS item hata:", e)
+            if "BRÜT" not in text and "BRUT" not in text:
                 continue
 
+            code = item.get("stockCode")
+            if not code:
+                continue
+
+            symbol = normalize_symbol(code)
+
+            end_dt = parse_date_safe(item.get("endDate"))
+            days_left = days_left_calc(end_dt)
+
+            if days_left is not None and days_left < 0:
+                continue
+
+            results[symbol] = {
+                "days_left": days_left
+            }
+
     except Exception as e:
-        print("⚠ VBTS FAIL:", e)
+        print("VBTS error:", e)
 
     return results
 
 
 # ======================================================
-# 2️⃣ DISCLOSURE API (EN KRİTİK)
+# DISCLOSURE
 # ======================================================
 
 def fetch_disclosures():
 
     url = "https://www.kap.org.tr/tr/api/disclosures"
-
     results = {}
 
     try:
-
-        r = requests.get(url, headers=HEADERS, timeout=12)
-
+        r = requests.get(url, headers=HEADERS, timeout=10)
         if r.status_code != 200:
-            print("⚠ DISCLOSURE status:", r.status_code)
             return results
 
         data = r.json()
 
-        if not isinstance(data, list):
-            return results
-
         for item in data[:300]:
 
-            try:
+            title = str(item.get("title","")).upper()
 
-                title = str(item.get("title","")).upper()
-
-                if "BRÜT" not in title and "BRUT" not in title:
-                    continue
-
-                codes = item.get("stockCodes")
-
-                if not codes:
-                    continue
-
-                symbol = normalize_symbol(codes.split(",")[0])
-
-                if not symbol:
-                    continue
-
-                results[symbol] = {
-                    "end_date": None,
-                    "days_left": None,
-                    "source": "DISCLOSURE",
-                    "title": title
-                }
-
-            except Exception as e:
-                print("DISC item hata:", e)
+            if "BRÜT" not in title and "BRUT" not in title:
                 continue
 
+            codes = item.get("stockCodes")
+
+            if not codes:
+                continue
+
+            symbol = normalize_symbol(codes.split(",")[0])
+
+            results[symbol] = {
+                "days_left": None
+            }
+
     except Exception as e:
-        print("⚠ DISCLOSURE FAIL:", e)
-        return {}  # 🔥 KRİTİK → sistem devam eder
+        print("DISC error:", e)
 
     return results
 
 
 # ======================================================
-# 3️⃣ HTML + REGEX (backup)
+# REGEX
 # ======================================================
 
 def fetch_regex():
 
     url = "https://www.kap.org.tr/tr/BistTedbirleri"
-
     results = {}
 
     try:
-
         r = requests.get(url, headers=HEADERS, timeout=10)
 
-        if r.status_code != 200:
-            print("⚠ REGEX status:", r.status_code)
-            return results
-
         matches = re.findall(
-            r'([A-Z]{3,5})\s*</td>\s*<td>.*?</td>\s*<td>.*?</td>\s*<td>(\d{2}\.\d{2}\.\d{4})',
+            r'([A-Z]{3,5}).*?(\d{2}\.\d{2}\.\d{4})',
             r.text
         )
 
-        for sym, end_date in matches:
+        for sym, date_str in matches:
 
-            try:
+            symbol = normalize_symbol(sym)
 
-                symbol = normalize_symbol(sym)
-                if not symbol:
-                    continue
+            end_dt = parse_date_safe(date_str)
+            days_left = days_left_calc(end_dt)
 
-                end_dt = parse_date_safe(end_date)
-                days_left = days_left_calc(end_dt)
-
-                if days_left is not None and days_left < 0:
-                    continue
-
-                results[symbol] = {
-                    "end_date": end_date,
-                    "days_left": days_left,
-                    "source": "REGEX"
-                }
-
-            except Exception as e:
-                print("REGEX item hata:", e)
+            if days_left is not None and days_left < 0:
                 continue
 
+            results[symbol] = {
+                "days_left": days_left
+            }
+
     except Exception as e:
-        print("⚠ REGEX FAIL:", e)
+        print("REGEX error:", e)
 
     return results
 
 
 # ======================================================
-# 🔥 MAIN ENGINE (ULTRA SAFE)
+# MAIN
 # ======================================================
 
 def get_brut_list():
 
     global BRUT_CACHE, LAST_UPDATE
 
+    now = datetime.now()
+
+    if LAST_UPDATE and (now - LAST_UPDATE).seconds < CACHE_TTL:
+        return BRUT_CACHE
+
+    final = {}
+
+    final.update(fetch_vbts())
+    final.update(fetch_disclosures())
+    final.update(fetch_regex())
+
+    clean = {}
+
+    for k, v in final.items():
+
+        if not k or not k.endswith(".IS"):
+            continue
+
+        clean[k] = v
+
+    BRUT_CACHE = clean
+    LAST_UPDATE = now
+
+    print(f"📊 BRÜT: {len(clean)}")
+
+    return clean
+
+
+# ======================================================
+# 🔥 HALT DETECTOR (EDGE)
+# ======================================================
+
+def detect_halt_from_data(item):
+
     try:
 
-        now = datetime.now()
+        tf15 = item.get("tf", {}).get("15m")
+        if not tf15:
+            return False
 
-        # CACHE
-        if LAST_UPDATE and (now - LAST_UPDATE).seconds < CACHE_TTL:
-            return BRUT_CACHE
+        df = tf15.get("df")
 
-        final = {}
+        if df is None or len(df) < 5:
+            return False
 
-        # --------------------------------------------------
-        # VBTS
-        # --------------------------------------------------
-        try:
-            vbts = fetch_vbts()
-            if isinstance(vbts, dict):
-                final.update(vbts)
-        except Exception as e:
-            print("VBTS merge hata:", e)
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
 
-        # --------------------------------------------------
-        # DISCLOSURE
-        # --------------------------------------------------
-        try:
-            disc = fetch_disclosures()
-            if isinstance(disc, dict):
-                for k, v in disc.items():
-                    final.setdefault(k, v)
-        except Exception as e:
-            print("DISC merge hata:", e)
+        if last["Close"] == prev["Close"]:
 
-        # --------------------------------------------------
-        # REGEX
-        # --------------------------------------------------
-        try:
-            regex = fetch_regex()
-            if isinstance(regex, dict):
-                for k, v in regex.items():
-                    final.setdefault(k, v)
-        except Exception as e:
-            print("REGEX merge hata:", e)
+            vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
 
-        # --------------------------------------------------
-        # VALIDATION
-        # --------------------------------------------------
+            if vol_ma and last["Volume"] < vol_ma * 0.1:
+                return True
 
-        clean = {}
+        spread = (last["High"] - last["Low"]) / last["Close"]
 
-        for k, v in final.items():
+        if spread > 0.05:
+            return True
 
-            try:
+        return False
 
-                if not isinstance(k, str):
-                    continue
+    except:
+        return False
 
-                if not k.endswith(".IS"):
-                    continue
 
-                if not isinstance(v, dict):
-                    continue
-
-                if v.get("days_left") is not None:
-
-                    if v["days_left"] < 0:
-                        continue
-
-                    if v["days_left"] > 90:
-                        continue
-
-                clean[k] = v
-
-            except Exception as e:
-                print("VALIDATION hata:", e)
-                continue
-
-        # --------------------------------------------------
-
-        BRUT_CACHE = clean
-        LAST_UPDATE = now
-
-        print(f"📊 BRÜT TAKAS SAYISI: {len(clean)}")
-
-        return clean
-
-    except Exception as e:
-
-        print("🔥 get_brut_list KRİTİK HATA:", e)
-
-        # 🔥 EN ÖNEMLİ KISIM → SİSTEM ASLA DURMAZ
-        return BRUT_CACHE if BRUT_CACHE else {}
+# fallback
+def get_halt_list():
+    return set()
