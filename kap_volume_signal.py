@@ -1,66 +1,29 @@
 from datetime import datetime
 from kap_watchlist_engine import in_watchlist
-from bist_market_filters import get_brut_list
+from bist_market_filters import get_brut_list, detect_halt_from_data
 
-# 🔥 HALT SAFE IMPORT
-try:
-    from bist_market_filters import get_halt_list
-except:
-    def get_halt_list():
-        return set()
-
-BRUT_LIST = {}
-HALT_LIST = set()
+BRUT_LIST = set()
 LAST_FILTER_UPDATE = None
 
 
-# ------------------------------------------------
-# FILTER UPDATE (ULTRA SAFE)
-# ------------------------------------------------
-
 def refresh_filters():
 
-    global BRUT_LIST, HALT_LIST, LAST_FILTER_UPDATE
+    global BRUT_LIST, LAST_FILTER_UPDATE
 
     now = datetime.now()
 
+    if LAST_FILTER_UPDATE:
+        if (now - LAST_FILTER_UPDATE).seconds < 300:
+            return
+
     try:
+        brut = get_brut_list()
+        BRUT_LIST = set(brut.keys())
+    except:
+        BRUT_LIST = set()
 
-        # CACHE
-        if LAST_FILTER_UPDATE:
-            diff = (now - LAST_FILTER_UPDATE).seconds
-            if diff < 300:
-                return
+    LAST_FILTER_UPDATE = now
 
-        # -----------------------
-        # BRÜT
-        # -----------------------
-        try:
-            brut = get_brut_list()
-            if isinstance(brut, dict):
-                BRUT_LIST = brut
-        except Exception as e:
-            print("⚠ BRUT FILTER FAIL:", e)
-
-        # -----------------------
-        # HALT (DEVRE KESİCİ)
-        # -----------------------
-        try:
-            halt = get_halt_list()
-            if isinstance(halt, (set, list)):
-                HALT_LIST = set(halt)
-        except Exception as e:
-            print("⚠ HALT FILTER FAIL:", e)
-
-        LAST_FILTER_UPDATE = now
-
-    except Exception as e:
-        print("🔥 refresh_filters KRİTİK:", e)
-
-
-# ------------------------------------------------
-# MAIN SIGNAL (PRO SAFE)
-# ------------------------------------------------
 
 def detect_kap_volume_momentum(item, kap_cache):
 
@@ -69,11 +32,7 @@ def detect_kap_volume_momentum(item, kap_cache):
         refresh_filters()
 
         symbol = item.get("symbol")
-
         if not symbol:
-            return None
-
-        if symbol not in kap_cache:
             return None
 
         tf15 = item.get("tf", {}).get("15m")
@@ -81,98 +40,93 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         df = tf15.get("df")
-
         if df is None or len(df) < 30:
             return None
 
         last = df.iloc[-1]
         prev = df.iloc[-2]
 
-        # ------------------------------------------------
-        # RELATIVE VOLUME
-        # ------------------------------------------------
+        # -----------------------
+        # RVOL
+        # -----------------------
 
         vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
-
         if not vol_ma or vol_ma == 0:
             return None
 
         rvol = last["Volume"] / vol_ma
 
-        threshold = 1.4 if in_watchlist(symbol) else 1.7
+        threshold = 1.3 if in_watchlist(symbol) else 1.7
 
         if rvol < threshold:
             return None
 
-        # ------------------------------------------------
-        # VWAP
-        # ------------------------------------------------
-
-        typical = (df["High"] + df["Low"] + df["Close"]) / 3
-
-        vwap = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
-
-        last_vwap = vwap.iloc[-1]
-
-        if last["Close"] < last_vwap:
+        # fake volume filtresi
+        if rvol > 6 and abs((last["Close"] - prev["Close"]) / prev["Close"]) < 0.01:
             return None
 
-        # ------------------------------------------------
+        # -----------------------
+        # VWAP
+        # -----------------------
+
+        typical = (df["High"] + df["Low"] + df["Close"]) / 3
+        vwap = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
+
+        if last["Close"] < vwap.iloc[-1]:
+            return None
+
+        # -----------------------
         # MOMENTUM
-        # ------------------------------------------------
+        # -----------------------
 
         momentum = (last["Close"] - prev["Close"]) / prev["Close"]
 
-        if momentum < 0.006:
+        if momentum < 0.005:
             return None
 
-        # ------------------------------------------------
-        # CANDLE STRENGTH
-        # ------------------------------------------------
+        # -----------------------
+        # CANDLE
+        # -----------------------
 
         body = abs(last["Close"] - last["Open"])
         full = last["High"] - last["Low"]
 
-        if full == 0:
+        if full == 0 or body / full < 0.5:
             return None
 
-        if body / full < 0.5:
-            return None
-
-        # ------------------------------------------------
+        # -----------------------
         # SMART MONEY
-        # ------------------------------------------------
+        # -----------------------
 
-        big_volume = False
+        big_volume = last["Volume"] > vol_ma * 2.5
 
-        if last["Volume"] > vol_ma * 2.5:
-            big_volume = True
+        # -----------------------
+        # HALT (EDGE)
+        # -----------------------
 
-        # ------------------------------------------------
-        # KAP TIME
-        # ------------------------------------------------
+        halt = detect_halt_from_data(item)
+
+        # -----------------------
+        # BRÜT
+        # -----------------------
+
+        brut = symbol in BRUT_LIST
+
+        # -----------------------
+        # KAP (OPSİYONEL)
+        # -----------------------
 
         kap = kap_cache.get(symbol)
 
-        if not kap or "time" not in kap:
-            return None
-
-        minutes = (datetime.now() - kap["time"]).total_seconds() / 60
-
-        if minutes > 10:
-            return None
-
-        # ------------------------------------------------
-        # MARKET FILTER
-        # ------------------------------------------------
-
-        brut = symbol in BRUT_LIST
-        halt = symbol in HALT_LIST
+        if kap:
+            minutes = (datetime.now() - kap["time"]).total_seconds() / 60
+            if minutes > 15:
+                kap = None
 
         return {
             "symbol": symbol,
-            "title": kap.get("title"),
-            "link": kap.get("link"),
+            "title": kap.get("title") if kap else "EDGE MOMENTUM",
+            "link": kap.get("link") if kap else None,
             "brut": brut,
             "halt": halt,
             "rvol": round(rvol, 2),
@@ -181,6 +135,6 @@ def detect_kap_volume_momentum(item, kap_cache):
 
     except Exception as e:
 
-        print(f"🔥 KAP SIGNAL ERROR ({item.get('symbol')}):", e)
+        print("KAP MOMENTUM ERROR:", e)
 
         return None
