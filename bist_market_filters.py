@@ -197,7 +197,7 @@ def get_brut_list():
 
 
 # ======================================================
-# 🔥 HALT DETECTOR (EDGE)
+# 🔥 HALT DETECTOR (FIXED)
 # ======================================================
 
 def detect_halt_from_data(item):
@@ -216,17 +216,18 @@ def detect_halt_from_data(item):
         last = df.iloc[-1]
         prev = df.iloc[-2]
 
+        # ------------------------------------------------
+        # ✅ GERÇEK HALT → fiyat sabit + hacim yok
+        # ------------------------------------------------
+
         if last["Close"] == prev["Close"]:
 
             vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
 
-            if vol_ma and last["Volume"] < vol_ma * 0.1:
+            if vol_ma and last["Volume"] < vol_ma * 0.05:
                 return True
 
-        spread = (last["High"] - last["Low"]) / last["Close"]
-
-        if spread > 0.05:
-            return True
+        # ❌ spread kontrolü kaldırıldı (yanlış halt üretiyordu)
 
         return False
 
@@ -234,6 +235,49 @@ def detect_halt_from_data(item):
         return False
 
 
-# fallback
-def get_halt_list():
-    return set()
+# ======================================================
+# 🔥 DYNAMIC HALT ENGINE (SIGNAL ENGINE UYUMLU)
+# ======================================================
+
+LAST_HALT_CACHE = set()
+LAST_HALT_UPDATE = None
+HALT_CACHE_TTL = 30
+
+
+def get_halt_list(data=None):
+
+    global LAST_HALT_CACHE, LAST_HALT_UPDATE
+
+    now = datetime.now()
+
+    # cache
+    if LAST_HALT_UPDATE and (now - LAST_HALT_UPDATE).seconds < HALT_CACHE_TTL:
+        return LAST_HALT_CACHE
+
+    halt_set = set()
+
+    # data yoksa sistem kırılmaz
+    if not data:
+        return halt_set
+
+    try:
+
+        for item in data:
+
+            symbol = item.get("symbol")
+
+            if not symbol:
+                continue
+
+            if detect_halt_from_data(item):
+                halt_set.add(symbol)
+
+    except Exception as e:
+        print("HALT scan error:", e)
+
+    LAST_HALT_CACHE = halt_set
+    LAST_HALT_UPDATE = now
+
+    print(f"⛔ HALT SAYISI: {len(halt_set)}")
+
+    return halt_set
