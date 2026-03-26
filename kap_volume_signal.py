@@ -3,15 +3,16 @@ from kap_watchlist_engine import in_watchlist
 from bist_market_filters import (
     get_brut_list,
     detect_halt_from_data,
-    validate_tradeable_momentum
+    validate_tradeable_momentum,
+    detect_pullback_entry   # ✅ YENİ
 )
 
 BRUT_LIST = set()
 LAST_FILTER_UPDATE = None
 
-# 🚀 YENİ GLOBALS
 LAST_SIGNAL_TIME = {}
 LAST_SIGNAL_PRICE = {}
+
 
 def refresh_filters():
 
@@ -57,17 +58,13 @@ def detect_kap_volume_momentum(item, kap_cache):
         price = last["Close"]
 
         # ==================================================
-        # 🚀 1️⃣ SPAM BLOCK (EN KRİTİK)
+        # 🚀 1️⃣ SPAM BLOCK
         # ==================================================
 
         if symbol in LAST_SIGNAL_TIME:
             diff = (now - LAST_SIGNAL_TIME[symbol]).seconds
             if diff < 600:
-                return None  # 10 dk blok
-
-        # ==================================================
-        # 🚀 2️⃣ FİYAT İLERLEMEDEN TEKRAR SİNYAL YOK
-        # ==================================================
+                return None
 
         if symbol in LAST_SIGNAL_PRICE:
             change = abs(price - LAST_SIGNAL_PRICE[symbol]) / LAST_SIGNAL_PRICE[symbol]
@@ -75,16 +72,7 @@ def detect_kap_volume_momentum(item, kap_cache):
                 return None
 
         # ==================================================
-        # 🚀 3️⃣ BREAKOUT ZORUNLU (OYUN DEĞİŞTİRİR)
-        # ==================================================
-
-        prev_high = df["High"].rolling(20).max().iloc[-2]
-
-        if price <= prev_high:
-            return None  # sadece kırılımda çalış
-
-        # ==================================================
-        # 🚀 4️⃣ MOMENTUM KALİTE
+        # 🚀 2️⃣ MOMENTUM FAZI
         # ==================================================
 
         ok, phase = validate_tradeable_momentum(df, price)
@@ -93,7 +81,26 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # RVOL
+        # 🚀 3️⃣ BREAKOUT
+        # ==================================================
+
+        prev_high = df["High"].rolling(20).max().iloc[-2]
+        is_breakout = price > prev_high
+
+        # ==================================================
+        # 🚀 4️⃣ PULLBACK (ALTIN NOKTA)
+        # ==================================================
+
+        pullback_ok, pullback_pct = detect_pullback_entry(df, price)
+
+        # ❗ İKİSİNDEN BİRİ OLMALI
+        if not is_breakout and not pullback_ok:
+            return None
+
+        entry_type = "BREAKOUT" if is_breakout else "PULLBACK"
+
+        # ==================================================
+        # 🚀 5️⃣ HACİM
         # ==================================================
 
         vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
@@ -107,16 +114,11 @@ def detect_kap_volume_momentum(item, kap_cache):
         if rvol < threshold:
             return None
 
-        # 🚀 İLK HACİM PATLAMASI
         if last["Volume"] < vol_ma * 2:
             return None
 
-        # fake volume filtresi
-        if rvol > 6 and abs((last["Close"] - prev["Close"]) / prev["Close"]) < 0.01:
-            return None
-
         # ==================================================
-        # VWAP
+        # 🚀 6️⃣ VWAP
         # ==================================================
 
         typical = (df["High"] + df["Low"] + df["Close"]) / 3
@@ -131,7 +133,7 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # MOMENTUM
+        # 🚀 7️⃣ MOMENTUM
         # ==================================================
 
         momentum = (price - prev["Close"]) / prev["Close"]
@@ -140,7 +142,7 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # CANDLE
+        # 🚀 8️⃣ CANDLE
         # ==================================================
 
         body = abs(price - last["Open"])
@@ -150,27 +152,26 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # SMART MONEY
+        # 🚀 9️⃣ SMART MONEY
         # ==================================================
 
         big_volume = last["Volume"] > vol_ma * 2.5
 
         # ==================================================
-        # HALT
+        # 🚀 🔟 HALT
         # ==================================================
 
-        halt = detect_halt_from_data(item)
-        if halt:
+        if detect_halt_from_data(item):
             return None
 
         # ==================================================
-        # BRÜT
+        # 🚀 1️⃣1️⃣ BRÜT
         # ==================================================
 
         brut = symbol in BRUT_LIST
 
         # ==================================================
-        # KAP
+        # 🚀 1️⃣2️⃣ KAP
         # ==================================================
 
         kap = kap_cache.get(symbol)
@@ -181,47 +182,56 @@ def detect_kap_volume_momentum(item, kap_cache):
                 kap = None
 
         # ==================================================
-        # 🚀 SCORE SYSTEM
+        # 🚀 1️⃣3️⃣ SCORE
         # ==================================================
 
         score = 0
 
-        if phase == "EARLY":
+        # faz
+        if phase == "ERKEN":
             score += 30
-        elif phase == "MID":
+        elif phase == "ORTA":
             score += 15
         else:
             score -= 20
 
+        # rvol
         if rvol > 3:
             score += 20
         elif rvol > 2:
             score += 10
 
+        # smart money
         if big_volume:
             score += 10
 
+        # momentum
         if momentum > 0.01:
             score += 10
 
-        # BREAKOUT BONUS
-        score += 15
+        # breakout bonus
+        if is_breakout:
+            score += 15
+
+        # pullback bonus (DAHA DEĞERLİ)
+        if pullback_ok:
+            score += 25
 
         # ==================================================
-        # 🎯 KALİTE
+        # 🚀 1️⃣4️⃣ KALİTE
         # ==================================================
 
-        if score >= 60:
+        if score >= 65:
             quality = "A+"
-        elif score >= 45:
+        elif score >= 50:
             quality = "A"
-        elif score >= 30:
+        elif score >= 35:
             quality = "B"
         else:
             return None
 
         # ==================================================
-        # 🚀 CACHE UPDATE
+        # 🚀 CACHE
         # ==================================================
 
         LAST_SIGNAL_TIME[symbol] = now
@@ -236,12 +246,13 @@ def detect_kap_volume_momentum(item, kap_cache):
             "title": kap.get("title") if kap else "EDGE MOMENTUM",
             "link": kap.get("link") if kap else None,
             "brut": brut,
-            "halt": halt,
             "rvol": round(rvol, 2),
             "smart_money": big_volume,
             "quality": quality,
             "score": score,
             "phase": phase,
+            "entry_type": entry_type,
+            "pullback_pct": pullback_pct,
             "momentum_pct": round(momentum * 100, 2),
             "vwap_distance": round(vwap_dist * 100, 2)
         }
