@@ -36,8 +36,6 @@ from dashboard import (
 from kap_monitor import check_kap
 from kap_volume_signal import detect_kap_volume_momentum
 
-from momentum_formatter import send_momentum_signal
-
 from utils import FALLBACK_SYMBOLS
 import dashboard
 from bist_market_filters import get_brut_list
@@ -504,9 +502,6 @@ def generate_invite_codes():
     })
 
 
-
-            
-                    
 # ======================================================
 # SCANNER
 # ======================================================
@@ -579,7 +574,7 @@ def scanner_loop():
             print("✅ MARKET AÇIK → TARAMA", flush=True)
 
             # --------------------------------------------------
-            # BRUT TAKAS RAPORU (09:40)
+            # BRUT TAKAS RAPORU
             # --------------------------------------------------
 
             if (
@@ -611,12 +606,10 @@ def scanner_loop():
 
                         kap_cache.update(new_kaps)
 
-                        # cache büyümesini engelle
                         if len(kap_cache) > 500:
                             kap_cache = dict(list(kap_cache.items())[-200:])
 
                 except Exception as e:
-
                     print("KAP tarama hatası:", e)
 
                 last_kap_check = now_ts
@@ -627,7 +620,6 @@ def scanner_loop():
 
             market_data = fetch_bist_data()
 
-            # 🔒 VERİ KONTROLÜ
             if not isinstance(market_data, list) or len(market_data) == 0:
                 print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
                 time.sleep(60)
@@ -650,6 +642,10 @@ def scanner_loop():
                 time.sleep(60)
                 continue
 
+            # ==================================================
+            # ANA LOOP
+            # ==================================================
+
             for item in market_data:
 
                 symbol = item.get("symbol")
@@ -660,9 +656,9 @@ def scanner_loop():
 
                 try:
 
-                    # --------------------------------------------------
-                    # 🚀 KAP MOMENTUM ENGINE (PRO MODÜLER)
-                    # --------------------------------------------------
+                    # ==================================================
+                    # 🚀 KAP MOMENTUM ENGINE (INLINE FORMAT)
+                    # ==================================================
 
                     kap_signal = detect_kap_volume_momentum(item, kap_cache)
 
@@ -672,22 +668,79 @@ def scanner_loop():
 
                         if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
-                            # ✅ TÜM FORMAT VE FİLTRE ARTIK TEK YERDE
-                            send_momentum_signal(kap_signal)
+                            # ---- FAZ ----
+                            phase_map = {
+                                "ERKEN": "🟢 ERKEN MOMENTUM",
+                                "ORTA": "🟡 ORTA FAZ",
+                                "GEÇ": "🔴 GEÇ",
+                                "PARABOLIK": "🔥 PARABOLİK"
+                            }
 
+                            phase_text = phase_map.get(kap_signal.get("phase"))
+
+                            # ---- FLAGS ----
+                            flags = ""
+
+                            if kap_signal.get("brut"):
+                                flags += "⚠️ BRÜT TAKAS\n"
+
+                            if kap_signal.get("smart_money"):
+                                flags += "🐋 SMART MONEY\n"
+
+                            # ---- ENTRY TYPE ----
+                            entry_type = kap_signal.get("entry_type")
+
+                            if entry_type == "BREAKOUT":
+                                entry_text = "🚀 BREAKOUT"
+                            else:
+                                entry_text = "🎯 PULLBACK"
+
+                            # ---- KALİTE ----
+                            quality = kap_signal.get("quality")
+
+                            if quality == "A+":
+                                entry_note = "🔥 YÜKSEK OLASILIK"
+                            elif quality == "A":
+                                entry_note = "🟢 TAKİP"
+                            else:
+                                entry_note = "👀 ZAYIF"
+
+                            # ---- MESAJ ----
+                            msg = f"""
+🚀 KAP DESTEKLİ MOMENTUM
+
+📊 {kap_signal['symbol']}
+
+💎 {quality} | Skor: {kap_signal.get('score')}
+
+🧠 {phase_text}
+📈 RVOL: {kap_signal.get('rvol')}
+⚡ %{kap_signal.get('momentum_pct')}
+
+📍 VWAP: %{kap_signal.get('vwap_distance')}
+
+🎯 {entry_text}
+📉 Pullback: %{kap_signal.get('pullback_pct')}
+
+{flags}
+{entry_note}
+
+🔗 {kap_signal['link']}
+"""
+
+                            send_to_channel(msg)
+
+                            # 🔥 KEY ERROR FIX
+                            kap_cache.setdefault(kap_symbol, {})
                             kap_cache[kap_symbol]["alert_sent"] = True
 
-                    # --------------------------------------------------
+                    # ==================================================
                     # NORMAL SIGNAL ENGINE
-                    # --------------------------------------------------
+                    # ==================================================
 
                     signals = process_symbol_signals(item)
 
                     success_hits = update_success_targets(symbol, price)
-
-                    # -----------------------
-                    # SUCCESS SIGNALS
-                    # -----------------------
 
                     for s in success_hits:
 
@@ -699,10 +752,6 @@ def scanner_loop():
                             send_to_channel(msg)
                         else:
                             broadcast_signal(msg)
-
-                    # -----------------------
-                    # NORMAL SIGNALS
-                    # -----------------------
 
                     for s in signals:
 
@@ -716,11 +765,9 @@ def scanner_loop():
                             broadcast_signal(msg)
 
                 except Exception as e:
-
                     print(f"⚠ {symbol} hata:", e, flush=True)
 
         except Exception as e:
-
             print("🔥 Scanner genel hata:", e, flush=True)
 
         time.sleep(SCAN_INTERVAL)
