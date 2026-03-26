@@ -717,7 +717,7 @@ Zarar: %{round((price-entry)/entry*100,2)}
                         if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
                             entry_price = kap_signal["entry_price"]
-                            target_price = entry_price * 1.015
+                            target_price = entry_price * 1.01
 
                             # ✅ TRADE KAYDET
                             ACTIVE_TRADES[kap_symbol] = {
