@@ -4,7 +4,7 @@ from bist_market_filters import (
     get_brut_list,
     detect_halt_from_data,
     validate_tradeable_momentum,
-    detect_pullback_entry   # ✅ YENİ
+    detect_pullback_entry
 )
 
 BRUT_LIST = set()
@@ -88,12 +88,11 @@ def detect_kap_volume_momentum(item, kap_cache):
         is_breakout = price > prev_high
 
         # ==================================================
-        # 🚀 4️⃣ PULLBACK (ALTIN NOKTA)
+        # 🚀 4️⃣ PULLBACK
         # ==================================================
 
         pullback_ok, pullback_pct = detect_pullback_entry(df, price)
 
-        # ❗ İKİSİNDEN BİRİ OLMALI
         if not is_breakout and not pullback_ok:
             return None
 
@@ -187,7 +186,6 @@ def detect_kap_volume_momentum(item, kap_cache):
 
         score = 0
 
-        # faz
         if phase == "ERKEN":
             score += 30
         elif phase == "ORTA":
@@ -195,25 +193,20 @@ def detect_kap_volume_momentum(item, kap_cache):
         else:
             score -= 20
 
-        # rvol
         if rvol > 3:
             score += 20
         elif rvol > 2:
             score += 10
 
-        # smart money
         if big_volume:
             score += 10
 
-        # momentum
         if momentum > 0.01:
             score += 10
 
-        # breakout bonus
         if is_breakout:
             score += 15
 
-        # pullback bonus (DAHA DEĞERLİ)
         if pullback_ok:
             score += 25
 
@@ -238,11 +231,12 @@ def detect_kap_volume_momentum(item, kap_cache):
         LAST_SIGNAL_PRICE[symbol] = price
 
         # ==================================================
-        # RETURN
+        # RETURN (GÜNCELLENDİ)
         # ==================================================
 
         return {
             "symbol": symbol,
+            "entry_price": round(price, 2),  # ✅ EKLENDİ
             "title": kap.get("title") if kap else "EDGE MOMENTUM",
             "link": kap.get("link") if kap else None,
             "brut": brut,
