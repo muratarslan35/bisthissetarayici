@@ -504,6 +504,9 @@ def generate_invite_codes():
     })
 
 
+
+            
+                    
 # ======================================================
 # SCANNER
 # ======================================================
@@ -658,7 +661,7 @@ def scanner_loop():
                 try:
 
                     # --------------------------------------------------
-                    # 🚀 KAP MOMENTUM ENGINE (YENİ FORMAT EKLENDİ)
+                    # 🚀 KAP MOMENTUM ENGINE (PRO MODÜLER)
                     # --------------------------------------------------
 
                     kap_signal = detect_kap_volume_momentum(item, kap_cache)
@@ -669,64 +672,8 @@ def scanner_loop():
 
                         if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
-                            # --------------------------------------------------
-                            # 🚀 YENİ PROFESYONEL FORMAT
-                            # --------------------------------------------------
-
-                            quality = kap_signal.get("quality")
-                            score = kap_signal.get("score")
-                            phase = kap_signal.get("phase")
-
-                            phase_map = {
-                                "EARLY": "🟢 ERKEN MOMENTUM",
-                                "MID": "🟡 ORTA FAZ",
-                                "LATE": "🔴 GEÇ KALINMIŞ",
-                                "PARABOLIC": "🔥 PARABOLİK (RİSKLİ)"
-                            }
-
-                            phase_text = phase_map.get(phase, phase)
-
-                            flags = ""
-
-                            if kap_signal.get("brut"):
-                                flags += "⚠️ BRÜT TAKAS\n"
-
-                            if kap_signal.get("halt"):
-                                flags += "⛔ DEVRE KESİCİ\n"
-
-                            if kap_signal.get("smart_money"):
-                                flags += "🐋 SMART MONEY\n"
-
-                            entry_note = ""
-
-                            if quality == "A+":
-                                entry_note = "🚀 GİRİŞ NOKTASI AKTİF"
-                            elif quality == "A":
-                                entry_note = "🟢 TAKİP EDİLEBİLİR"
-                            elif quality == "B":
-                                entry_note = "👀 ZAYIF MOMENTUM"
-
-                            msg = f"""
-🚀 KAP DESTEKLİ MOMENTUM
-
-📊 {kap_signal['symbol']}
-
-💎 Kalite: {quality}
-📊 Skor: {score}
-
-🧠 Faz: {phase_text}
-📈 RVOL: {kap_signal.get('rvol')}
-⚡ Momentum: %{kap_signal.get('momentum_pct')}
-
-📍 VWAP Mesafe: %{kap_signal.get('vwap_distance')}
-
-{flags}
-{entry_note}
-
-🔗 {kap_signal['link']}
-"""
-
-                            send_to_channel(msg)
+                            # ✅ TÜM FORMAT VE FİLTRE ARTIK TEK YERDE
+                            send_momentum_signal(kap_signal)
 
                             kap_cache[kap_symbol]["alert_sent"] = True
 
@@ -776,8 +723,7 @@ def scanner_loop():
 
             print("🔥 Scanner genel hata:", e, flush=True)
 
-        time.sleep(SCAN_INTERVAL)               
-
+        time.sleep(SCAN_INTERVAL)
 
 # ======================================================
 # START
