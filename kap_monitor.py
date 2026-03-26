@@ -20,6 +20,8 @@ TWITTER_FEEDS = [
 
 KAP_RSS = "https://www.kap.org.tr/tr/rss/all"
 
+# 🚀 YENİ: SYMBOL COOLDOWN
+SYMBOL_COOLDOWN = {}
 
 # ---------------------------------------------------
 # STATE
@@ -43,6 +45,32 @@ def save_state(data):
 
     with open(STATE_FILE,"w") as f:
         json.dump(list(data),f)
+
+
+# ---------------------------------------------------
+# 🚀 YENİ: KAP SKOR
+# ---------------------------------------------------
+
+def kap_score(title):
+
+    t = title.lower()
+
+    score = 0
+
+    if "bedelsiz" in t:
+        score += 30
+    if "geri alım" in t or "geri alim" in t:
+        score += 25
+    if "ihale" in t:
+        score += 20
+    if "yatırım" in t or "yatirim" in t:
+        score += 20
+    if "temettü" in t:
+        score += 15
+    if "bedelli" in t:
+        score -= 10
+
+    return score
 
 
 # ---------------------------------------------------
@@ -88,6 +116,7 @@ def fetch_twitter_kap():
                     "title":title,
                     "link":entry.link,
                     "time":datetime.now(),
+                    "score": kap_score(title),  # ✅
                     "alert_sent":False
                 }
 
@@ -126,6 +155,7 @@ def fetch_kap_rss():
                 "title":title,
                 "link":entry.link,
                 "time":datetime.now(),
+                "score": kap_score(title),  # ✅
                 "alert_sent":False
             }
 
@@ -169,6 +199,8 @@ def check_kap(fallback_symbols):
     sent=load_state()
     results={}
 
+    now = datetime.now()
+
     # ---- Twitter ----
 
     twitter=fetch_twitter_kap()
@@ -178,6 +210,11 @@ def check_kap(fallback_symbols):
         if sym not in fallback_symbols:
             continue
 
+        # 🚀 COOLDOWN
+        if sym in SYMBOL_COOLDOWN:
+            if (now - SYMBOL_COOLDOWN[sym]).seconds < 600:
+                continue
+
         key=data["link"]
 
         if key in sent:
@@ -186,6 +223,8 @@ def check_kap(fallback_symbols):
         results[sym]=data
         add_to_watchlist(sym)
         sent.add(key)
+
+        SYMBOL_COOLDOWN[sym] = now  # ✅
 
     # ---- RSS ----
 
@@ -196,6 +235,10 @@ def check_kap(fallback_symbols):
         if sym not in fallback_symbols:
             continue
 
+        if sym in SYMBOL_COOLDOWN:
+            if (now - SYMBOL_COOLDOWN[sym]).seconds < 600:
+                continue
+
         key=data["link"]
 
         if key in sent:
@@ -204,6 +247,8 @@ def check_kap(fallback_symbols):
         results[sym]=data
         add_to_watchlist(sym)
         sent.add(key)
+
+        SYMBOL_COOLDOWN[sym] = now
 
     # ---- API ----
 
@@ -231,17 +276,24 @@ def check_kap(fallback_symbols):
         if symbol not in fallback_symbols:
             continue
 
+        if symbol in SYMBOL_COOLDOWN:
+            if (now - SYMBOL_COOLDOWN[symbol]).seconds < 600:
+                continue
+
         link=f"https://www.kap.org.tr/tr/Bildirim/{kap_id}"
 
         results[symbol]={
             "title":title,
             "link":link,
             "time":datetime.now(),
+            "score": kap_score(title),  # ✅
             "alert_sent":False
         }
 
         add_to_watchlist(symbol)
         sent.add(kap_id)
+
+        SYMBOL_COOLDOWN[symbol] = now
 
     save_state(sent)
 
