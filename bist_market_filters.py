@@ -227,8 +227,6 @@ def detect_halt_from_data(item):
             if vol_ma and last["Volume"] < vol_ma * 0.05:
                 return True
 
-        # ❌ spread kontrolü kaldırıldı (yanlış halt üretiyordu)
-
         return False
 
     except:
@@ -250,13 +248,11 @@ def get_halt_list(data=None):
 
     now = datetime.now()
 
-    # cache
     if LAST_HALT_UPDATE and (now - LAST_HALT_UPDATE).seconds < HALT_CACHE_TTL:
         return LAST_HALT_CACHE
 
     halt_set = set()
 
-    # data yoksa sistem kırılmaz
     if not data:
         return halt_set
 
@@ -281,3 +277,37 @@ def get_halt_list(data=None):
     print(f"⛔ HALT SAYISI: {len(halt_set)}")
 
     return halt_set
+
+
+# ======================================================
+# 🚀 YENİ: TRADEABLE MOMENTUM VALIDATOR
+# ======================================================
+
+def validate_tradeable_momentum(df, price):
+
+    try:
+
+        low_30 = df["Low"].rolling(30).min().iloc[-1]
+        move_pct = (price - low_30) / low_30
+
+        # ❌ çok gitmiş → geç kaldın
+        if move_pct > 0.05:
+            return False, "LATE"
+
+        # ❌ parabolik spike (son 5 mum aşırı dik)
+        last5 = df["Close"].iloc[-5:]
+        move5 = (last5.iloc[-1] - last5.iloc[0]) / last5.iloc[0]
+
+        if move5 > 0.03:
+            return False, "PARABOLIC"
+
+        # faz belirleme
+        if move_pct < 0.02:
+            return True, "EARLY"
+        elif move_pct < 0.04:
+            return True, "MID"
+        else:
+            return True, "LATE"
+
+    except:
+        return False, None
