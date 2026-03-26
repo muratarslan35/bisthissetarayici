@@ -35,6 +35,9 @@ from dashboard import (
 )
 from kap_monitor import check_kap
 from kap_volume_signal import detect_kap_volume_momentum
+
+from momentum_formatter import send_momentum_signal
+
 from utils import FALLBACK_SYMBOLS
 import dashboard
 from bist_market_filters import get_brut_list
@@ -500,6 +503,7 @@ def generate_invite_codes():
         "codes": created_codes
     })
 
+
 # ======================================================
 # SCANNER
 # ======================================================
@@ -620,7 +624,7 @@ def scanner_loop():
 
             market_data = fetch_bist_data()
 
-            # 🔒 VERİ KONTROLÜ (EKLENEN KISIM - HATASIZ)
+            # 🔒 VERİ KONTROLÜ
             if not isinstance(market_data, list) or len(market_data) == 0:
                 print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
                 time.sleep(60)
@@ -654,7 +658,7 @@ def scanner_loop():
                 try:
 
                     # --------------------------------------------------
-                    # KAP MOMENTUM ENGINE
+                    # 🚀 KAP MOMENTUM ENGINE (YENİ FORMAT EKLENDİ)
                     # --------------------------------------------------
 
                     kap_signal = detect_kap_volume_momentum(item, kap_cache)
@@ -664,6 +668,23 @@ def scanner_loop():
                         kap_symbol = kap_signal["symbol"]
 
                         if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
+
+                            # --------------------------------------------------
+                            # 🚀 YENİ PROFESYONEL FORMAT
+                            # --------------------------------------------------
+
+                            quality = kap_signal.get("quality")
+                            score = kap_signal.get("score")
+                            phase = kap_signal.get("phase")
+
+                            phase_map = {
+                                "EARLY": "🟢 ERKEN MOMENTUM",
+                                "MID": "🟡 ORTA FAZ",
+                                "LATE": "🔴 GEÇ KALINMIŞ",
+                                "PARABOLIC": "🔥 PARABOLİK (RİSKLİ)"
+                            }
+
+                            phase_text = phase_map.get(phase, phase)
 
                             flags = ""
 
@@ -676,16 +697,31 @@ def scanner_loop():
                             if kap_signal.get("smart_money"):
                                 flags += "🐋 SMART MONEY\n"
 
+                            entry_note = ""
+
+                            if quality == "A+":
+                                entry_note = "🚀 GİRİŞ NOKTASI AKTİF"
+                            elif quality == "A":
+                                entry_note = "🟢 TAKİP EDİLEBİLİR"
+                            elif quality == "B":
+                                entry_note = "👀 ZAYIF MOMENTUM"
+
                             msg = f"""
-🚨 KAP DESTEKLİ MOMENTUM
+🚀 KAP DESTEKLİ MOMENTUM
 
 📊 {kap_signal['symbol']}
 
-📄 {kap_signal['title']}
+💎 Kalite: {quality}
+📊 Skor: {score}
+
+🧠 Faz: {phase_text}
+📈 RVOL: {kap_signal.get('rvol')}
+⚡ Momentum: %{kap_signal.get('momentum_pct')}
+
+📍 VWAP Mesafe: %{kap_signal.get('vwap_distance')}
 
 {flags}
-
-📈 RVOL: {kap_signal.get('rvol')}
+{entry_note}
 
 🔗 {kap_signal['link']}
 """
@@ -740,9 +776,7 @@ def scanner_loop():
 
             print("🔥 Scanner genel hata:", e, flush=True)
 
-        time.sleep(SCAN_INTERVAL)
-
-                    
+        time.sleep(SCAN_INTERVAL)               
 
 
 # ======================================================
