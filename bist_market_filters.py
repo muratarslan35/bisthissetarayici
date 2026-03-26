@@ -59,10 +59,6 @@ def fetch_bist_tedbirleri_scrape():
 
         html = r.text.upper()
 
-        # ------------------------------------------------
-        # TÜM SATIRLARI ÇEK
-        # ------------------------------------------------
-
         matches = re.findall(
             r'([A-Z]{3,5})\s+.*?(\d{2}\.\d{2}\.\d{4})',
             html
@@ -154,11 +150,9 @@ def get_brut_list():
 
     final = {}
 
-    # 1️⃣ SCRAPE (ANA)
     scrape_data = fetch_bist_tedbirleri_scrape()
     final.update(scrape_data)
 
-    # 2️⃣ API (DESTEK)
     api_data = fetch_vbts()
     final.update(api_data)
 
@@ -171,7 +165,6 @@ def get_brut_list():
 
         clean[k] = v
 
-    # ❗ boşsa cache kullan
     if not clean:
         print("⚠ BRÜT BOŞ → CACHE KULLANILIYOR")
         return BRUT_CACHE
@@ -204,7 +197,6 @@ def detect_halt_from_data(item):
         last = df.iloc[-1]
         prev = df.iloc[-2]
 
-        # gerçek halt
         if last["Close"] == prev["Close"]:
 
             vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
@@ -265,7 +257,7 @@ def get_halt_list(data=None):
 
 
 # ======================================================
-# 🚀 MOMENTUM VALIDATOR (SENİN SİSTEM İÇİN)
+# 🚀 MOMENTUM FAZ ANALİZİ (TÜRKÇE)
 # ======================================================
 
 def validate_tradeable_momentum(df, price):
@@ -275,21 +267,79 @@ def validate_tradeable_momentum(df, price):
         low_30 = df["Low"].rolling(30).min().iloc[-1]
         move_pct = (price - low_30) / low_30
 
+        # ❌ çok gitmiş
         if move_pct > 0.05:
-            return False, "LATE"
+            return False, "GEÇ KALINMIŞ"
 
+        # ❌ parabolik spike
         last5 = df["Close"].iloc[-5:]
         move5 = (last5.iloc[-1] - last5.iloc[0]) / last5.iloc[0]
 
         if move5 > 0.03:
-            return False, "PARABOLIC"
+            return False, "PARABOLİK (TEHLİKELİ)"
 
+        # faz
         if move_pct < 0.02:
-            return True, "EARLY"
+            return True, "ERKEN"
         elif move_pct < 0.04:
-            return True, "MID"
+            return True, "ORTA"
         else:
-            return True, "LATE"
+            return True, "GEÇ"
+
+    except:
+        return False, None
+
+
+# ======================================================
+# 🚀 PULLBACK DETECTOR (EN KRİTİK)
+# ======================================================
+
+def detect_pullback_entry(df, price):
+
+    try:
+
+        if df is None or len(df) < 25:
+            return False, None
+
+        # trend var mı
+        low = df["Low"].iloc[-20:-10].min()
+        high = df["High"].iloc[-10:-3].max()
+
+        move_pct = (high - low) / low
+
+        if move_pct < 0.025:
+            return False, None
+
+        # geri çekilme
+        last_high = df["High"].iloc[-3]
+        pullback_pct = (last_high - price) / last_high
+
+        if pullback_pct < 0.005:
+            return False, None
+
+        if pullback_pct > 0.03:
+            return False, None
+
+        # ema desteği
+        ema20 = df["Close"].ewm(span=20).mean().iloc[-1]
+
+        if price < ema20:
+            return False, None
+
+        # dönüş mumu
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+
+        if not (last["Close"] > last["Open"] and last["Close"] > prev["Close"]):
+            return False, None
+
+        # hacim
+        vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
+
+        if last["Volume"] < vol_ma:
+            return False, None
+
+        return True, round(pullback_pct * 100, 2)
 
     except:
         return False, None
