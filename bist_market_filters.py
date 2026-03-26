@@ -3,9 +3,12 @@ import re
 from datetime import datetime
 from dateutil import parser
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept-Language": "tr-TR,tr;q=0.9"
+}
 
-CACHE_TTL = 60
+CACHE_TTL = 120
 
 BRUT_CACHE = {}
 LAST_UPDATE = None
@@ -24,7 +27,7 @@ def normalize_symbol(code):
 
 def parse_date_safe(date_str):
     try:
-        return parser.parse(date_str).date()
+        return parser.parse(date_str, dayfirst=True).date()
     except:
         return None
 
@@ -39,7 +42,56 @@ def days_left_calc(dt):
 
 
 # ======================================================
-# VBTS
+# 🔥 PRO SCRAPER (ANA KAYNAK)
+# ======================================================
+
+def fetch_bist_tedbirleri_scrape():
+
+    url = "https://www.kap.org.tr/tr/BistTedbirleri"
+    results = {}
+
+    try:
+
+        r = requests.get(url, headers=HEADERS, timeout=10)
+
+        if r.status_code != 200:
+            return results
+
+        html = r.text.upper()
+
+        # ------------------------------------------------
+        # TÜM SATIRLARI ÇEK
+        # ------------------------------------------------
+
+        matches = re.findall(
+            r'([A-Z]{3,5})\s+.*?(\d{2}\.\d{2}\.\d{4})',
+            html
+        )
+
+        for sym, date_str in matches:
+
+            symbol = normalize_symbol(sym)
+
+            end_dt = parse_date_safe(date_str)
+            days_left = days_left_calc(end_dt)
+
+            if days_left is not None and days_left < 0:
+                continue
+
+            results[symbol] = {
+                "days_left": days_left
+            }
+
+        print(f"📡 SCRAPE BRÜT: {len(results)}")
+
+    except Exception as e:
+        print("SCRAPE error:", e)
+
+    return results
+
+
+# ======================================================
+# 🔥 FALLBACK (API)
 # ======================================================
 
 def fetch_vbts():
@@ -48,7 +100,9 @@ def fetch_vbts():
     results = {}
 
     try:
+
         r = requests.get(url, headers=HEADERS, timeout=10)
+
         if r.status_code != 200:
             return results
 
@@ -56,7 +110,7 @@ def fetch_vbts():
 
         for item in data:
 
-            text = (str(item) or "").upper()
+            text = str(item).upper()
 
             if "BRÜT" not in text and "BRUT" not in text:
                 continue
@@ -77,6 +131,8 @@ def fetch_vbts():
                 "days_left": days_left
             }
 
+        print(f"📡 API BRÜT: {len(results)}")
+
     except Exception as e:
         print("VBTS error:", e)
 
@@ -84,84 +140,7 @@ def fetch_vbts():
 
 
 # ======================================================
-# DISCLOSURE
-# ======================================================
-
-def fetch_disclosures():
-
-    url = "https://www.kap.org.tr/tr/api/disclosures"
-    results = {}
-
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
-        if r.status_code != 200:
-            return results
-
-        data = r.json()
-
-        for item in data[:300]:
-
-            title = str(item.get("title","")).upper()
-
-            if "BRÜT" not in title and "BRUT" not in title:
-                continue
-
-            codes = item.get("stockCodes")
-
-            if not codes:
-                continue
-
-            symbol = normalize_symbol(codes.split(",")[0])
-
-            results[symbol] = {
-                "days_left": None
-            }
-
-    except Exception as e:
-        print("DISC error:", e)
-
-    return results
-
-
-# ======================================================
-# REGEX
-# ======================================================
-
-def fetch_regex():
-
-    url = "https://www.kap.org.tr/tr/BistTedbirleri"
-    results = {}
-
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
-
-        matches = re.findall(
-            r'([A-Z]{3,5}).*?(\d{2}\.\d{2}\.\d{4})',
-            r.text
-        )
-
-        for sym, date_str in matches:
-
-            symbol = normalize_symbol(sym)
-
-            end_dt = parse_date_safe(date_str)
-            days_left = days_left_calc(end_dt)
-
-            if days_left is not None and days_left < 0:
-                continue
-
-            results[symbol] = {
-                "days_left": days_left
-            }
-
-    except Exception as e:
-        print("REGEX error:", e)
-
-    return results
-
-
-# ======================================================
-# MAIN
+# 🔥 MAIN (SMART MERGE)
 # ======================================================
 
 def get_brut_list():
@@ -175,9 +154,13 @@ def get_brut_list():
 
     final = {}
 
-    final.update(fetch_vbts())
-    final.update(fetch_disclosures())
-    final.update(fetch_regex())
+    # 1️⃣ SCRAPE (ANA)
+    scrape_data = fetch_bist_tedbirleri_scrape()
+    final.update(scrape_data)
+
+    # 2️⃣ API (DESTEK)
+    api_data = fetch_vbts()
+    final.update(api_data)
 
     clean = {}
 
@@ -188,10 +171,15 @@ def get_brut_list():
 
         clean[k] = v
 
+    # ❗ boşsa cache kullan
+    if not clean:
+        print("⚠ BRÜT BOŞ → CACHE KULLANILIYOR")
+        return BRUT_CACHE
+
     BRUT_CACHE = clean
     LAST_UPDATE = now
 
-    print(f"📊 BRÜT: {len(clean)}")
+    print(f"✅ BRÜT TOPLAM: {len(clean)}")
 
     return clean
 
@@ -216,10 +204,7 @@ def detect_halt_from_data(item):
         last = df.iloc[-1]
         prev = df.iloc[-2]
 
-        # ------------------------------------------------
-        # ✅ GERÇEK HALT → fiyat sabit + hacim yok
-        # ------------------------------------------------
-
+        # gerçek halt
         if last["Close"] == prev["Close"]:
 
             vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
@@ -234,7 +219,7 @@ def detect_halt_from_data(item):
 
 
 # ======================================================
-# 🔥 DYNAMIC HALT ENGINE (SIGNAL ENGINE UYUMLU)
+# 🔥 DYNAMIC HALT ENGINE
 # ======================================================
 
 LAST_HALT_CACHE = set()
@@ -280,7 +265,7 @@ def get_halt_list(data=None):
 
 
 # ======================================================
-# 🚀 YENİ: TRADEABLE MOMENTUM VALIDATOR
+# 🚀 MOMENTUM VALIDATOR (SENİN SİSTEM İÇİN)
 # ======================================================
 
 def validate_tradeable_momentum(df, price):
@@ -290,18 +275,15 @@ def validate_tradeable_momentum(df, price):
         low_30 = df["Low"].rolling(30).min().iloc[-1]
         move_pct = (price - low_30) / low_30
 
-        # ❌ çok gitmiş → geç kaldın
         if move_pct > 0.05:
             return False, "LATE"
 
-        # ❌ parabolik spike (son 5 mum aşırı dik)
         last5 = df["Close"].iloc[-5:]
         move5 = (last5.iloc[-1] - last5.iloc[0]) / last5.iloc[0]
 
         if move5 > 0.03:
             return False, "PARABOLIC"
 
-        # faz belirleme
         if move_pct < 0.02:
             return True, "EARLY"
         elif move_pct < 0.04:
