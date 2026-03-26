@@ -75,6 +75,12 @@ app.register_blueprint(dashboard_bp)
 init_db()
 
 # ======================================================
+# GLOBAL TRADE TRACK
+# ======================================================
+
+ACTIVE_TRADES = {}
+
+# ======================================================
 # HELPERS
 # ======================================================
 
@@ -501,11 +507,6 @@ def generate_invite_codes():
         "codes": created_codes
     })
 
-
-# ======================================================
-# SCANNER
-# ======================================================
-
 def scanner_loop():
 
     send_startup_message()
@@ -643,7 +644,7 @@ def scanner_loop():
                 continue
 
             # ==================================================
-            # ANA LOOP
+            # 🔁 MAIN LOOP
             # ==================================================
 
             for item in market_data:
@@ -657,8 +658,55 @@ def scanner_loop():
                 try:
 
                     # ==================================================
-                    # 🚀 KAP MOMENTUM ENGINE (INLINE FORMAT)
+                    # 🎯 TARGET TRACKING (EN KRİTİK)
                     # ==================================================
+
+                    if symbol in ACTIVE_TRADES:
+
+                        trade = ACTIVE_TRADES[symbol]
+
+                        entry = trade["entry"]
+                        target = trade["target"]
+
+                        # ✅ HEDEF GELDİ
+                        if price >= target:
+
+                            msg = f"""
+🎯 HEDEF GERÇEKLEŞTİ
+
+📊 {symbol}
+
+💰 Giriş: {entry}
+🏁 Çıkış: {price}
+
+📈 Getiri: %{round((price-entry)/entry*100,2)}
+"""
+
+                            send_to_channel(msg)
+
+                            del ACTIVE_TRADES[symbol]
+
+                        # ❌ STOP
+                        elif price <= entry * 0.99:
+
+                            msg = f"""
+⛔ BAŞARISIZ
+
+📊 {symbol}
+
+💰 Giriş: {entry}
+📉 Fiyat: {price}
+
+Zarar: %{round((price-entry)/entry*100,2)}
+"""
+
+                            send_to_channel(msg)
+
+                            del ACTIVE_TRADES[symbol]
+
+                    # --------------------------------------------------
+                    # 🚀 KAP MOMENTUM
+                    # --------------------------------------------------
 
                     kap_signal = detect_kap_volume_momentum(item, kap_cache)
 
@@ -668,75 +716,23 @@ def scanner_loop():
 
                         if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
-                            # ---- FAZ ----
-                            phase_map = {
-                                "ERKEN": "🟢 ERKEN MOMENTUM",
-                                "ORTA": "🟡 ORTA FAZ",
-                                "GEÇ": "🔴 GEÇ",
-                                "PARABOLIK": "🔥 PARABOLİK"
+                            entry_price = kap_signal["entry_price"]
+                            target_price = entry_price * 1.015
+
+                            # ✅ TRADE KAYDET
+                            ACTIVE_TRADES[kap_symbol] = {
+                                "entry": entry_price,
+                                "target": target_price,
+                                "time": now
                             }
 
-                            phase_text = phase_map.get(kap_signal.get("phase"))
+                            send_momentum_signal(kap_signal)
 
-                            # ---- FLAGS ----
-                            flags = ""
-
-                            if kap_signal.get("brut"):
-                                flags += "⚠️ BRÜT TAKAS\n"
-
-                            if kap_signal.get("smart_money"):
-                                flags += "🐋 SMART MONEY\n"
-
-                            # ---- ENTRY TYPE ----
-                            entry_type = kap_signal.get("entry_type")
-
-                            if entry_type == "BREAKOUT":
-                                entry_text = "🚀 BREAKOUT"
-                            else:
-                                entry_text = "🎯 PULLBACK"
-
-                            # ---- KALİTE ----
-                            quality = kap_signal.get("quality")
-
-                            if quality == "A+":
-                                entry_note = "🔥 YÜKSEK OLASILIK"
-                            elif quality == "A":
-                                entry_note = "🟢 TAKİP"
-                            else:
-                                entry_note = "👀 ZAYIF"
-
-                            # ---- MESAJ ----
-                            msg = f"""
-🚀 KAP DESTEKLİ MOMENTUM
-
-📊 {kap_signal['symbol']}
-
-💎 {quality} | Skor: {kap_signal.get('score')}
-
-🧠 {phase_text}
-📈 RVOL: {kap_signal.get('rvol')}
-⚡ %{kap_signal.get('momentum_pct')}
-
-📍 VWAP: %{kap_signal.get('vwap_distance')}
-
-🎯 {entry_text}
-📉 Pullback: %{kap_signal.get('pullback_pct')}
-
-{flags}
-{entry_note}
-
-🔗 {kap_signal['link']}
-"""
-
-                            send_to_channel(msg)
-
-                            # 🔥 KEY ERROR FIX
-                            kap_cache.setdefault(kap_symbol, {})
                             kap_cache[kap_symbol]["alert_sent"] = True
 
-                    # ==================================================
-                    # NORMAL SIGNAL ENGINE
-                    # ==================================================
+                    # --------------------------------------------------
+                    # NORMAL ENGINE
+                    # --------------------------------------------------
 
                     signals = process_symbol_signals(item)
 
@@ -771,6 +767,7 @@ def scanner_loop():
             print("🔥 Scanner genel hata:", e, flush=True)
 
         time.sleep(SCAN_INTERVAL)
+
 
 # ======================================================
 # START
