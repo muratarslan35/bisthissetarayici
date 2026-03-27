@@ -55,7 +55,15 @@ def detect_kap_volume_momentum(item, kap_cache):
 
         last = df.iloc[-1]
         prev = df.iloc[-2]
-        price = last["Close"]
+
+        # ✅ candle fiyatı
+        candle_price = last["Close"]
+
+        # ✅ gerçek fiyat
+        price = item.get("current_price")
+
+        if not price:
+            return None
 
         # ==================================================
         # 🚀 1️⃣ SPAM BLOCK
@@ -97,6 +105,13 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         entry_type = "BREAKOUT" if is_breakout else "PULLBACK"
+
+        # ==================================================
+        # 🚀 ⛔ GEÇ KALMA FİLTRESİ
+        # ==================================================
+
+        if abs(price - candle_price) / candle_price > 0.015:
+            return None
 
         # ==================================================
         # 🚀 5️⃣ HACİM
@@ -224,6 +239,16 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
+        # 🚀 🎯 ELİT FİLTRE (YENİ)
+        # ==================================================
+
+        if quality not in ["A+", "A"]:
+            return None
+
+        if phase != "ERKEN":
+            return None
+
+        # ==================================================
         # 🚀 CACHE
         # ==================================================
 
@@ -231,12 +256,12 @@ def detect_kap_volume_momentum(item, kap_cache):
         LAST_SIGNAL_PRICE[symbol] = price
 
         # ==================================================
-        # RETURN (GÜNCELLENDİ)
+        # RETURN
         # ==================================================
 
         return {
             "symbol": symbol,
-            "entry_price": round(price, 2),  # ✅ EKLENDİ
+            "entry_price": round(price, 2),
             "title": kap.get("title") if kap else "EDGE MOMENTUM",
             "link": kap.get("link") if kap else None,
             "brut": brut,
