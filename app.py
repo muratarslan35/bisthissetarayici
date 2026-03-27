@@ -137,6 +137,48 @@ def send_to_channel(text):
         )
     except Exception as e:
         print("Channel send error:", e)
+# ======================================================
+# 🚀 MOMENTUM MESSAGE FORMAT (INLINE)
+# ======================================================
+
+def send_momentum_signal(data):
+
+    symbol = data.get("symbol")
+    entry = data.get("entry_price")
+    score = data.get("score")
+    quality = data.get("quality")
+    rvol = data.get("rvol")
+    phase = data.get("phase")
+    entry_type = data.get("entry_type")
+    momentum = data.get("momentum_pct")
+    vwap_dist = data.get("vwap_distance")
+    brut = data.get("brut")
+
+    msg = f"""
+🚀 <b>MOMENTUM SİNYALİ</b>
+
+📊 <b>{symbol}</b>
+"""
+
+    if brut:
+        msg += "\n‼️ BRÜT TAKAS VAR"
+
+    msg += f"""
+
+💰 Giriş: {round(entry,2)}
+
+⚡ Tür: {entry_type}
+🧠 Skor: {score} ({quality})
+📊 RVOL: {rvol}
+📈 Faz: {phase}
+
+💹 Momentum: %{momentum}
+📉 VWAP Mesafe: %{vwap_dist}
+
+🕒 {now_tr().strftime('%H:%M:%S')}
+"""
+
+    send_to_channel(msg)
 
 def broadcast_signal(text):
     conn = get_connection()
