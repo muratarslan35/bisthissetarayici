@@ -8,6 +8,9 @@ from functools import wraps
 import random
 import string
 
+from ultra_price_engine import start_engine
+from volume_engine import load_volume_cache, save_volume_cache
+
 from dotenv import load_dotenv
 from flask import (
     Flask, jsonify, render_template,
@@ -54,7 +57,7 @@ ADMIN_PANEL_PATH = os.getenv("ADMIN_PANEL_PATH", "admin-hidden")
 TR_TZ = ZoneInfo("Europe/Istanbul")
 BIST_OPEN = dtime(9, 40)
 BIST_CLOSE = dtime(18, 5)
-SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "25"))
+SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "8"))
 
 # ======================================================
 # TELEGRAM
@@ -817,6 +820,27 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
 if __name__ == "__main__":
 
+    # ==================================================
+    # 🔥 ULTRA ENGINE START
+    # ==================================================
+    print("🚀 ULTRA PRICE ENGINE STARTING...")
+
+    start_engine(FALLBACK_SYMBOLS)
+
+    # ==================================================
+    # 🔥 VOLUME ENGINE START
+    # ==================================================
+    print("📊 VOLUME ENGINE STARTING...")
+
+    load_volume_cache()
+    threading.Thread(target=save_volume_cache, daemon=True).start()
+
+    # ==================================================
+    # 🔁 SCANNER START
+    # ==================================================
     threading.Thread(target=scanner_loop, daemon=True).start()
 
+    # ==================================================
+    # 🌐 WEB
+    # ==================================================
     app.run(host="0.0.0.0", port=5000, debug=False)
