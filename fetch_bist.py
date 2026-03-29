@@ -109,7 +109,7 @@ def fetch_yf(symbol, interval):
                 return data
 
         df = yf.download(
-            symbol,
+            yf_symbol,
             interval=interval,
             period=MAX_LOOKBACK.get(interval, "5d"),
             progress=False,
