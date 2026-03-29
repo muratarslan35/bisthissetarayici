@@ -51,6 +51,11 @@ load_dotenv()
 ADMIN_PANEL_PATH = os.getenv("ADMIN_PANEL_PATH", "admin-hidden")
 
 # ======================================================
+# 🔥 ENGINE SYMBOLS (MERKEZİ)
+# ======================================================
+ENGINE_SYMBOLS = list(set(FALLBACK_SYMBOLS))
+
+# ======================================================
 # TIME
 # ======================================================
 
@@ -555,7 +560,7 @@ def generate_invite_codes():
 def scanner_loop():
 
     send_startup_message()
-
+    last_market_data = []
     kap_cache = {}
     last_kap_check = 0
     KAP_INTERVAL = 25
@@ -664,7 +669,21 @@ def scanner_loop():
             # MARKET DATA
             # --------------------------------------------------
 
-            market_data = fetch_bist_data()
+            # --------------------------------------------------
+            # MARKET DATA (NON-BLOCKING)
+            # --------------------------------------------------
+
+            if time.time() % 2 < 1:
+                new_data = fetch_bist_data()
+                if isinstance(new_data, list) and len(new_data) > 0:
+                    last_market_data = new_data
+
+            market_data = last_market_data
+
+            if not isinstance(market_data, list) or len(market_data) == 0:
+                print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
+                time.sleep(60)
+                continue
 
             if not isinstance(market_data, list) or len(market_data) == 0:
                 print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
@@ -825,7 +844,7 @@ if __name__ == "__main__":
     # ==================================================
     print("🚀 ULTRA PRICE ENGINE STARTING...")
 
-    start_engine(FALLBACK_SYMBOLS)
+    start_engine(ENGINE_SYMBOLS)
 
     # ==================================================
     # 🔥 VOLUME ENGINE START
