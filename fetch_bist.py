@@ -4,7 +4,6 @@ import yfinance as yf
 import pandas as pd
 
 from utils import (
-    resolve_symbols,
     FALLBACK_SYMBOLS,
     fetch_live_price   # ✅ YENİ
 )
@@ -212,8 +211,7 @@ def fetch_bist_data(symbol_data=None):
     results = []
     tried = set()
 
-    symbols = resolve_symbols(symbol_data)
-    all_symbols = symbols + FALLBACK_SYMBOLS
+    all_symbols = list(set(FALLBACK_SYMBOLS))
 
     print(f"\n🔍 TARAMA BAŞLADI | TOPLAM: {len(all_symbols)}", flush=True)
 
