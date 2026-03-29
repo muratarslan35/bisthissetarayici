@@ -283,7 +283,7 @@ def fetch_bist_data(symbol_data=None):
             print(f"✅ OK | vol={tick_vol} rvol={round(rvol,2)}", flush=True)
 
             # 🔥 SMART SLEEP
-            if i %50 == 0 and i != 0:
+            if i %30 == 0 and i != 0:
                 time.sleep(0.3)
 
         except Exception as e:
