@@ -560,6 +560,8 @@ def generate_invite_codes():
 def scanner_loop():
 
     send_startup_message()
+    last_fetch_time = 0
+    FETCH_INTERVAL = 2
     last_market_data = []
     kap_cache = {}
     last_kap_check = 0
@@ -651,7 +653,7 @@ def scanner_loop():
 
                 try:
 
-                    new_kaps = check_kap(FALLBACK_SYMBOLS)
+                    new_kaps = check_kap(ENGINE_SYMBOLS)
 
                     if new_kaps:
 
@@ -673,17 +675,14 @@ def scanner_loop():
             # MARKET DATA (NON-BLOCKING)
             # --------------------------------------------------
 
-            if time.time() % 2 < 1:
-                new_data = fetch_bist_data()
+            if time.time() - last_fetch_time > FETCH_INTERVAL:
+                new_data = fetch_bist_data(ENGINE_SYMBOLS)
                 if isinstance(new_data, list) and len(new_data) > 0:
                     last_market_data = new_data
+                last_fetch_time = time.time()
 
             market_data = last_market_data
 
-            if not isinstance(market_data, list) or len(market_data) == 0:
-                print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
-                time.sleep(60)
-                continue
 
             if not isinstance(market_data, list) or len(market_data) == 0:
                 print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
@@ -702,7 +701,8 @@ def scanner_loop():
                 except:
                     continue
 
-            if valid_count < 50:
+            if valid_count < max(50,
+            int(len(ENGINE_SYMBOLS) * 0.5)):
                 print(f"⚠ Sağlıklı veri yok ({valid_count}) → sinyal durduruldu", flush=True)
                 time.sleep(60)
                 continue
