@@ -1,13 +1,17 @@
 import time
 from collections import defaultdict, deque
 from threading import Lock
+import json
+import os
 
 # ======================================================
 # CONFIG
 # ======================================================
 
 WINDOW_SECONDS = 60
-MAX_TICKS = 500
+MAX_TICKS = 600
+SAVE_INTERVAL = 15
+CACHE_FILE = "data/volume_cache.json"
 
 # ======================================================
 # GLOBAL
@@ -17,8 +21,63 @@ TICKS = defaultdict(lambda: deque(maxlen=MAX_TICKS))
 LAST_PRICE = {}
 LOCK = Lock()
 
+RUNNING = True
+
 # ======================================================
-# UPDATE TICK (ULTRA PRICE ENGINE BURAYI BESLER)
+# LOAD CACHE (RESTART SAFE)
+# ======================================================
+
+def load_volume_cache():
+
+    if not os.path.exists(CACHE_FILE):
+        return
+
+    try:
+        with open(CACHE_FILE, "r") as f:
+            data = json.load(f)
+
+        now = time.time()
+
+        with LOCK:
+            for sym, ticks in data.items():
+
+                for t in ticks:
+                    # sadece son 3 dakika al
+                    if now - t["ts"] <= 180:
+                        TICKS[sym].append(t)
+
+        print(f"📦 volume cache loaded: {len(TICKS)}")
+
+    except Exception as e:
+        print("volume load error:", e)
+
+# ======================================================
+# SAVE CACHE
+# ======================================================
+
+def save_volume_cache():
+
+    while RUNNING:
+        try:
+
+            os.makedirs("data", exist_ok=True)
+
+            with LOCK:
+                data = {
+                    sym: list(ticks)[-200:]
+                    for sym, ticks in TICKS.items()
+                }
+
+            with open(CACHE_FILE, "w") as f:
+                json.dump(data, f)
+
+        except Exception as e:
+            print("volume save error:", e)
+
+        time.sleep(SAVE_INTERVAL)
+
+# ======================================================
+# UPDATE TICK (ULTRA ENGINE BURAYI BESLER)
 # ======================================================
 
 def update_tick(symbol, price):
@@ -33,7 +92,6 @@ def update_tick(symbol, price):
             LAST_PRICE[symbol] = price
             return
 
-        # price değişmişse tick say
         if price != prev:
 
             TICKS[symbol].append({
@@ -44,7 +102,7 @@ def update_tick(symbol, price):
             LAST_PRICE[symbol] = price
 
 # ======================================================
-# REAL-TIME VOLUME (TICK BASED)
+# REAL VOLUME (1 DK)
 # ======================================================
 
 def get_tick_volume(symbol):
@@ -55,45 +113,35 @@ def get_tick_volume(symbol):
 
         ticks = TICKS.get(symbol, [])
 
-        recent = [
-            t for t in ticks
-            if now - t["ts"] <= WINDOW_SECONDS
-        ]
-
-        return len(recent)
+        return sum(1 for t in ticks if now - t["ts"] <= WINDOW_SECONDS)
 
 # ======================================================
-# RVOL (SMART)
+# SMART RVOL
 # ======================================================
 
 def get_rvol(symbol):
+
+    now = time.time()
 
     with LOCK:
 
         ticks = list(TICKS.get(symbol, []))
 
-    if len(ticks) < 20:
+    if len(ticks) < 30:
         return 0
 
-    now = time.time()
+    last_60 = sum(1 for t in ticks if now - t["ts"] <= 60)
+    prev_180 = sum(1 for t in ticks if 60 < now - t["ts"] <= 180)
 
-    recent = [t for t in ticks if now - t["ts"] <= 60]
-    older = [t for t in ticks if 60 < now - t["ts"] <= 180]
-
-    if not older:
+    if prev_180 == 0:
         return 0
 
-    return len(recent) / max(len(older), 1)
+    return last_60 / (prev_180 / 2)
 
 # ======================================================
-# VOLUME SPIKE
+# SPIKE
 # ======================================================
 
 def detect_volume_spike(symbol):
 
-    rvol = get_rvol(symbol)
-
-    if rvol >= 2:
-        return True
-
-    return False
+    return get_rvol(symbol) >= 2
