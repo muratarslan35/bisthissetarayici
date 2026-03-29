@@ -132,6 +132,9 @@ def fetch_yf(symbol, interval):
         # CACHE SAVE
         YF_CACHE[key] = (df, now)
 
+        if len(YF_CACHE) > 1000:
+            YF_CACHE.clear()
+
         return df
 
     except Exception as e:
@@ -169,7 +172,7 @@ def build_tf_data(symbol, live_price=None):
     if live_price is not None:
 
         last_close = close.iloc[-1]
-        hybrid_last = (last_close + float(live_price)) / 2
+        hybrid_last = float(live_price)
 
         ema20_live = float(base_df["ema20"].iloc[-1] * 0.9 + hybrid_last * 0.1)
         ema50_live = float(base_df["ema50"].iloc[-1] * 0.96 + hybrid_last * 0.04)
@@ -240,7 +243,7 @@ def fetch_bist_data(symbol_data=None):
 
     results = []
 
-    all_symbols = list(set(FALLBACK_SYMBOLS))
+    all_symbols = list(set(symbol_data)) if symbol_data else list(set(FALLBACK_SYMBOLS))
 
     print(f"\n🔍 TARAMA BAŞLADI | TOPLAM: {len(all_symbols)}", flush=True)
 
@@ -280,7 +283,7 @@ def fetch_bist_data(symbol_data=None):
             print(f"✅ OK | vol={tick_vol} rvol={round(rvol,2)}", flush=True)
 
             # 🔥 SMART SLEEP
-            if i % 10 == 0:
+            if i % 10 == 0 and i != 0:
                 time.sleep(0.1)
 
         except Exception as e:
