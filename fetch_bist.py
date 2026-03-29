@@ -97,8 +97,7 @@ def resample_df(df, rule):
 def fetch_yf(symbol, interval):
     try:
 
-        if not symbol.endswith(".IS"):
-            symbol = f"{symbol}.IS"
+        yf_symbol = symbol if symbol.endswith(".IS") else f"{symbol}.IS"
 
         key = f"{symbol}_{interval}"
         now = time.time()
