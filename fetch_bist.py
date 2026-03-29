@@ -99,7 +99,7 @@ def fetch_yf(symbol, interval):
 
         yf_symbol = symbol if symbol.endswith(".IS") else f"{symbol}.IS"
 
-        key = f"{symbol}_{interval}"
+        key = f"{yf_symbol}_{interval}"
         now = time.time()
 
         # CACHE HIT
@@ -133,7 +133,7 @@ def fetch_yf(symbol, interval):
         YF_CACHE[key] = (df, now)
 
         if len(YF_CACHE) > 1000:
-            YF_CACHE.clear()
+            YF_CACHE.pop(next(iter(YF_CACHE)))
 
         return df
 
@@ -283,8 +283,8 @@ def fetch_bist_data(symbol_data=None):
             print(f"✅ OK | vol={tick_vol} rvol={round(rvol,2)}", flush=True)
 
             # 🔥 SMART SLEEP
-            if i % 10 == 0 and i != 0:
-                time.sleep(0.1)
+            if i % r0 == 0 and i != 0:
+                time.sleep(0.3)
 
         except Exception as e:
             print(f"🔥 fetch_bist_data hata → {symbol} | {e}", flush=True)
