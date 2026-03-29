@@ -561,7 +561,7 @@ def scanner_loop():
 
     send_startup_message()
     last_fetch_time = 0
-    FETCH_INTERVAL = 2
+    FETCH_INTERVAL = 5
     last_market_data = []
     kap_cache = {}
     last_kap_check = 0
