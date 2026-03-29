@@ -5,8 +5,13 @@ import pandas as pd
 
 from utils import (
     resolve_symbols,
-    fetch_tradingview_price,
-    FALLBACK_SYMBOLS
+    FALLBACK_SYMBOLS,
+    fetch_live_price   # ✅ YENİ
+)
+
+from volume_engine import (   # ✅ YENİ
+    get_tick_volume,
+    get_rvol
 )
 
 # ======================================================
@@ -22,20 +27,15 @@ MAX_LOOKBACK = {
 # YF DATETIME NORMALIZER (KRİTİK)
 # ======================================================
 def normalize_yf_df(df):
-    """
-    yfinance bazen Datetime index verir, bazen Date.
-    Bu fonksiyon her durumda Datetime index üretir.
-    """
+
     if df is None or df.empty:
         return None
 
     df = df.copy()
 
-    # index datetime değilse çevir
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index, errors="coerce")
 
-    # index adı ne olursa olsun Datetime yap
     df["Datetime"] = df.index
     df["Datetime"] = pd.to_datetime(df["Datetime"], utc=True, errors="coerce")
 
@@ -205,9 +205,10 @@ def build_tf_data(symbol, live_price=None):
     return tf
 
 # ======================================================
-# MAIN FETCH
+# MAIN FETCH (ULTRA ENGINE)
 # ======================================================
 def fetch_bist_data(symbol_data=None):
+
     results = []
     tried = set()
 
@@ -217,36 +218,56 @@ def fetch_bist_data(symbol_data=None):
     print(f"\n🔍 TARAMA BAŞLADI | TOPLAM: {len(all_symbols)}", flush=True)
 
     for symbol in all_symbols:
+
         if symbol in tried:
             continue
         tried.add(symbol)
 
         try:
+
             print(f"➡ {symbol}", flush=True)
 
-            price = fetch_tradingview_price(symbol)
+            # ==================================================
+            # 🔥 ULTRA LIVE PRICE
+            # ==================================================
+            price = fetch_live_price(symbol)
+
             if price is None:
-                print("⚠ TV fiyat yok", flush=True)
+                print("⚠ LIVE fiyat yok", flush=True)
                 continue
 
+            # ==================================================
+            # 🔥 TF BUILD
+            # ==================================================
             tf = build_tf_data(symbol, live_price=price)
+
             if tf is None or "1d" not in tf:
                 print("⚠ TF/1D eksik", flush=True)
                 continue
 
+            # ==================================================
+            # 🔥 REAL-TIME VOLUME
+            # ==================================================
+            tick_vol = get_tick_volume(symbol)
+            rvol = get_rvol(symbol)
+
             results.append({
                 "symbol": symbol,
                 "current_price": float(price),
+                "tick_volume": tick_vol,
+                "rvol": rvol,
                 "tf": tf,
                 "fetched_at": datetime.now(timezone.utc)
             })
 
-            print("✅ OK", flush=True)
-            time.sleep(0.12)
+            print(f"✅ OK | vol={tick_vol} rvol={round(rvol,2)}", flush=True)
+
+            time.sleep(0.05)  # 🔥 hız arttı
 
         except Exception as e:
             print(f"🔥 fetch_bist_data hata → {symbol} | {e}", flush=True)
             continue
 
     print(f"✅ TARAMA BİTTİ | GEÇERLİ: {len(results)}\n", flush=True)
+
     return results
