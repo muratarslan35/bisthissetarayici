@@ -12,8 +12,8 @@ from volume_engine import update_tick
 # CONFIG (FINAL STABLE)
 # ======================================================
 
-BATCH_SIZE = 8          # düşük tut → ban yeme
-FETCH_INTERVAL = 5       # agresif olma
+BATCH_SIZE = 8
+FETCH_INTERVAL = 5
 
 STALE_TTL = 10
 SAVE_INTERVAL = 15
@@ -40,6 +40,10 @@ LOCK = threading.Lock()
 RUNNING = True
 
 TV_FAIL_COUNT = 0
+
+# 🔥 GLOBAL RATE LIMIT (KRİTİK FIX)
+REQUEST_LOCK = threading.Lock()
+LAST_REQUEST_TIME = 0
 
 # ======================================================
 # CACHE
@@ -110,54 +114,64 @@ def cleanup_loop():
 # ======================================================
 
 def fetch_batch(symbols):
-    global TV_FAIL_COUNT
+    global TV_FAIL_COUNT, LAST_REQUEST_TIME
 
-    try:
-        url = "https://scanner.tradingview.com/turkey/scan"
+    with REQUEST_LOCK:
 
-        tv_symbols = [f"BIST:{s.replace('.IS','')}" for s in symbols]
+        # 🔥 GLOBAL THROTTLE (EN KRİTİK)
+        now = time.time()
+        wait = 0.7 - (now - LAST_REQUEST_TIME)
+        if wait > 0:
+            time.sleep(wait)
 
-        payload = {
-            "symbols": {
-                "tickers": tv_symbols,
-                "query": {"types": []}
-            },
-            "columns": ["close"]
-        }
+        LAST_REQUEST_TIME = time.time()
 
-        r = requests.post(url, json=payload, headers=HEADERS, timeout=6)
+        try:
+            url = "https://scanner.tradingview.com/turkey/scan"
 
-        text = r.text.strip()
+            tv_symbols = [f"BIST:{s.replace('.IS','')}" for s in symbols]
 
-        if not text or text.startswith("<"):
+            payload = {
+                "symbols": {
+                    "tickers": tv_symbols,
+                    "query": {"types": []}
+                },
+                "columns": ["close"]
+            }
+
+            r = requests.post(url, json=payload, headers=HEADERS, timeout=6)
+
+            text = r.text.strip()
+
+            if not text or text.startswith("<"):
+                TV_FAIL_COUNT += 1
+                print("⚠ TV BLOCK")
+                return {}
+
+            data = r.json()
+
+            result = {}
+
+            for item in data.get("data", []):
+                try:
+                    symbol = item["s"].replace("BIST:", "") + ".IS"
+                    price = item["d"][0]
+
+                    if price:
+                        result[symbol] = float(price)
+
+                except:
+                    continue
+
+            if result:
+                TV_FAIL_COUNT = 0
+
+            return result
+
+        except Exception as e:
             TV_FAIL_COUNT += 1
-            print("⚠ TV BLOCK")
+            print("❌ TV ERROR:", e)
             return {}
-
-        data = r.json()
-
-        result = {}
-
-        for item in data.get("data", []):
-            try:
-                symbol = item["s"].replace("BIST:", "") + ".IS"
-                price = item["d"][0]
-
-                if price:
-                    result[symbol] = float(price)
-
-            except:
-                continue
-
-        if result:
-            TV_FAIL_COUNT = 0
-
-        return result
-
-    except Exception as e:
-        TV_FAIL_COUNT += 1
-        print("❌ TV ERROR:", e)
-        return {}
 
 # ======================================================
 # 🔥 INVESTING (FALLBACK)
@@ -200,7 +214,6 @@ class Worker(threading.Thread):
 
         while RUNNING:
 
-            # 🔥 PRIMARY
             if TV_FAIL_COUNT < 2:
                 prices = fetch_batch(self.symbols)
             else:
@@ -244,7 +257,7 @@ def start_engine(symbols):
         for i in range(0, len(symbols), BATCH_SIZE)
     ]
 
-    # 🔥 MAX 4 WORKER
+    # 🔥 SAFE WORKER COUNT
     chunks = chunks[:2]
 
     for ch in chunks:
