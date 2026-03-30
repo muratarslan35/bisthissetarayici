@@ -97,7 +97,6 @@ def resample_df(df, rule):
 def fetch_yf(symbol, interval):
     try:
 
-        yf_symbol = symbol if symbol.endswith(".IS") else f"{symbol}.IS"
         symbol_clean = symbol.replace(".IS", "")
         yf_symbol = f"{symbol_clean}.IS"
 
