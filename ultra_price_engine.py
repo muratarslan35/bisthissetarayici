@@ -12,8 +12,8 @@ from volume_engine import update_tick
 # CONFIG (FINAL STABLE)
 # ======================================================
 
-BATCH_SIZE = 12          # düşük tut → ban yeme
-FETCH_INTERVAL = 4       # agresif olma
+BATCH_SIZE = 8          # düşük tut → ban yeme
+FETCH_INTERVAL = 3       # agresif olma
 
 STALE_TTL = 10
 SAVE_INTERVAL = 15
