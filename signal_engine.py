@@ -4,6 +4,7 @@ import numpy as np
 import json
 import os
 from threading import Lock
+import time
 
 from utils import (
     detect_three_peaks,
@@ -759,7 +760,7 @@ def scalping_signal(item):
     # 🔥 RVOL FIX (TEK KAYNAK ÖNCELİK)
     ext_rvol = get_rvol(item["symbol"])
 
-    if ext_rvol and ext_rvol > 0:
+    if ext_rvol and ext_rvol > 0.5:
         rvol = ext_rvol
     else:
         rvol = last["Volume"] / avg_volume_30
@@ -934,7 +935,7 @@ def process_symbol_signals(item):
 
     rvol_live = get_rvol(symbol)
 
-    if not rvol_live or rvol_live == 0:
+    if not rvol_live or rvol_live < 0.5:
         try:
             df15 = item["tf"]["15m"]["df"]
             last = df15.iloc[-1]
