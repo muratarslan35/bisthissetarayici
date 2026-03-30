@@ -757,7 +757,7 @@ def scalping_signal(item):
         return None
 
     # 🔥 RVOL FIX (TEK KAYNAK ÖNCELİK)
-    ext_rvol = item.get("rvol")
+    ext_rvol = get_rvol(item["symbol"])
 
     if ext_rvol and ext_rvol > 0:
         rvol = ext_rvol
@@ -932,7 +932,7 @@ def process_symbol_signals(item):
     if now_ts - item_ts > 5:
         return []
 
-    rvol_live = item.get("rvol")
+    rvol_live = get_rvol(symbol)
 
     if not rvol_live or rvol_live == 0:
         try:
