@@ -686,8 +686,14 @@ def scanner_loop():
                         print("⚠ boş veri geldi, eski veri korunuyor")
                 last_fetch_time = time.time()
 
-            market_data = last_market_data
-            market_data = market_data[:250]
+            market_data = last_market_data or []
+
+            if len(market_data) == 0:
+                print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
+                time.sleep(60)
+                continue
+
+            market_data = market_data[:250]]
 
 
             if not isinstance(market_data, list) or len(market_data) == 0:
@@ -728,8 +734,6 @@ def scanner_loop():
                 # 🔥 RVOL ENTEGRE
                 try:
                     item["rvol"] = item.get("rvol", 0)
-                except:
-                    item["rvol"] = None
 
                 if symbol and isinstance(price, (int, float)):
                     dashboard.LIVE_PRICES[symbol] = price
@@ -807,7 +811,7 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
                             send_momentum_signal(kap_signal)
 
-                            kap_cache[kap_symbol]["alert_sent"] = True
+                            kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
 
                     # --------------------------------------------------
                     # NORMAL ENGINE
