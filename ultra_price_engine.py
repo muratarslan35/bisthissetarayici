@@ -3,17 +3,19 @@ import threading
 import json
 import os
 import requests
+import random
+import re
 
 from volume_engine import update_tick
 
 # ======================================================
-# CONFIG (PRO STABLE)
+# CONFIG (FINAL STABLE)
 # ======================================================
 
-BATCH_SIZE = 25
-FETCH_INTERVAL = 3
+BATCH_SIZE = 12          # düşük tut → ban yeme
+FETCH_INTERVAL = 4       # agresif olma
 
-STALE_TTL = 8
+STALE_TTL = 10
 SAVE_INTERVAL = 15
 
 MAX_KEEP_SECONDS = 300
@@ -37,8 +39,10 @@ LAST_UPDATE = {}
 LOCK = threading.Lock()
 RUNNING = True
 
+TV_FAIL_COUNT = 0
+
 # ======================================================
-# CACHE LOAD
+# CACHE
 # ======================================================
 
 def load_cache():
@@ -63,10 +67,6 @@ def load_cache():
     except Exception as e:
         print("cache load error:", e)
 
-# ======================================================
-# CACHE SAVE
-# ======================================================
-
 def save_cache():
     while RUNNING:
         try:
@@ -89,13 +89,8 @@ def save_cache():
 
         time.sleep(SAVE_INTERVAL)
 
-# ======================================================
-# CLEANUP
-# ======================================================
-
 def cleanup_loop():
     while RUNNING:
-
         now = time.time()
 
         with LOCK:
@@ -108,33 +103,15 @@ def cleanup_loop():
                 PRICE_CACHE.pop(k, None)
                 LAST_UPDATE.pop(k, None)
 
-        if to_delete:
-            print(f"🧹 CLEANUP: {len(to_delete)} silindi")
-
         time.sleep(CLEANUP_INTERVAL)
 
 # ======================================================
-# 🔥 YAHOO FALLBACK (KRİTİK)
-# ======================================================
-
-def fetch_yahoo(symbol):
-    try:
-        import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="1d")
-
-        if hist.empty:
-            return None
-
-        return float(hist["Close"].iloc[-1])
-    except:
-        return None
-
-# ======================================================
-# 🔥 TRADINGVIEW BATCH (SAFE)
+# 🔥 TRADINGVIEW (PRIMARY)
 # ======================================================
 
 def fetch_batch(symbols):
+    global TV_FAIL_COUNT
+
     try:
         url = "https://scanner.tradingview.com/turkey/scan"
 
@@ -152,9 +129,9 @@ def fetch_batch(symbols):
 
         text = r.text.strip()
 
-        # 🔥 BLOCK / HTML / EMPTY CHECK
         if not text or text.startswith("<"):
-            print("⚠ TV BLOCK / EMPTY RESPONSE")
+            TV_FAIL_COUNT += 1
+            print("⚠ TV BLOCK")
             return {}
 
         data = r.json()
@@ -163,62 +140,96 @@ def fetch_batch(symbols):
 
         for item in data.get("data", []):
             try:
-                tv_symbol = item["s"]
+                symbol = item["s"].replace("BIST:", "") + ".IS"
                 price = item["d"][0]
 
-                if not price:
-                    continue
-
-                clean = tv_symbol.replace("BIST:", "") + ".IS"
-                result[clean] = float(price)
+                if price:
+                    result[symbol] = float(price)
 
             except:
                 continue
 
+        if result:
+            TV_FAIL_COUNT = 0
+
         return result
 
     except Exception as e:
-        print("❌ BATCH ERROR:", e)
+        TV_FAIL_COUNT += 1
+        print("❌ TV ERROR:", e)
         return {}
+
+# ======================================================
+# 🔥 INVESTING (FALLBACK)
+# ======================================================
+
+def fetch_investing(symbol):
+    try:
+        clean = symbol.replace(".IS", "").lower()
+
+        url = f"https://www.investing.com/equities/{clean}-stock"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        r = requests.get(url, headers=headers, timeout=5)
+
+        if r.status_code != 200:
+            return None
+
+        m = re.search(r'"last"\s*:\s*([\d.]+)', r.text)
+
+        if m:
+            return float(m.group(1))
+
+    except:
+        return None
 
 # ======================================================
 # WORKER
 # ======================================================
 
-class BatchWorker(threading.Thread):
+class Worker(threading.Thread):
     def __init__(self, symbols):
         super().__init__(daemon=True)
         self.symbols = symbols
 
     def run(self):
+        global TV_FAIL_COUNT
+
         while RUNNING:
 
-            batch_prices = fetch_batch(self.symbols)
+            # 🔥 PRIMARY
+            if TV_FAIL_COUNT < 5:
+                prices = fetch_batch(self.symbols)
+            else:
+                prices = {}
+
             now = time.time()
 
-            if batch_prices:
-
+            if prices:
                 with LOCK:
-                    for symbol, price in batch_prices.items():
-                        PRICE_CACHE[symbol] = price
-                        LAST_UPDATE[symbol] = now
-                        update_tick(symbol, price)
+                    for s, p in prices.items():
+                        PRICE_CACHE[s] = p
+                        LAST_UPDATE[s] = now
+                        update_tick(s, p)
 
             else:
-                print("⚠ batch fail → fallback devrede")
+                print("⚠ FALLBACK MODE")
 
-                # 🔥 FALLBACK MODE
                 for s in self.symbols:
-                    price = fetch_yahoo(s)
-                    if price:
+                    p = fetch_investing(s)
+
+                    if p:
                         with LOCK:
-                            PRICE_CACHE[s] = price
+                            PRICE_CACHE[s] = p
                             LAST_UPDATE[s] = now
-                            update_tick(s, price)
+                            update_tick(s, p)
 
-                    time.sleep(0.2)
+                    time.sleep(random.uniform(0.2, 0.5))
 
-            time.sleep(FETCH_INTERVAL)
+            time.sleep(FETCH_INTERVAL + random.uniform(0.5, 1.5))
 
 # ======================================================
 # START
@@ -233,13 +244,16 @@ def start_engine(symbols):
         for i in range(0, len(symbols), BATCH_SIZE)
     ]
 
+    # 🔥 MAX 4 WORKER
+    chunks = chunks[:4]
+
     for ch in chunks:
-        BatchWorker(ch).start()
+        Worker(ch).start()
 
     threading.Thread(target=save_cache, daemon=True).start()
     threading.Thread(target=cleanup_loop, daemon=True).start()
 
-    print(f"🚀 ENGINE STARTED | batch={len(chunks)}")
+    print(f"🚀 FINAL ENGINE STARTED | workers={len(chunks)}")
 
 # ======================================================
 # READ
