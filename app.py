@@ -561,6 +561,7 @@ def generate_invite_codes():
 def scanner_loop():
 
     send_startup_message()
+    market_data = market_data[:250]
     last_fetch_time = 0
     FETCH_INTERVAL = 5
     last_market_data = []
@@ -705,7 +706,8 @@ def scanner_loop():
                 except:
                     continue
 
-            if valid_count < max(30, int(len(ENGINE_SYMBOLS) * 0.2)):
+            threshold = max(20, int(len(market_data) * 0.5))
+            if valid_count < threshold:
                 print(f"⚠ Sağlıklı veri yok ({valid_count}) → sinyal durduruldu", flush=True)
                 time.sleep(60)
                 continue
@@ -721,7 +723,7 @@ def scanner_loop():
                 
                 # 🔥 RVOL ENTEGRE
                 try:
-                    item["rvol"] = item.get("rvol")
+                    item["rvol"] = item.get("rvol", 0)
                 except:
                     item["rvol"] = None
 
