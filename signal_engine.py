@@ -1691,30 +1691,38 @@ def process_signals(data):
     for item in data:
         time.sleep(0.10)
 
-        price = item.get("current_price")
-        
-        rvol = get_rvol(item["symbol"])
-        if not price or rvol == 0:
-            zero_streak += 1
-        else:
-            zero_streak = 0
-
-        if zero_streak >= 5:
-            print("⚠️ DATA KOPTU → 10sn bekleniyor...")
-            time.sleep(10)
-            zero_streak = 0
-            continue
-
         try:
+            symbol = item.get("symbol")
+            price = item.get("current_price")
+
+            # 🔥 TEK KAYNAK RVOL (item'dan gelirse kullan, yoksa fallback)
+            rvol = item.get("rvol")
+            if rvol is None:
+                rvol = 0
+
+            # 🔥 SOFT DATA CHECK
+            if not price or rvol < 0.05:
+                zero_streak += 1
+            else:
+                zero_streak = 0
+
+            # 🔥 DATA YAVAŞSA BEKLE AMA DURMA
+            if zero_streak >= 12:
+                print("⚠️ DATA YAVAŞ → kısa bekleme (5sn)")
+                time.sleep(5)
+                zero_streak = 0
+                continue
+
+            # 🔥 SİNYAL ÜRET
             signals = process_symbol_signals(item)
-            out.extend(signals)
+            if signals:
+                out.extend(signals)
 
-            update_success_targets(
-                item["symbol"],
-                item["current_price"]
-            )
+            # 🔥 TARGET UPDATE
+            update_success_targets(symbol, price)
 
-        except Exception:
+        except Exception as e:
+            print(f"❌ PROCESS ERROR ({item.get('symbol')}):", e)
             continue
 
     return out
