@@ -743,7 +743,6 @@ def scanner_loop():
                 if live_price:
                     price = live_price
                     item["current_price"] = price
-                    item["timestamp"] = time.time()
 
                 # ❌ hala yoksa skip
                 if not price:
@@ -751,6 +750,7 @@ def scanner_loop():
 
                 # 🔥 artık güvenli şekilde kullanabilirsin
                 item["current_price"] = price
+                item["timestamp"] = time.time()
                 item["rvol"] = get_rvol(symbol)
 
 
