@@ -1680,6 +1680,7 @@ def process_signals(data):
     out = []
 
     for item in data:
+        time.sleep(0.15)
         try:
             signals = process_symbol_signals(item)
             out.extend(signals)
