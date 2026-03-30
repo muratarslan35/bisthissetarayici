@@ -1302,7 +1302,7 @@ def process_symbol_signals(item):
     if signal["category"] != "strong":
         return []
 
-
+    return [signal]
 # ======================================================
 # FRIDAY CLOSE SNAPSHOT
 # ======================================================
@@ -1692,7 +1692,8 @@ def process_signals(data):
         time.sleep(0.10)
 
         price = item.get("current_price")
-
+        
+        rvol = get_rvol(item["symbol"])
         if not price or rvol == 0:
             zero_streak += 1
         else:
@@ -1701,7 +1702,8 @@ def process_signals(data):
         if zero_streak >= 5:
             print("⚠️ DATA KOPTU → 10sn bekleniyor...")
             time.sleep(10)
-            break
+            zero_streak = 0
+            continue
 
         try:
             signals = process_symbol_signals(item)
