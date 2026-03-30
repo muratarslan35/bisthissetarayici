@@ -100,7 +100,10 @@ def now_tr():
 # 🔥 VOLUME CACHE LOOP
 def volume_cache_loop():
     while True:
-        save_volume_cache()
+        try:
+            save_volume_cache()
+        except Exception as e:
+            print("Volume cache error:", e)
         time.sleep(60)
 
 def is_market_open(now=None):
