@@ -1679,8 +1679,23 @@ def format_signal_message(signal):
 def process_signals(data):
     out = []
 
+    zero_streak = 0
+
     for item in data:
         time.sleep(0.15)
+
+        price = item.get("current_price")
+
+        if not price:
+            zero_streak += 1
+        else:
+            zero_streak = 0
+
+        if zero_streak >= 8:
+            print("⚠️ DATA KOPTU → 15sn bekleniyor...")
+            time.sleep(15)
+            break
+
         try:
             signals = process_symbol_signals(item)
             out.extend(signals)
@@ -1694,4 +1709,3 @@ def process_signals(data):
             continue
 
     return out
-
