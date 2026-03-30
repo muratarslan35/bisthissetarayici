@@ -7,22 +7,21 @@ import os
 from volume_engine import update_tick
 
 # ======================================================
-# CONFIG (ORACLE SAFE)
+# CONFIG (PRODUCTION SAFE)
 # ======================================================
 
-MAX_WORKERS = 6
-BATCH_SIZE = 8
+MAX_WORKERS = 5
+BATCH_SIZE = 10
 
-MIN_DELAY = 0.08
-MAX_DELAY = 0.25
+MIN_DELAY = 0.10
+MAX_DELAY = 0.30
 
-CACHE_TTL = 1.5
-STALE_TTL = 6
+CACHE_TTL = 2
+STALE_TTL = 8
 
-SAVE_INTERVAL = 10
+SAVE_INTERVAL = 15
 
-# 🔥 CLEANUP CONFIG
-MAX_KEEP_SECONDS = 300      # RAM + disk max tutma süresi (5 dk)
+MAX_KEEP_SECONDS = 300
 CLEANUP_INTERVAL = 30
 
 CACHE_FILE = "data/price_cache.json"
@@ -56,7 +55,6 @@ def load_cache():
             for k, v in data.items():
                 ts = v.get("ts", 0)
 
-                # 🔥 sadece fresh olanları yükle
                 if now - ts < MAX_KEEP_SECONDS:
                     PRICE_CACHE[k] = v.get("price")
                     LAST_UPDATE[k] = ts
@@ -67,7 +65,7 @@ def load_cache():
         print("cache load error:", e)
 
 # ======================================================
-# CACHE SAVE (STALE CLEAN)
+# CACHE SAVE
 # ======================================================
 
 def save_cache():
@@ -96,11 +94,10 @@ def save_cache():
         time.sleep(SAVE_INTERVAL)
 
 # ======================================================
-# 🔥 RAM CLEANUP LOOP
+# CLEANUP
 # ======================================================
 
 def cleanup_loop():
-
     while RUNNING:
 
         now = time.time()
@@ -122,23 +119,53 @@ def cleanup_loop():
         time.sleep(CLEANUP_INTERVAL)
 
 # ======================================================
-# PRIMARY SOURCE
+# 🔥 DATA SOURCES
 # ======================================================
 
+# ✅ 1. YAHOO (PRIMARY - STABLE)
+def fetch_yahoo(symbol):
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period="1d")
+
+        if hist.empty:
+            return None
+
+        return float(hist["Close"].iloc[-1])
+
+    except:
+        return None
+
+
+# ⚠️ 2. TRADINGVIEW (SECONDARY)
 def fetch_primary(symbol):
-    from utils import fetch_tradingview_price
-    return fetch_tradingview_price(symbol)
+    try:
+        from utils import fetch_tradingview_price
 
-# ======================================================
-# FALLBACK
-# ======================================================
+        clean = symbol.replace(".IS", "")
+        tv_symbol = f"BIST:{clean}"
 
+        return fetch_tradingview_price(tv_symbol)
+    except:
+        return None
+
+
+# ⚠️ 3. INVESTING (LAST RESORT)
 def fetch_fallback(symbol):
     try:
-        import requests, re
+        import requests
+        import re
 
-        url = f"https://www.investing.com/equities/{symbol.replace('.IS','').lower()}"
-        r = requests.get(url, timeout=5)
+        clean = symbol.replace(".IS", "").lower()
+        url = f"https://www.investing.com/equities/{clean}-stock"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        r = requests.get(url, headers=headers, timeout=5)
 
         if r.status_code != 200:
             return None
@@ -150,8 +177,9 @@ def fetch_fallback(symbol):
     except:
         return None
 
+
 # ======================================================
-# SMART FETCH
+# SMART FETCH (CORE)
 # ======================================================
 
 def smart_fetch(symbol):
@@ -162,21 +190,20 @@ def smart_fetch(symbol):
         if time.time() - ts < CACHE_TTL:
             return PRICE_CACHE.get(symbol)
 
-    # PRIMARY
-    price = fetch_primary(symbol)
+    price = None
 
-    if price:
-        with LOCK:
-            PRICE_CACHE[symbol] = price
-            LAST_UPDATE[symbol] = time.time()
-            FAIL_COUNT[symbol] = 0
+    # 1️⃣ YAHOO (PRIMARY)
+    price = fetch_yahoo(symbol)
 
-        update_tick(symbol, price)
-        return price
+    # 2️⃣ TRADINGVIEW
+    if not price:
+        price = fetch_primary(symbol)
 
-    # FALLBACK
-    price = fetch_fallback(symbol)
+    # 3️⃣ INVESTING
+    if not price:
+        price = fetch_fallback(symbol)
 
+    # SUCCESS
     if price:
         with LOCK:
             PRICE_CACHE[symbol] = price
@@ -192,19 +219,21 @@ def smart_fetch(symbol):
 
     return None
 
+
 # ======================================================
-# DELAY (AUTO THROTTLE)
+# DELAY (SMART THROTTLE)
 # ======================================================
 
 def dynamic_delay(symbol):
     fails = FAIL_COUNT.get(symbol, 0)
 
     if fails > 5:
-        return random.uniform(0.3, 0.6)
+        return random.uniform(0.4, 0.8)
     elif fails > 2:
-        return random.uniform(0.15, 0.35)
+        return random.uniform(0.2, 0.4)
     else:
         return random.uniform(MIN_DELAY, MAX_DELAY)
+
 
 # ======================================================
 # WORKER
@@ -224,6 +253,7 @@ class Worker(threading.Thread):
                     pass
 
                 time.sleep(dynamic_delay(s))
+
 
 # ======================================================
 # START
@@ -247,6 +277,7 @@ def start_engine(symbols):
     threading.Thread(target=cleanup_loop, daemon=True).start()
 
     print(f"🚀 ENGINE STARTED | workers={len(chunks)}")
+
 
 # ======================================================
 # READ
