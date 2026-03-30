@@ -96,16 +96,6 @@ ACTIVE_TRADES = {}
 def now_tr():
     return datetime.now(TR_TZ)
 
-
-# 🔥 VOLUME CACHE LOOP
-def volume_cache_loop():
-    while True:
-        try:
-            save_volume_cache()
-        except Exception as e:
-            print("Volume cache error:", e)
-        time.sleep(60)
-
 def is_market_open(now=None):
     now = now or now_tr()
     if now.weekday() >= 5:
@@ -688,7 +678,7 @@ def scanner_loop():
 
             if time.time() - last_fetch_time > FETCH_INTERVAL:
                 new_data = fetch_bist_data(ENGINE_SYMBOLS)
-                if isinstance(new_data, list) and len(new_data) > 0:
+                if isinstance(new_data, list):
                     last_market_data = new_data
                 last_fetch_time = time.time()
 
@@ -712,8 +702,7 @@ def scanner_loop():
                 except:
                     continue
 
-            if valid_count < max(50,
-            int(len(ENGINE_SYMBOLS) * 0.5)):
+            if valid_count < max(30, int(len(ENGINE_SYMBOLS) * 0.2)):
                 print(f"⚠ Sağlıklı veri yok ({valid_count}) → sinyal durduruldu", flush=True)
                 time.sleep(60)
                 continue
@@ -729,7 +718,7 @@ def scanner_loop():
                 
                 # 🔥 RVOL ENTEGRE
                 try:
-                    item["rvol"] = get_rvol(symbol)
+                    item["rvol"] = item.get("rvol")
                 except:
                     item["rvol"] = None
 
@@ -869,7 +858,7 @@ if __name__ == "__main__":
     print("📊 VOLUME ENGINE STARTING...")
 
     load_volume_cache()
-    threading.Thread(target=volume_cache_loop, daemon=True).start()
+    threading.Thread(target=save_volume_cache, daemon=True).start()
 
     # ==================================================
     # 🔁 SCANNER START
