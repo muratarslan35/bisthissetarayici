@@ -13,7 +13,7 @@ from volume_engine import update_tick
 # ======================================================
 
 BATCH_SIZE = 8          # düşük tut → ban yeme
-FETCH_INTERVAL = 3       # agresif olma
+FETCH_INTERVAL = 5       # agresif olma
 
 STALE_TTL = 10
 SAVE_INTERVAL = 15
@@ -201,7 +201,7 @@ class Worker(threading.Thread):
         while RUNNING:
 
             # 🔥 PRIMARY
-            if TV_FAIL_COUNT < 5:
+            if TV_FAIL_COUNT < 2:
                 prices = fetch_batch(self.symbols)
             else:
                 prices = {}
@@ -227,7 +227,7 @@ class Worker(threading.Thread):
                             LAST_UPDATE[s] = now
                             update_tick(s, p)
 
-                    time.sleep(random.uniform(0.2, 0.5))
+                    time.sleep(random.uniform(0.1, 0.2))
 
             time.sleep(FETCH_INTERVAL + random.uniform(0.5, 1.5))
 
@@ -245,7 +245,7 @@ def start_engine(symbols):
     ]
 
     # 🔥 MAX 4 WORKER
-    chunks = chunks[:4]
+    chunks = chunks[:2]
 
     for ch in chunks:
         Worker(ch).start()
