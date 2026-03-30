@@ -679,7 +679,10 @@ def scanner_loop():
             if time.time() - last_fetch_time > FETCH_INTERVAL:
                 new_data = fetch_bist_data(ENGINE_SYMBOLS)
                 if isinstance(new_data, list):
-                    last_market_data = new_data
+                    if len(new_data) > 0:
+                        last_market_data = new_data
+                    else:
+                        print("⚠ boş veri geldi, eski veri korunuyor")
                 last_fetch_time = time.time()
 
             market_data = last_market_data
