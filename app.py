@@ -96,6 +96,13 @@ ACTIVE_TRADES = {}
 def now_tr():
     return datetime.now(TR_TZ)
 
+
+# 🔥 VOLUME CACHE LOOP
+def volume_cache_loop():
+    while True:
+        save_volume_cache()
+        time.sleep(60)
+
 def is_market_open(now=None):
     now = now or now_tr()
     if now.weekday() >= 5:
@@ -859,7 +866,7 @@ if __name__ == "__main__":
     print("📊 VOLUME ENGINE STARTING...")
 
     load_volume_cache()
-    threading.Thread(target=save_volume_cache, daemon=True).start()
+    threading.Thread(target=volume_cache_loop, daemon=True).start()
 
     # ==================================================
     # 🔁 SCANNER START
