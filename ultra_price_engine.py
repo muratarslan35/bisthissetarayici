@@ -13,7 +13,7 @@ from volume_engine import update_tick
 # ======================================================
 
 BATCH_SIZE = 8
-FETCH_INTERVAL = 5
+FETCH_INTERVAL = 3
 
 STALE_TTL = 10
 SAVE_INTERVAL = 15
@@ -120,7 +120,7 @@ def fetch_batch(symbols):
 
         # 🔥 GLOBAL THROTTLE (EN KRİTİK)
         now = time.time()
-        wait = 0.7 - (now - LAST_REQUEST_TIME)
+        wait = 1.2 - (now - LAST_REQUEST_TIME)
         if wait > 0:
             time.sleep(wait)
 
@@ -258,7 +258,7 @@ def start_engine(symbols):
     ]
 
     # 🔥 SAFE WORKER COUNT
-    chunks = chunks[:2]
+    chunks = chunks[:1]
 
     for ch in chunks:
         Worker(ch).start()
