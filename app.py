@@ -751,6 +751,8 @@ def scanner_loop():
 
                 # 🔥 artık güvenli şekilde kullanabilirsin
                 item["current_price"] = price
+                item["rvol"] = get_rvol(symbol)
+
 
                 if symbol and isinstance(price, (int, float)):
                     dashboard.LIVE_PRICES[symbol] = price
