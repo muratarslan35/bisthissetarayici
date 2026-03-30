@@ -914,11 +914,23 @@ def scalping_signal(item):
 # ======================================================
 
 def process_symbol_signals(item):
-    
+
     refresh_brut_list()
     
     symbol = item["symbol"]
-    price = item["current_price"]
+
+    # 🔥 REALTIME GUARD
+    price = item.get("current_price")
+
+    if not price:
+        return []
+
+    # 🔥 gecikmiş veri filtre
+    now_ts = time.time()
+    item_ts = item.get("timestamp", now_ts)
+
+    if now_ts - item_ts > 5:
+        return []
 
     rvol_live = item.get("rvol")
 
