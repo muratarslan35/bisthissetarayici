@@ -8,9 +8,12 @@ from functools import wraps
 import random
 import string
 
+
 from ultra_price_engine import start_engine
+from ultra_price_engine import get_price
 from volume_engine import load_volume_cache, save_volume_cache
 from volume_engine import get_rvol
+
 
 from dotenv import load_dotenv
 from flask import (
@@ -724,16 +727,28 @@ def scanner_loop():
 
                 symbol = item.get("symbol")
                 price = item.get("current_price")
-                
-                # 🔥 RVOL ENTEGRE
-    
-                item["rvol"] = item.get("rvol", 0)
+
+                # 🔥 ENGINE PRICE FALLBACK
+                if not price or price == 0:
+                    price = get_price(symbol)
+
+                # 🔥 .IS uyumsuzluğu için
+                if not price and symbol:
+                    clean_symbol = symbol.replace(".IS", "")
+                    price = get_price(clean_symbol)
+
+                # ❌ hala yoksa skip
+                if not price:
+                    continue
+
+                # 🔥 artık güvenli şekilde kullanabilirsin
+                item["current_price"] = price
 
                 if symbol and isinstance(price, (int, float)):
                     dashboard.LIVE_PRICES[symbol] = price
 
                 try:
-
+                
                     # ==================================================
                     # 🎯 TARGET TRACKING (EN KRİTİK)
                     # ==================================================
