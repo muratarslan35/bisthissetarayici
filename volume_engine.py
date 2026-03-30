@@ -7,7 +7,7 @@ import os
 # ======================================================
 # CONFIG
 # ======================================================
-MIN_TICKS = 20
+MIN_TICKS = 30
 WINDOW_SECONDS = 60
 MAX_TICKS = 600
 SAVE_INTERVAL = 15
@@ -122,7 +122,7 @@ def get_rvol(symbol):
     with LOCK:
         ticks = list(TICKS.get(symbol, []))
 
-    if len(ticks) < 20:
+    if len(ticks) < MIN_TICKS:
         return 0
 
     last_60 = sum(1 for t in ticks if now - t["ts"] <= 60)
