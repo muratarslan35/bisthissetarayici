@@ -66,7 +66,7 @@ ENGINE_SYMBOLS = list(set(FALLBACK_SYMBOLS))
 TR_TZ = ZoneInfo("Europe/Istanbul")
 BIST_OPEN = dtime(9, 40)
 BIST_CLOSE = dtime(18, 5)
-SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "8"))
+SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "3"))
 
 # ======================================================
 # TELEGRAM
@@ -736,6 +736,13 @@ def scanner_loop():
                 if not price and symbol:
                     clean_symbol = symbol.replace(".IS", "")
                     price = get_price(clean_symbol)
+
+                # 🔥 REALTIME PRICE FORCE
+               live_price = get_price(symbol)
+
+               if live_price:
+                   price = live_price
+                   item["current_price"] = live_price
 
                 # ❌ hala yoksa skip
                 if not price:
