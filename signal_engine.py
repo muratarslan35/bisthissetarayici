@@ -756,8 +756,13 @@ def scalping_signal(item):
     if avg_volume_30 == 0:
         return None
 
-    rvol = last["Volume"] / avg_volume_30
-    rvol = item.get("rvol", rvol)
+    # 🔥 RVOL FIX (TEK KAYNAK ÖNCELİK)
+    ext_rvol = item.get("rvol")
+
+    if ext_rvol and ext_rvol > 0:
+        rvol = ext_rvol
+    else:
+        rvol = last["Volume"] / avg_volume_30
     if rvol < 1.5:
         return None
 
@@ -859,7 +864,7 @@ def scalping_signal(item):
     if rsi is None:
         return None
 
-    if rsi < 55 or rsi > 65:
+    if rsi < 52 or rsi > 68:
         return None
 
     # ==================================================
@@ -915,7 +920,22 @@ def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
-    rvol_live = item.get("rvol", 0)
+    rvol_live = item.get("rvol")
+
+    if not rvol_live or rvol_live == 0:
+        try:
+            df15 = item["tf"]["15m"]["df"]
+            last = df15.iloc[-1]
+            avg = df15["Volume"].rolling(30).mean().iloc[-1]
+
+            if avg and avg > 0:
+                rvol_live = last["Volume"] / avg
+            else:
+                rvol_live = 0
+
+        except:
+            rvol_live = 0
+
     volume_label = classify_volume_from_value(rvol_live)
 
     brut_info = BRUT_MAP.get(symbol)
