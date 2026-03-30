@@ -10,6 +10,7 @@ import string
 
 from ultra_price_engine import start_engine
 from volume_engine import load_volume_cache, save_volume_cache
+from volume_engine import get_rvol
 
 from dotenv import load_dotenv
 from flask import (
@@ -715,6 +716,12 @@ def scanner_loop():
 
                 symbol = item.get("symbol")
                 price = item.get("current_price")
+                
+                # 🔥 RVOL ENTEGRE
+                try:
+                    item["rvol"] = get_rvol(symbol)
+                except:
+                    item["rvol"] = None
 
                 if symbol and isinstance(price, (int, float)):
                     dashboard.LIVE_PRICES[symbol] = price
