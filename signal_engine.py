@@ -11,6 +11,7 @@ from utils import (
     get_last_resistance
 )
 from bist_market_filters import get_brut_list
+from volume_engine import get_rvol
 
 _STORE_LOCK = Lock()
 
@@ -249,6 +250,14 @@ HELPER_DESCRIPTIONS = {
     "MOST KIRILIMI": "MOST aşağı – risk",
     "L4 MAJÖR KIRILIM": "Kurumsal majör seviye kırılımı",
 }
+
+def classify_volume_from_value(rvol):
+    if rvol >= 2.5:
+        return "🔥 GÜÇLÜ HACİM"
+    elif rvol >= 1.3:
+        return "⚡ ORTA HACİM"
+    else:
+        return "🐢 DÜŞÜK HACİM"
 
 # ======================================================
 # REPEAT BLOCK
@@ -541,7 +550,7 @@ def helper_indicators(item):
             helpers.append(("RSI DÜŞÜK", 6))
 
     if tf15.get("volume_ok"):
-        helpers.append(("GÜÇLÜ HACİM", 10))
+        helpers.append(("MUMDA GÜÇLÜ HACİM", 10))
 
     df15 = tf15.get("df")
     if df15 is not None:
@@ -748,7 +757,7 @@ def scalping_signal(item):
         return None
 
     rvol = last["Volume"] / avg_volume_30
-
+    rvol = item.get("rvol", rvol)
     if rvol < 1.5:
         return None
 
@@ -906,6 +915,9 @@ def process_symbol_signals(item):
     symbol = item["symbol"]
     price = item["current_price"]
 
+    rvol_live = item.get("rvol", 0)
+    volume_label = classify_volume_from_value(rvol_live)
+
     brut_info = BRUT_MAP.get(symbol)
 
     base_entry = None
@@ -964,6 +976,14 @@ def process_symbol_signals(item):
     )
 
     total_power = base_strength + helper_power
+
+    # HACİM BOOST
+    if rvol_live >= 2.5:
+        total_power += 6
+    elif rvol_live >= 1.8:
+        total_power += 3
+    elif rvol_live < 1:
+        total_power -= 4
     power_delta = total_power - prev_power
 
     levels = {"A": 0, "B": 0, "C": 0}
@@ -1179,6 +1199,8 @@ def process_symbol_signals(item):
         "most_4h": most_4h,
         "most_1h_level": most_1h_level,
         "most_4h_level": most_4h_level,
+        "volume_label": volume_label,
+        "rvol": round(rvol_live, 2),
         "power": total_power,
         "power_delta": power_delta,
         "signal_type": "reentry" if is_reentry else "primary",
@@ -1578,6 +1600,9 @@ def format_signal_message(signal):
     lines.append(f"💰 Canlı: {signal['price']}")
     lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
+
+    if signal.get("volume_label"):
+        lines.append(f"📊 {signal['volume_label']} (RVOL: {signal.get('rvol')})")
 
     # ---------- TP'LER ----------
     if signal.get("tp1"):
