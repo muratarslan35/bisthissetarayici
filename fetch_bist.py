@@ -98,6 +98,8 @@ def fetch_yf(symbol, interval):
     try:
 
         yf_symbol = symbol if symbol.endswith(".IS") else f"{symbol}.IS"
+        symbol_clean = symbol.replace(".IS", "")
+        yf_symbol = f"{symbol_clean}.IS"
 
         key = f"{yf_symbol}_{interval}"
         now = time.time()
@@ -254,7 +256,8 @@ def fetch_bist_data(symbol_data=None):
             print(f"➡ {symbol}", flush=True)
 
             # 🔥 LIVE PRICE
-            price = fetch_live_price(symbol)
+            symbol_clean = symbol.replace(".IS", "")
+            price = fetch_live_price(symbol_clean)
 
             if price is None:
                 print("⚠ LIVE fiyat yok", flush=True)
