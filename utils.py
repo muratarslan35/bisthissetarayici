@@ -154,3 +154,6 @@ def get_last_resistance(df, min_strength=3):
         return None
 
     return round(max(strong_levels), 2)
+
+def fetch_live_price(symbol):
+    return fetch_tradingview_price(symbol)
