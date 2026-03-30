@@ -561,7 +561,7 @@ def generate_invite_codes():
 def scanner_loop():
 
     send_startup_message()
-    market_data = market_data[:250]
+    
     last_fetch_time = 0
     FETCH_INTERVAL = 5
     last_market_data = []
@@ -687,6 +687,7 @@ def scanner_loop():
                 last_fetch_time = time.time()
 
             market_data = last_market_data
+            market_data = market_data[:250]
 
 
             if not isinstance(market_data, list) or len(market_data) == 0:
@@ -708,7 +709,10 @@ def scanner_loop():
 
             threshold = max(20, int(len(market_data) * 0.5))
             if valid_count < threshold:
-                print(f"⚠ Sağlıklı veri yok ({valid_count}) → sinyal durduruldu", flush=True)
+                print(
+                    f"⚠ Sağlıksız veri → valid={valid_count} / total={len(market_data)} / threshold={threshold}",
+                    flush=True
+                )
                 time.sleep(60)
                 continue
 
