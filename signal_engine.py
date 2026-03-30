@@ -1289,11 +1289,18 @@ def process_symbol_signals(item):
             save_weekly_state()
 
         # SADECE STRONG publish edilir
+    # 🔥 ORDER BLOCK FİLTRESİ (BURAYA)
+    if action == "GÜÇLÜ AL":
+        
+        if rvol_live < 1.0:
+            return []
+
+        if "ORDER BLOCK" not in helper_names:
+            return []
+
+    # SADECE STRONG publish edilir
     if signal["category"] != "strong":
         return []
-
-    return [signal]
-
 
 
 # ======================================================
