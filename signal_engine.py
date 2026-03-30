@@ -1682,18 +1682,18 @@ def process_signals(data):
     zero_streak = 0
 
     for item in data:
-        time.sleep(0.15)
+        time.sleep(0.10)
 
         price = item.get("current_price")
 
-        if not price:
+        if not price or rvol == 0:
             zero_streak += 1
         else:
             zero_streak = 0
 
-        if zero_streak >= 8:
-            print("⚠️ DATA KOPTU → 15sn bekleniyor...")
-            time.sleep(15)
+        if zero_streak >= 5:
+            print("⚠️ DATA KOPTU → 10sn bekleniyor...")
+            time.sleep(10)
             break
 
         try:
