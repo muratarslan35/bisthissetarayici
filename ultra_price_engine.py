@@ -1,24 +1,19 @@
 import time
-import random
 import threading
 import json
 import os
+import requests
 
 from volume_engine import update_tick
 
 # ======================================================
-# CONFIG (PRODUCTION SAFE)
+# CONFIG (ULTRA PRO)
 # ======================================================
 
-MAX_WORKERS = 5
-BATCH_SIZE = 10
+BATCH_SIZE = 40          # 🔥 tek requestte 40 hisse
+FETCH_INTERVAL = 2       # kaç saniyede bir fetch
 
-MIN_DELAY = 0.10
-MAX_DELAY = 0.30
-
-CACHE_TTL = 2
-STALE_TTL = 8
-
+STALE_TTL = 6
 SAVE_INTERVAL = 15
 
 MAX_KEEP_SECONDS = 300
@@ -32,7 +27,6 @@ CACHE_FILE = "data/price_cache.json"
 
 PRICE_CACHE = {}
 LAST_UPDATE = {}
-FAIL_COUNT = {}
 
 LOCK = threading.Lock()
 RUNNING = True
@@ -111,7 +105,6 @@ def cleanup_loop():
             for k in to_delete:
                 PRICE_CACHE.pop(k, None)
                 LAST_UPDATE.pop(k, None)
-                FAIL_COUNT.pop(k, None)
 
         if to_delete:
             print(f"🧹 CLEANUP: {len(to_delete)} symbol silindi")
@@ -119,141 +112,77 @@ def cleanup_loop():
         time.sleep(CLEANUP_INTERVAL)
 
 # ======================================================
-# 🔥 DATA SOURCES
+# 🔥 TRADINGVIEW SCANNER (TEK GERÇEK KAYNAK)
 # ======================================================
 
-# ✅ 1. YAHOO (PRIMARY - STABLE)
-def fetch_yahoo(symbol):
+def fetch_batch(symbols):
     try:
-        import yfinance as yf
+        url = "https://scanner.tradingview.com/turkey/scan"
 
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="1d")
+        tv_symbols = [
+            f"BIST:{s.replace('.IS','')}"
+            for s in symbols
+        ]
 
-        if hist.empty:
-            return None
-
-        return float(hist["Close"].iloc[-1])
-
-    except:
-        return None
-
-
-# ⚠️ 2. TRADINGVIEW (SECONDARY)
-def fetch_primary(symbol):
-    try:
-        from utils import fetch_tradingview_price
-
-        clean = symbol.replace(".IS", "")
-        tv_symbol = f"BIST:{clean}"
-
-        return fetch_tradingview_price(tv_symbol)
-    except:
-        return None
-
-
-# ⚠️ 3. INVESTING (LAST RESORT)
-def fetch_fallback(symbol):
-    try:
-        import requests
-        import re
-
-        clean = symbol.replace(".IS", "").lower()
-        url = f"https://www.investing.com/equities/{clean}-stock"
-
-        headers = {
-            "User-Agent": "Mozilla/5.0"
+        payload = {
+            "symbols": {
+                "tickers": tv_symbols,
+                "query": {"types": []}
+            },
+            "columns": ["close"]
         }
 
-        r = requests.get(url, headers=headers, timeout=5)
+        r = requests.post(url, json=payload, timeout=6)
 
-        if r.status_code != 200:
-            return None
+        data = r.json()
 
-        m = re.search(r'"last"\s*:\s*([\d.]+)', r.text)
-        if m:
-            return float(m.group(1))
+        result = {}
 
-    except:
-        return None
+        if "data" in data:
+            for item in data["data"]:
+                tv_symbol = item["s"]          # BIST:THYAO
+                price = item["d"][0]
 
+                clean = tv_symbol.replace("BIST:", "") + ".IS"
 
-# ======================================================
-# SMART FETCH (CORE)
-# ======================================================
+                if price:
+                    result[clean] = float(price)
 
-def smart_fetch(symbol):
+        return result
 
-    # CACHE
-    with LOCK:
-        ts = LAST_UPDATE.get(symbol, 0)
-        if time.time() - ts < CACHE_TTL:
-            return PRICE_CACHE.get(symbol)
-
-    price = None
-
-    # 1️⃣ YAHOO (PRIMARY)
-    price = fetch_yahoo(symbol)
-
-    # 2️⃣ TRADINGVIEW
-    if not price:
-        price = fetch_primary(symbol)
-
-    # 3️⃣ INVESTING
-    if not price:
-        price = fetch_fallback(symbol)
-
-    # SUCCESS
-    if price:
-        with LOCK:
-            PRICE_CACHE[symbol] = price
-            LAST_UPDATE[symbol] = time.time()
-            FAIL_COUNT[symbol] = 0
-
-        update_tick(symbol, price)
-        return price
-
-    # FAIL
-    with LOCK:
-        FAIL_COUNT[symbol] = FAIL_COUNT.get(symbol, 0) + 1
-
-    return None
-
+    except Exception as e:
+        print("❌ BATCH FETCH ERROR:", e)
+        return {}
 
 # ======================================================
-# DELAY (SMART THROTTLE)
+# WORKER (BATCH MODE)
 # ======================================================
 
-def dynamic_delay(symbol):
-    fails = FAIL_COUNT.get(symbol, 0)
-
-    if fails > 5:
-        return random.uniform(0.4, 0.8)
-    elif fails > 2:
-        return random.uniform(0.2, 0.4)
-    else:
-        return random.uniform(MIN_DELAY, MAX_DELAY)
-
-
-# ======================================================
-# WORKER
-# ======================================================
-
-class Worker(threading.Thread):
+class BatchWorker(threading.Thread):
     def __init__(self, symbols):
         super().__init__(daemon=True)
         self.symbols = symbols
 
     def run(self):
         while RUNNING:
-            for s in self.symbols:
-                try:
-                    smart_fetch(s)
-                except:
-                    pass
 
-                time.sleep(dynamic_delay(s))
+            batch_prices = fetch_batch(self.symbols)
 
+            now = time.time()
+
+            if batch_prices:
+
+                with LOCK:
+                    for symbol, price in batch_prices.items():
+                        PRICE_CACHE[symbol] = price
+                        LAST_UPDATE[symbol] = now
+
+                        update_tick(symbol, price)
+
+            else:
+                print("⚠ batch boş döndü")
+
+            time.sleep(FETCH_INTERVAL)
 
 # ======================================================
 # START
@@ -263,21 +192,19 @@ def start_engine(symbols):
 
     load_cache()
 
+    # 🔥 batch böl
     chunks = [
         symbols[i:i + BATCH_SIZE]
         for i in range(0, len(symbols), BATCH_SIZE)
     ]
 
-    chunks = chunks[:MAX_WORKERS]
-
     for ch in chunks:
-        Worker(ch).start()
+        BatchWorker(ch).start()
 
     threading.Thread(target=save_cache, daemon=True).start()
     threading.Thread(target=cleanup_loop, daemon=True).start()
 
-    print(f"🚀 ENGINE STARTED | workers={len(chunks)}")
-
+    print(f"🚀 BATCH ENGINE STARTED | batch={len(chunks)}")
 
 # ======================================================
 # READ
