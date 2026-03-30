@@ -693,13 +693,7 @@ def scanner_loop():
                 time.sleep(60)
                 continue
 
-            market_data = market_data[:250]]
-
-
-            if not isinstance(market_data, list) or len(market_data) == 0:
-                print("⚠ Veri alınamadı → sinyal durduruldu", flush=True)
-                time.sleep(60)
-                continue
+            market_data = market_data[:250]
 
             valid_count = 0
 
@@ -713,7 +707,7 @@ def scanner_loop():
                 except:
                     continue
 
-            threshold = max(20, int(len(market_data) * 0.5))
+            threshold = max(20, int(len(market_data) * 0.35))
             if valid_count < threshold:
                 print(
                     f"⚠ Sağlıksız veri → valid={valid_count} / total={len(market_data)} / threshold={threshold}",
@@ -732,8 +726,8 @@ def scanner_loop():
                 price = item.get("current_price")
                 
                 # 🔥 RVOL ENTEGRE
-                try:
-                    item["rvol"] = item.get("rvol", 0)
+    
+                item["rvol"] = item.get("rvol", 0)
 
                 if symbol and isinstance(price, (int, float)):
                     dashboard.LIVE_PRICES[symbol] = price
