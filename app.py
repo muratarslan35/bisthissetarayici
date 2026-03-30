@@ -738,12 +738,12 @@ def scanner_loop():
                     price = get_price(clean_symbol)
 
                 # 🔥 REALTIME PRICE FORCE
-               live_price = get_price(symbol)
+                live_price = get_price(symbol)
 
-               if live_price:
-                   price = live_price
-                   item["current_price"] = price
-                   item["timestamp"] = time.time()
+                if live_price:
+                    price = live_price
+                    item["current_price"] = price
+                    item["timestamp"] = time.time()
 
                 # ❌ hala yoksa skip
                 if not price:
