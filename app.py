@@ -93,6 +93,27 @@ RVOL_CACHE = {}
 ACTIVE_TRADES = {}
 
 # ======================================================
+# RVOL ENGINE
+# ======================================================
+
+def rvol_updater():
+
+    while True:
+        try:
+            for symbol in ENGINE_SYMBOLS:
+
+                r = get_rvol(symbol)
+
+                if r is not None:
+                    RVOL_CACHE[symbol] = r
+
+                time.sleep(0.05)  # BAN yememek için kritik
+
+        except Exception as e:
+            print("RVOL ENGINE ERROR:", e)
+
+        time.sleep(1)
+# ======================================================
 # HELPERS
 # ======================================================
 
@@ -751,7 +772,12 @@ def scanner_loop():
                 # 🔥 artık güvenli şekilde kullanabilirsin
                 item["current_price"] = price
                 item["timestamp"] = time.time()
-                item["rvol"] = get_rvol(symbol)
+                rvol = RVOL_CACHE.get(symbol)
+
+                if rvol is None:
+                    continue
+
+                item["rvol"] = rvol
 
 
                 if symbol and isinstance(price, (int, float)):
@@ -891,6 +917,9 @@ if __name__ == "__main__":
 
     load_volume_cache()
     threading.Thread(target=save_volume_cache, daemon=True).start()
+   
+    # 🔥 RVOL BACKGROUND ENGINE
+    threading.Thread(target=rvol_updater, daemon=True).start()
 
     # ==================================================
     # 🔁 SCANNER START
