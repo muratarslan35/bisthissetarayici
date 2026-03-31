@@ -13,6 +13,7 @@ from ultra_price_engine import start_engine
 from ultra_price_engine import get_price
 from volume_engine import load_volume_cache, save_volume_cache
 from volume_engine import get_rvol
+from volume_engine import update_tick
 
 
 from dotenv import load_dotenv
@@ -772,7 +773,9 @@ def scanner_loop():
                 # 🔥 artık güvenli şekilde kullanabilirsin
                 item["current_price"] = price
                 item["timestamp"] = time.time()
-                rvol = RVOL_CACHE.get(symbol)
+                update_tick(symbol, price)
+                rvol = get_rvol(symbol)
+                
 
                 if rvol is None:
                     rvol = 0
