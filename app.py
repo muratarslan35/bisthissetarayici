@@ -775,7 +775,7 @@ def scanner_loop():
                 rvol = RVOL_CACHE.get(symbol)
 
                 if rvol is None:
-                    continue
+                    rvol = 0
 
                 item["rvol"] = rvol
 
