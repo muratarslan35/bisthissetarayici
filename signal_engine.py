@@ -1625,92 +1625,89 @@ def build_weekly_success_report():
 # ======================================================
 
 def format_signal_message(signal):
-
-    # =========================================
-    # 🎯 SUCCESS MESAJI
-    # =========================================
     if signal.get("category") == "success":
         return "\n".join([
-            "🎯 HEDEF GERÇEKLEŞTİ",
+            "🎯 HEDEF GELDİ",
             "────────────",
-            f"📊 {signal.get('symbol', '-')}",
+            f"📊 {signal['symbol']}",
             "",
-            f"🎯 Giriş: {signal.get('entry_price', '-')}",
-            f"🏁 Çıkış: {signal.get('hit_price', '-')}",
-            f"📈 Kazanç: %{signal.get('gain_pct', '-')}",
+            f"🎯 Giriş: {signal['entry_price']}",
+            f"📈 Hedef: {signal['target_price']}",
+            f"✅ Gerçekleşen: {signal['hit_price']}",
+            "",
+            f"💰 Kazanç: %{signal['gain_pct']}",
             "────────────",
-            f"⏰ {signal.get('time', '-')}",
+            f"⏰ {signal['time']}",
         ])
 
     lines = []
-
-    # =========================================
-    # HEADER
-    # =========================================
-    lines.append(f"📊 {signal.get('symbol', '-')}")
+    lines.append(f"📊 {signal['symbol']}")
     lines.append("────────────")
 
-    # BRÜT TAKAS
-    brut = signal.get("brut")
-    if brut:
-        days = brut.get("days_left")
-        if isinstance(days, (int, float)) and days >= 0:
-            lines.append(f"‼️ BRÜT TAKAS ({days} gün)")
+    # BRÜT TAKAS UYARISI
+    if signal.get("brut"):
+
+        days = signal["brut"].get("days_left")
+
+        if days is not None and days >= 0:
+            lines.append(f"‼️‼️ BRÜT TAKAS VAR ({days} gün kaldı)")
             lines.append("────────────")
 
-    # BAŞLIK
     if signal.get("signal_type") == "reentry":
-        lines.append("♻️ TEKRAR GÜÇLÜ AL")
+        lines.append("♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)")
     else:
-        lines.append(f"{signal.get('title', '-')}")
+        lines.append(f"🏷 {signal['title']}")
 
-    # =========================================
-    # PRICE BLOCK
-    # =========================================
     lines.append("")
-    lines.append(f"🎯 Giriş: {signal.get('entry_price', '-')}")
-    lines.append(f"💰 Fiyat: {signal.get('price', '-')}")
-    lines.append(f"⚡ {signal.get('action', '-')}  •  {signal.get('main_algorithm', '-')}")
-    lines.append(f"📈 {signal.get('ema_trend', '-')}")
+    lines.append("────────────")
 
-    # HACİM
+    if signal.get("entry_price"):
+        lines.append(f"🎯 Giriş: {signal['entry_price']}")
+
+    lines.append(f"💰 Canlı: {signal['price']}")
+    lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
+    lines.append(f"📈 Trend: {signal['ema_trend']}")
+
     if signal.get("volume_label"):
-        lines.append(f"📊 {signal.get('volume_label')} | RVOL: {signal.get('rvol', '-')}")
+        lines.append(f"📊 {signal['volume_label']} (RVOL: {signal.get('rvol')})")
 
-    # =========================================
-    # TP BLOCK
-    # =========================================
+    # ---------- TP'LER ----------
     if signal.get("tp1"):
+        lines.append("")
         lines.append("────────────")
         lines.append("🎯 HEDEFLER")
-        lines.append(f"TP1: {signal.get('tp1')}")
+        lines.append(f"• TP1: {signal['tp1']}")
         if signal.get("tp2"):
-            lines.append(f"TP2: {signal.get('tp2')}")
+            lines.append(f"• TP2: {signal['tp2']}")
         if signal.get("tp3"):
-            lines.append(f"TP3: {signal.get('tp3')}")
+            lines.append(f"• TP3: {signal['tp3']}")
 
-    # =========================================
-    # GAIN
-    # =========================================
+    # ---------- ANLIK KAZANÇ ----------
     if signal.get("live_gain_pct") is not None:
         lines.append("────────────")
-        lines.append(f"💹 Anlık: %{signal.get('live_gain_pct')}")
+        lines.append(f"💹 Anlık Kazanç: %{signal['live_gain_pct']}")
 
-    # =========================================
-    # HELPERS (SADE)
-    # =========================================
+    # ---------- YARDIMCILAR ----------
     helpers = signal.get("helpers_detail") or []
     if helpers:
+        lines.append("")
         lines.append("────────────")
-        lines.append("🧩 SİNYAL GÜÇLERİ")
-        for h in helpers[:4]:  # spam önleme
-            lines.append(f"• {h.get('name')}")
+        lines.append("🧩 YARDIMCILAR")
+        for h in helpers:
+            lines.append(f"• [{h['level']}] {h['name']}")
 
-    # =========================================
-    # TIME
-    # =========================================
+    # ---------- GEÇMİŞ ----------
+    history = signal.get("history") or []
+    if history:
+        lines.append("")
+        lines.append("────────────")
+        lines.append("📜 HAREKETLER")
+        for t, msg in history[-4:]:
+            lines.append(f"{t} → {msg}")
+
+    lines.append("")
     lines.append("────────────")
-    lines.append(f"⏰ {signal.get('time', '-')}")
+    lines.append(f"⏰ {signal['time']}")
 
     return "\n".join(lines)
 
