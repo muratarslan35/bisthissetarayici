@@ -1434,6 +1434,8 @@ def update_success_targets(symbol, price):
     r_day = REENTRY_DAILY_TRACKER.get(t_key, {})
 
     for r in r_day.values():
+        if r.get("signal_type") != "reentry":
+            continue
         if r.get("hit"):
             continue
 
@@ -1464,6 +1466,8 @@ def update_success_targets(symbol, price):
             continue
 
         if s.get("tp1") is None:
+            continue
+        if not s.get("entry_price"):
             continue
 
         if s.get("tp1_hit"):
@@ -1664,14 +1668,14 @@ def format_signal_message(signal):
     # PRICE BLOCK
     # =========================================
     lines.append("")
-    lines.append(f"🎯 {signal.get('entry_price', '-')}")
-    lines.append(f"💰 {signal.get('price', '-')}")
-    lines.append(f"⚡ {signal.get('action', '-')} | {signal.get('main_algorithm', '-')}")
+    lines.append(f"🎯 Giriş: {signal.get('entry_price', '-')}")
+    lines.append(f"💰 Fiyat: {signal.get('price', '-')}")
+    lines.append(f"⚡ {signal.get('action', '-')}  •  {signal.get('main_algorithm', '-')}")
     lines.append(f"📈 {signal.get('ema_trend', '-')}")
 
     # HACİM
     if signal.get("volume_label"):
-        lines.append(f"📊 {signal['volume_label']} | RVOL: {signal.get('rvol', '-')}")
+        lines.append(f"📊 {signal.get('volume_label')} | RVOL: {signal.get('rvol', '-')}")
 
     # =========================================
     # TP BLOCK
@@ -1690,17 +1694,17 @@ def format_signal_message(signal):
     # =========================================
     if signal.get("live_gain_pct") is not None:
         lines.append("────────────")
-        lines.append(f"💹 %{signal.get('live_gain_pct')}")
+        lines.append(f"💹 Anlık: %{signal.get('live_gain_pct')}")
 
     # =========================================
-    # HELPERS (sade)
+    # HELPERS (SADE)
     # =========================================
     helpers = signal.get("helpers_detail") or []
     if helpers:
         lines.append("────────────")
-        lines.append("🧩")
-        for h in helpers[:4]:  # max 4 → spam yok
-            lines.append(f"{h.get('name')}")
+        lines.append("🧩 SİNYAL GÜÇLERİ")
+        for h in helpers[:4]:  # spam önleme
+            lines.append(f"• {h.get('name')}")
 
     # =========================================
     # TIME
