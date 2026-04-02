@@ -1240,6 +1240,10 @@ def process_symbol_signals(item):
         "published": True,
     }
 
+    # =====================================
+    # 🔁 REPEAT BLOCK
+    # =====================================
+
     if key in LAST_PUBLISHED_STATE:
         if (
             in_repeat_block(symbol, algo)
@@ -1247,10 +1251,35 @@ def process_symbol_signals(item):
         ):
             return []
 
+    # =====================================
+    # 🔥 FİLTRELER (EN KRİTİK YER)
+    # =====================================
+
+    if action == "GÜÇLÜ AL":
+
+        if rvol_live < 1.0:
+            return []
+
+        if "ORDER BLOCK" not in helper_names:
+            return []
+
+    # sadece strong gönder
+    if signal["category"] != "strong":
+        return []
+
+    # =====================================
+    # ✅ PUBLISH STATE
+    # =====================================
+
     LAST_PUBLISHED_STATE[key] = tr_now()
     mark_sent(symbol, algo)
 
+    # =====================================
+    # ✅ SADECE YAYINLANAN SİNYAL TRACKER'A
+    # =====================================
+
     if not is_reentry and algo != "SCALPING":
+
         d_store = DAILY_SUCCESS_TRACKER.setdefault(t_key, {})
         w_store = WEEKLY_SUCCESS_TRACKER.setdefault(w_key, {})
 
@@ -1266,10 +1295,9 @@ def process_symbol_signals(item):
                 "hit": False,
                 "entry_time": tr_now().strftime("%H:%M:%S"),
                 "entry_date": tr_now().date(),
+                "published": True
             }
             save_daily_state()
-
-        k = make_key(symbol, algo)
 
         if k not in w_store:
             w_store[k] = {
@@ -1285,22 +1313,9 @@ def process_symbol_signals(item):
                 "entry_day": tr_now().strftime("%A"),
                 "entry_date": tr_now().date(),
                 "entry_time": tr_now().strftime("%H:%M:%S"),
+                "published": True
             }
             save_weekly_state()
-
-        # SADECE STRONG publish edilir
-    # 🔥 ORDER BLOCK FİLTRESİ (BURAYA)
-    if action == "GÜÇLÜ AL":
-        
-        if rvol_live < 1.0:
-            return []
-
-        if "ORDER BLOCK" not in helper_names:
-            return []
-
-    # SADECE STRONG publish edilir
-    if signal["category"] != "strong":
-        return []
 
     return [signal]
 # ======================================================
@@ -1348,6 +1363,8 @@ def update_success_targets(symbol, price):
 
     # ---------- DAILY ----------
     for k, d in daily.items():
+        if not d.get("published"):
+            continue
         sym = d["symbol"]
         algo = d["algo"]
         if d.get("hit"):
@@ -1396,6 +1413,8 @@ def update_success_targets(symbol, price):
 
     # ---------- WEEKLY (canlı takip) ----------
     for k, d in weekly.items():
+        if not d.get("published"):
+            continue
         sym = d["symbol"]
         algo = d["algo"]
         if d.get("hit"):
@@ -1602,80 +1621,92 @@ def build_weekly_success_report():
 # ======================================================
 
 def format_signal_message(signal):
+
+    # =========================================
+    # 🎯 SUCCESS MESAJI
+    # =========================================
     if signal.get("category") == "success":
         return "\n".join([
-            "🎯 HEDEF GELDİ",
-            f"📊 {signal['symbol']}",
+            "🎯 HEDEF GERÇEKLEŞTİ",
+            "────────────",
+            f"📊 {signal.get('symbol', '-')}",
             "",
-            f"🎯 Giriş: {signal['entry_price']}",
-            f"📈 Hedef: {signal['target_price']}",
-            f"✅ Gerçekleşen: {signal['hit_price']}",
-            "",
-            f"💰 Kazanç: %{signal['gain_pct']}",
-            "",
-            f"⏰ {signal['time']}",
+            f"🎯 Giriş: {signal.get('entry_price', '-')}",
+            f"🏁 Çıkış: {signal.get('hit_price', '-')}",
+            f"📈 Kazanç: %{signal.get('gain_pct', '-')}",
+            "────────────",
+            f"⏰ {signal.get('time', '-')}",
         ])
 
     lines = []
-    lines.append(f"📊 {signal['symbol']}")
 
-    # BRÜT TAKAS UYARISI
-    if signal.get("brut"):
+    # =========================================
+    # HEADER
+    # =========================================
+    lines.append(f"📊 {signal.get('symbol', '-')}")
+    lines.append("────────────")
 
-        days = signal["brut"].get("days_left")
+    # BRÜT TAKAS
+    brut = signal.get("brut")
+    if brut:
+        days = brut.get("days_left")
+        if isinstance(days, (int, float)) and days >= 0:
+            lines.append(f"‼️ BRÜT TAKAS ({days} gün)")
+            lines.append("────────────")
 
-        if days is not None and days >= 0:
-            lines.append(f"‼️‼️ BRÜT TAKAS VAR ({days} gün kaldı)")
-
+    # BAŞLIK
     if signal.get("signal_type") == "reentry":
-        lines.append("♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)")
+        lines.append("♻️ TEKRAR GÜÇLÜ AL")
     else:
-        lines.append(f"🏷 {signal['title']}")
+        lines.append(f"{signal.get('title', '-')}")
 
+    # =========================================
+    # PRICE BLOCK
+    # =========================================
     lines.append("")
+    lines.append(f"🎯 {signal.get('entry_price', '-')}")
+    lines.append(f"💰 {signal.get('price', '-')}")
+    lines.append(f"⚡ {signal.get('action', '-')} | {signal.get('main_algorithm', '-')}")
+    lines.append(f"📈 {signal.get('ema_trend', '-')}")
 
-    if signal.get("entry_price"):
-        lines.append(f"🎯 Giriş: {signal['entry_price']}")
-
-    lines.append(f"💰 Canlı: {signal['price']}")
-    lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
-    lines.append(f"📈 Trend: {signal['ema_trend']}")
-
+    # HACİM
     if signal.get("volume_label"):
-        lines.append(f"📊 {signal['volume_label']} (RVOL: {signal.get('rvol')})")
+        lines.append(f"📊 {signal['volume_label']} | RVOL: {signal.get('rvol', '-')}")
 
-    # ---------- TP'LER ----------
+    # =========================================
+    # TP BLOCK
+    # =========================================
     if signal.get("tp1"):
-        lines.append("")
+        lines.append("────────────")
         lines.append("🎯 HEDEFLER")
-        lines.append(f"• TP1: {signal['tp1']}")
+        lines.append(f"TP1: {signal.get('tp1')}")
         if signal.get("tp2"):
-            lines.append(f"• TP2: {signal['tp2']}")
+            lines.append(f"TP2: {signal.get('tp2')}")
         if signal.get("tp3"):
-            lines.append(f"• TP3: {signal['tp3']}")
+            lines.append(f"TP3: {signal.get('tp3')}")
 
-    # ---------- ANLIK KAZANÇ ----------
+    # =========================================
+    # GAIN
+    # =========================================
     if signal.get("live_gain_pct") is not None:
-        lines.append(f"💹 Anlık Kazanç: %{signal['live_gain_pct']}")
+        lines.append("────────────")
+        lines.append(f"💹 %{signal.get('live_gain_pct')}")
 
-    # ---------- YARDIMCILAR ----------
+    # =========================================
+    # HELPERS (sade)
+    # =========================================
     helpers = signal.get("helpers_detail") or []
     if helpers:
-        lines.append("")
-        lines.append("🧩 YARDIMCILAR")
-        for h in helpers:
-            lines.append(f"• [{h['level']}] {h['name']}")
+        lines.append("────────────")
+        lines.append("🧩")
+        for h in helpers[:4]:  # max 4 → spam yok
+            lines.append(f"{h.get('name')}")
 
-    # ---------- GEÇMİŞ ----------
-    history = signal.get("history") or []
-    if history:
-        lines.append("")
-        lines.append("📜 HAREKETLER")
-        for t, msg in history[-4:]:
-            lines.append(f"{t} → {msg}")
-
-    lines.append("")
-    lines.append(f"⏰ {signal['time']}")
+    # =========================================
+    # TIME
+    # =========================================
+    lines.append("────────────")
+    lines.append(f"⏰ {signal.get('time', '-')}")
 
     return "\n".join(lines)
 
