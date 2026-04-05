@@ -93,6 +93,8 @@ SCALPING_STRENGTH_THRESHOLD = 35
 TP1_PCT = 0.01    # %1
 TP2_PCT = 0.03    # %3
 TP3_PCT = 0.05    # %5
+TP1_HIT_SYMBOLS = {}
+DAILY_SYMBOL_ALGO = {}
 
 LAST_SENT = {}
 LAST_SIGNAL_STATE = {}
@@ -207,6 +209,20 @@ def reset_reentry_daily_if_needed():
     if key not in REENTRY_DAILY_TRACKER:
         REENTRY_DAILY_TRACKER.clear()
         REENTRY_DAILY_TRACKER[key] = {}
+
+def reset_tp1_tracker_if_needed():
+    today = today_key()
+
+    for k in list(TP1_HIT_SYMBOLS.keys()):
+        if TP1_HIT_SYMBOLS[k] != today:
+            del TP1_HIT_SYMBOLS[k]
+
+def reset_daily_algo_tracker_if_needed():
+    today = today_key()
+
+    for k in list(DAILY_SYMBOL_ALGO.keys()):
+        if k[0] != today:
+            del DAILY_SYMBOL_ALGO[k]
 
 # ======================================================
 # HELPER SEVİYELERİ
@@ -916,6 +932,8 @@ def scalping_signal(item):
 
 def process_symbol_signals(item):
 
+    reset_tp1_tracker_if_needed()
+
     refresh_brut_list()
     
     symbol = item["symbol"]
@@ -925,6 +943,8 @@ def process_symbol_signals(item):
 
     if not price:
         return []
+
+    t_key = today_key()
 
     # 🔥 gecikmiş veri filtre
     now_ts = time.time()
@@ -967,6 +987,8 @@ def process_symbol_signals(item):
         return []
 
     algo = main["main_type"]
+
+    
 
     helpers = helper_indicators(item)
     helper_map = {h[0]: h[1] for h in helpers}
@@ -1156,7 +1178,8 @@ def process_symbol_signals(item):
         base_entry = price
     else:
         base_entry = entry_price if entry_price is not None else price
-    
+    if TP1_HIT_SYMBOLS.get((symbol, algo)) == today_key():
+        return []
     tp1 = None
     tp2 = None
     tp3 = None
@@ -1249,6 +1272,10 @@ def process_symbol_signals(item):
             in_repeat_block(symbol, algo)
             and not (strengthened or weakened or most_upgrade or most_downgrade)
         ):
+            return []
+
+    if key in LAST_PUBLISHED_STATE:
+        if not (strengthened or weakened or most_upgrade or most_downgrade):
             return []
 
     # =====================================
@@ -1373,6 +1400,7 @@ def update_success_targets(symbol, price):
             continue
 
         if price >= d["target"]:
+            TP1_HIT_SYMBOLS[(symbol, algo)] = today_key()
             d["hit"] = True
             d["hit_price"] = price
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
