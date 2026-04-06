@@ -980,19 +980,35 @@ def process_symbol_signals(item):
     # 🔥 ANLIK HACİM
     last_volume = None
     try:
-        df15 = item["tf"]["15m"]["df"]
-        last_volume = df15.iloc[-1]["Volume"]
+        last = df15.iloc[-1]
+
+        typical_last = (
+            last["High"] +
+            last["Low"] +
+            last["Close"]
+        ) / 3
+
+        last_volume = typical_last * last["Volume"]
+
     except:
         last_volume = None
 
-    # 🔥 GÜNLÜK HACİM (BURAYA EKLİYORSUN)
+    # 🔥 GÜNLÜK HACİM (TL BAZLI - PROFESSIONAL)
     daily_volume = None
+
     try:
         today = tr_now().date()
         df_today = df15[df15.index.date == today]
 
         if not df_today.empty:
-            daily_volume = df_today["Volume"].sum()
+            typical_price = (
+                df_today["High"] +
+                df_today["Low"] +
+                df_today["Close"]
+            ) / 3
+
+            daily_volume = (typical_price * df_today["Volume"]).sum()
+
     except:
         daily_volume = None
 
