@@ -103,6 +103,7 @@ LAST_PUBLISHED_STATE = {}
 DAILY_SUCCESS_TRACKER = load_daily_state()
 DAILY_CLOSE_PRICES = {}
 REENTRY_DAILY_TRACKER = {}
+DAILY_SENT = {}
 
 WEEKLY_SUCCESS_TRACKER, FRIDAY_CLOSE_PRICES = load_weekly_state()
 
@@ -216,6 +217,11 @@ def reset_tp1_tracker_if_needed():
     for k in list(TP1_HIT_SYMBOLS.keys()):
         if TP1_HIT_SYMBOLS[k] != today:
             del TP1_HIT_SYMBOLS[k]
+
+    # 🔥 EKLE
+    for k in list(DAILY_SENT.keys()):
+        if DAILY_SENT[k] != today:
+            del DAILY_SENT[k]
 
 def reset_daily_algo_tracker_if_needed():
     today = today_key()
@@ -1178,8 +1184,9 @@ def process_symbol_signals(item):
         base_entry = price
     else:
         base_entry = entry_price if entry_price is not None else price
-    if TP1_HIT_SYMBOLS.get((symbol, algo)) == today_key():
-        return []
+    if not is_reentry:
+        if TP1_HIT_SYMBOLS.get((symbol, algo)) == today_key():
+            return []
     tp1 = None
     tp2 = None
     tp3 = None
@@ -1274,7 +1281,9 @@ def process_symbol_signals(item):
         ):
             return []
 
-    if key in LAST_PUBLISHED_STATE:
+    # 🔁 GÜN İÇİ TEKRAR FİLTRESİ (SMART)
+
+    if DAILY_SENT.get((symbol, algo, "re" if is_reentry else "pr")) == today_key():
         if not (strengthened or weakened or most_upgrade or most_downgrade):
             return []
 
@@ -1300,6 +1309,8 @@ def process_symbol_signals(item):
 
     LAST_PUBLISHED_STATE[key] = tr_now()
     mark_sent(symbol, algo)
+
+    DAILY_SENT[(symbol, algo, "re" if is_reentry else "pr")] = today_key()
 
     # =====================================
     # ✅ SADECE YAYINLANAN SİNYAL TRACKER'A
