@@ -939,8 +939,6 @@ def scalping_signal(item):
 def process_symbol_signals(item):
 
     reset_tp1_tracker_if_needed()
-
-    refresh_brut_list()
     
     symbol = item["symbol"]
 
@@ -1302,8 +1300,8 @@ def process_symbol_signals(item):
         "most_4h_level": most_4h_level,
         "volume_label": volume_label,
         "rvol": round(rvol_live, 2),
-        "volume": round(last_volume, 0) if last_volume else None,
-        "daily_volume": round(daily_volume, 0) if daily_volume else None,
+        "volume": int(last_volume) if last_volume else None,
+        "daily_volume": int(daily_volume) if daily_volume else None,
         "power": total_power,
         "power_delta": power_delta,
         "signal_type": "reentry" if is_reentry else "primary",
@@ -1828,6 +1826,8 @@ def format_signal_message(signal):
 
 def process_signals(data):
     out = []
+
+    refresh_brut_list()
 
     zero_streak = 0
 
