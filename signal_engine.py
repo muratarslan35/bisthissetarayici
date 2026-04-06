@@ -944,6 +944,9 @@ def process_symbol_signals(item):
     
     symbol = item["symbol"]
 
+    # 🔥 HER ZAMAN TANIMLA
+    df15 = item["tf"]["15m"]["df"]
+
     # 🔥 REALTIME GUARD
     price = item.get("current_price")
 
@@ -1299,8 +1302,8 @@ def process_symbol_signals(item):
         "most_4h_level": most_4h_level,
         "volume_label": volume_label,
         "rvol": round(rvol_live, 2),
-        "volume": int(last_volume) if last_volume else None,
-        "daily_volume": int(daily_volume) if daily_volume else None,
+        "volume": round(last_volume, 0) if last_volume else None,
+        "daily_volume": round(daily_volume, 0) if daily_volume else None,
         "power": total_power,
         "power_delta": power_delta,
         "signal_type": "reentry" if is_reentry else "primary",
