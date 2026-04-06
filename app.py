@@ -818,7 +818,7 @@ def scanner_loop():
                             del ACTIVE_TRADES[symbol]
 
                         # ❌ STOP
-                        elif price <= entry * 0.99:
+                        elif price <= entry * 0.95:
 
                             msg = f"""
 ⛔ BAŞARISIZ
