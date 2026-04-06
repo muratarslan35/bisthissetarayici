@@ -977,6 +977,25 @@ def process_symbol_signals(item):
 
     volume_label = classify_volume_from_value(rvol_live)
 
+    # 🔥 ANLIK HACİM
+    last_volume = None
+    try:
+        df15 = item["tf"]["15m"]["df"]
+        last_volume = df15.iloc[-1]["Volume"]
+    except:
+        last_volume = None
+
+    # 🔥 GÜNLÜK HACİM (BURAYA EKLİYORSUN)
+    daily_volume = None
+    try:
+        today = tr_now().date()
+        df_today = df15[df15.index.date == today]
+
+        if not df_today.empty:
+            daily_volume = df_today["Volume"].sum()
+    except:
+        daily_volume = None
+
     brut_info = BRUT_MAP.get(symbol)
 
     base_entry = None
@@ -1264,6 +1283,8 @@ def process_symbol_signals(item):
         "most_4h_level": most_4h_level,
         "volume_label": volume_label,
         "rvol": round(rvol_live, 2),
+        "volume": int(last_volume) if last_volume else None,
+        "daily_volume": int(daily_volume) if daily_volume else None,
         "power": total_power,
         "power_delta": power_delta,
         "signal_type": "reentry" if is_reentry else "primary",
@@ -1664,6 +1685,7 @@ def build_weekly_success_report():
 # ======================================================
 
 def format_signal_message(signal):
+
     if signal.get("category") == "success":
         return "\n".join([
             "🎯 HEDEF GELDİ",
@@ -1683,15 +1705,14 @@ def format_signal_message(signal):
     lines.append(f"📊 {signal['symbol']}")
     lines.append("────────────")
 
-    # BRÜT TAKAS UYARISI
+    # BRÜT TAKAS
     if signal.get("brut"):
-
         days = signal["brut"].get("days_left")
-
         if days is not None and days >= 0:
             lines.append(f"‼️‼️ BRÜT TAKAS VAR ({days} gün kaldı)")
             lines.append("────────────")
 
+    # TITLE
     if signal.get("signal_type") == "reentry":
         lines.append("♻️ TEKRAR GÜÇLÜ AL (RE-ENTRY)")
     else:
@@ -1700,6 +1721,7 @@ def format_signal_message(signal):
     lines.append("")
     lines.append("────────────")
 
+    # ENTRY
     if signal.get("entry_price"):
         lines.append(f"🎯 Giriş: {signal['entry_price']}")
 
@@ -1707,10 +1729,35 @@ def format_signal_message(signal):
     lines.append(f"⚡ {signal['action']} | 🧠 {signal['main_algorithm']}")
     lines.append(f"📈 Trend: {signal['ema_trend']}")
 
+    # =====================================
+    # 🔥 HACİM BLOĞU (DÜZELTİLMİŞ)
+    # =====================================
     if signal.get("volume_label"):
-        lines.append(f"📊 {signal['volume_label']} (RVOL: {signal.get('rvol')})")
 
-    # ---------- TP'LER ----------
+        vol = signal.get("volume")
+        dvol = signal.get("daily_volume")
+
+        def format_vol(v):
+            if not v:
+                return "-"
+            if v >= 1_000_000_000:
+                return f"{round(v/1_000_000_000,2)}B"
+            elif v >= 1_000_000:
+                return f"{round(v/1_000_000,2)}M"
+            elif v >= 1_000:
+                return f"{round(v/1_000,1)}K"
+            return str(v)
+
+        lines.append(
+            f"📊 {signal['volume_label']} | "
+            f"Anlık: {format_vol(vol)} | "
+            f"Günlük: {format_vol(dvol)} "
+            f"(RVOL: {signal.get('rvol')})"
+        )
+
+    # =====================================
+    # TP
+    # =====================================
     if signal.get("tp1"):
         lines.append("")
         lines.append("────────────")
@@ -1721,12 +1768,16 @@ def format_signal_message(signal):
         if signal.get("tp3"):
             lines.append(f"• TP3: {signal['tp3']}")
 
-    # ---------- ANLIK KAZANÇ ----------
+    # =====================================
+    # LIVE GAIN
+    # =====================================
     if signal.get("live_gain_pct") is not None:
         lines.append("────────────")
         lines.append(f"💹 Anlık Kazanç: %{signal['live_gain_pct']}")
 
-    # ---------- YARDIMCILAR ----------
+    # =====================================
+    # HELPERS
+    # =====================================
     helpers = signal.get("helpers_detail") or []
     if helpers:
         lines.append("")
@@ -1735,7 +1786,9 @@ def format_signal_message(signal):
         for h in helpers:
             lines.append(f"• [{h['level']}] {h['name']}")
 
-    # ---------- GEÇMİŞ ----------
+    # =====================================
+    # HISTORY
+    # =====================================
     history = signal.get("history") or []
     if history:
         lines.append("")
