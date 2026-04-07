@@ -47,6 +47,11 @@ from kap_volume_signal import detect_kap_volume_momentum
 from utils import FALLBACK_SYMBOLS
 import dashboard
 from bist_market_filters import get_brut_list
+from brut_tracker import (
+    detect_new_bruts,
+    build_daily_message,
+    build_new_message
+)
 
 # ======================================================
 # ENV
@@ -669,10 +674,10 @@ def scanner_loop():
                 and now.time() >= dtime(9, 40)
             ):
 
-                brut_report = build_brut_report()
+                msg = build_daily_message(now)
 
-                if brut_report:
-                    send_to_channel(brut_report)
+                if msg:
+                    send_to_channel(msg)
 
                 last_brut_report = now.date()
 
@@ -698,7 +703,19 @@ def scanner_loop():
                 except Exception as e:
                     print("KAP tarama hatası:", e)
 
-                last_kap_check = now_ts
+                # 🔥 YENİ BRÜT TAKAS KONTROL
+                try:
+                    new_bruts = detect_new_bruts()
+
+                    if new_bruts and len(new_bruts) > 0:
+                        msg = build_new_message(new_bruts, now_tr())
+                        if msg:
+                            send_to_channel(msg)
+
+                except Exception as e:
+                    print("BRUT ERROR:", e)
+
+                last_kap_check = time.time()
 
             # --------------------------------------------------
             # MARKET DATA
