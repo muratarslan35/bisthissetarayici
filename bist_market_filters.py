@@ -8,7 +8,7 @@ HEADERS = {
     "Accept-Language": "tr-TR,tr;q=0.9"
 }
 
-CACHE_TTL = 120
+CACHE_TTL = 300
 
 BRUT_CACHE = {}
 LAST_UPDATE = None
@@ -29,7 +29,7 @@ def parse_date_safe(date_str):
     try:
         if not date_str:
             return None
-        return parser.parse(date_str).date()
+        return parser.parse(date_str, dayfirst=True).date()
     except:
         return None
 
@@ -44,7 +44,115 @@ def days_left_calc(dt):
 
 
 # ======================================================
-# 🔥 SCRAPER (YEDEK - SON ÇARE)
+# 🔥 1. KAP API (PRIMARY - MULTI TRY)
+# ======================================================
+
+def fetch_vbts():
+
+    urls = [
+        "https://www.kap.org.tr/tr/api/vbts",
+        "https://www.kap.org.tr/en/api/vbts"
+    ]
+
+    results = {}
+
+    for url in urls:
+
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=8)
+
+            if r.status_code != 200:
+                continue
+
+            data = r.json()
+
+            for item in data:
+
+                tedbir = str(item.get("measureType", "")).upper()
+
+                if "BRUT" not in tedbir and "BRÜT" not in tedbir:
+                    continue
+
+                code = item.get("stockCode")
+                if not code:
+                    continue
+
+                symbol = normalize_symbol(code)
+
+                start_dt = parse_date_safe(item.get("startDate"))
+                end_dt = parse_date_safe(item.get("endDate"))
+
+                days_left = days_left_calc(end_dt)
+
+                if days_left is not None and days_left < 0:
+                    continue
+
+                results[symbol] = {
+                    "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
+                    "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
+                    "days_left": days_left,
+                    "type": tedbir or "Brüt Takas"
+                }
+
+            if results:
+                print(f"✅ API BRÜT: {len(results)}")
+                return results
+
+        except Exception:
+            continue
+
+    print("⚠ API FAILED")
+    return {}
+
+
+# ======================================================
+# 🔥 2. ALTERNATİF KAYNAKLAR (SİTE SCRAPE)
+# ======================================================
+
+def fetch_alternative_sources():
+
+    urls = [
+        "https://borsa.doviz.com/brut-takas",
+        "https://bigpara.hurriyet.com.tr/borsa/brut-takas/"
+    ]
+
+    results = {}
+
+    for url in urls:
+
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=8)
+
+            if r.status_code != 200:
+                continue
+
+            html = r.text.upper()
+
+            matches = re.findall(r'\b[A-Z]{3,5}\b', html)
+
+            for sym in matches:
+
+                symbol = normalize_symbol(sym)
+
+                if symbol not in results:
+                    results[symbol] = {
+                        "start_date": "-",
+                        "end_date": "-",
+                        "days_left": None,
+                        "type": "Brüt Takas"
+                    }
+
+        except Exception:
+            continue
+
+    if results:
+        print(f"🟡 ALT BRÜT: {len(results)}")
+
+    return results
+
+
+# ======================================================
+# 🔥 3. KAP SAYFA SCRAPE (SON ÇARE)
 # ======================================================
 
 def fetch_bist_tedbirleri_scrape():
@@ -85,71 +193,14 @@ def fetch_bist_tedbirleri_scrape():
 
         print(f"📡 SCRAPE BRÜT: {len(results)}")
 
-    except Exception as e:
-        print("SCRAPE error:", e)
+    except Exception:
+        pass
 
     return results
 
 
 # ======================================================
-# 🔥 API (ANA KAYNAK - FIXED)
-# ======================================================
-
-def fetch_vbts():
-
-    # 🔥 ÇALIŞAN ENDPOINT
-    url = "https://www.kap.org.tr/en/api/vbts"
-    results = {}
-
-    try:
-
-        r = requests.get(url, headers=HEADERS, timeout=10)
-
-        if r.status_code != 200:
-            print("❌ API STATUS:", r.status_code)
-            return results
-
-        data = r.json()
-
-        for item in data:
-
-            tedbir = str(item.get("measureType", "")).upper()
-
-            # sadece BRÜT TAKAS
-            if "BRUT" not in tedbir:
-                continue
-
-            code = item.get("stockCode")
-            if not code:
-                continue
-
-            symbol = normalize_symbol(code)
-
-            start_dt = parse_date_safe(item.get("startDate"))
-            end_dt = parse_date_safe(item.get("endDate"))
-
-            days_left = days_left_calc(end_dt)
-
-            if days_left is not None and days_left < 0:
-                continue
-
-            results[symbol] = {
-                "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
-                "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
-                "days_left": days_left,
-                "type": "Brüt Takas"
-            }
-
-        print(f"📡 API BRÜT: {len(results)}")
-
-    except Exception as e:
-        print("VBTS error:", e)
-
-    return results
-
-
-# ======================================================
-# 🔥 MAIN (SMART MERGE + FALLBACK + CACHE)
+# 🔥 MAIN ENGINE
 # ======================================================
 
 def get_brut_list():
@@ -164,33 +215,34 @@ def get_brut_list():
 
     final = {}
 
-    # 1️⃣ API (ANA)
+    # 1️⃣ API
     api_data = fetch_vbts()
     final.update(api_data)
 
-    # 2️⃣ SCRAPE fallback
-    if len(final) == 0:
-        print("⚠ API boş → SCRAPE fallback")
+    # 2️⃣ ALT SOURCE
+    if len(final) < 3:
+        alt_data = fetch_alternative_sources()
+        final.update(alt_data)
+
+    # 3️⃣ SCRAPE
+    if len(final) < 3:
         scrape_data = fetch_bist_tedbirleri_scrape()
         final.update(scrape_data)
 
-    # CLEAN
     clean = {}
 
     for k, v in final.items():
-        if not k or not k.endswith(".IS"):
-            continue
-        clean[k] = v
+        if k and k.endswith(".IS"):
+            clean[k] = v
 
-    # TAMAMEN BOŞSA CACHE
     if not clean:
-        print("⚠ BRÜT BOŞ → CACHE KULLANILIYOR")
+        print("❌ BRÜT BOŞ → CACHE")
         return BRUT_CACHE
 
     BRUT_CACHE = clean
     LAST_UPDATE = now
 
-    print(f"✅ BRÜT TOPLAM: {len(clean)}")
+    print(f"🔥 FINAL BRÜT: {len(clean)}")
 
     return clean
 
