@@ -1,4 +1,6 @@
 from datetime import datetime
+from threading import Lock
+
 from kap_watchlist_engine import in_watchlist
 from bist_market_filters import (
     get_brut_list,
@@ -7,16 +9,24 @@ from bist_market_filters import (
     detect_pullback_entry
 )
 
-BRUT_LIST = set()
+# ======================================================
+# GLOBALS
+# ======================================================
+
+BRUT_MAP = {}
+BRUT_LOCK = Lock()
 LAST_FILTER_UPDATE = None
 
 LAST_SIGNAL_TIME = {}
 LAST_SIGNAL_PRICE = {}
 
+# ======================================================
+# FILTER REFRESH (THREAD SAFE)
+# ======================================================
 
 def refresh_filters():
 
-    global BRUT_LIST, LAST_FILTER_UPDATE
+    global BRUT_MAP, LAST_FILTER_UPDATE
 
     now = datetime.now()
 
@@ -25,13 +35,23 @@ def refresh_filters():
             return
 
     try:
-        brut = get_brut_list()
-        BRUT_LIST = set(brut.keys())
-    except:
-        BRUT_LIST = set()
+        new_map = get_brut_list() or {}
+
+        with BRUT_LOCK:
+            BRUT_MAP = new_map
+
+        print(f"✅ BRUT MAP UPDATED → {len(BRUT_MAP)} adet")
+
+    except Exception as e:
+        print("⚠ BRUT LOAD ERROR:", e)
+        with BRUT_LOCK:
+            BRUT_MAP = {}
 
     LAST_FILTER_UPDATE = now
 
+# ======================================================
+# MAIN MOMENTUM DETECTOR
+# ======================================================
 
 def detect_kap_volume_momentum(item, kap_cache):
 
@@ -56,17 +76,14 @@ def detect_kap_volume_momentum(item, kap_cache):
         last = df.iloc[-1]
         prev = df.iloc[-2]
 
-        # ✅ candle fiyatı
         candle_price = last["Close"]
-
-        # ✅ gerçek fiyat
         price = item.get("current_price")
 
         if not price:
             return None
 
         # ==================================================
-        # 🚀 1️⃣ SPAM BLOCK
+        # 🚀 SPAM BLOCK
         # ==================================================
 
         if symbol in LAST_SIGNAL_TIME:
@@ -80,7 +97,7 @@ def detect_kap_volume_momentum(item, kap_cache):
                 return None
 
         # ==================================================
-        # 🚀 2️⃣ MOMENTUM FAZI
+        # 🚀 MOMENTUM FAZI
         # ==================================================
 
         ok, phase = validate_tradeable_momentum(df, price)
@@ -89,14 +106,14 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # 🚀 3️⃣ BREAKOUT
+        # 🚀 BREAKOUT
         # ==================================================
 
         prev_high = df["High"].rolling(20).max().iloc[-2]
         is_breakout = price > prev_high
 
         # ==================================================
-        # 🚀 4️⃣ PULLBACK
+        # 🚀 PULLBACK
         # ==================================================
 
         pullback_ok, pullback_pct = detect_pullback_entry(df, price)
@@ -107,14 +124,14 @@ def detect_kap_volume_momentum(item, kap_cache):
         entry_type = "BREAKOUT" if is_breakout else "PULLBACK"
 
         # ==================================================
-        # 🚀 ⛔ GEÇ KALMA FİLTRESİ
+        # 🚀 GEÇ KALMA
         # ==================================================
 
         if abs(price - candle_price) / candle_price > 0.015:
             return None
 
         # ==================================================
-        # 🚀 5️⃣ HACİM
+        # 🚀 HACİM
         # ==================================================
 
         vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
@@ -132,7 +149,7 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # 🚀 6️⃣ VWAP
+        # 🚀 VWAP
         # ==================================================
 
         typical = (df["High"] + df["Low"] + df["Close"]) / 3
@@ -147,7 +164,7 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # 🚀 7️⃣ MOMENTUM
+        # 🚀 MOMENTUM
         # ==================================================
 
         momentum = (price - prev["Close"]) / prev["Close"]
@@ -156,7 +173,7 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # 🚀 8️⃣ CANDLE
+        # 🚀 CANDLE
         # ==================================================
 
         body = abs(price - last["Open"])
@@ -166,26 +183,36 @@ def detect_kap_volume_momentum(item, kap_cache):
             return None
 
         # ==================================================
-        # 🚀 9️⃣ SMART MONEY
+        # 🚀 SMART MONEY
         # ==================================================
 
         big_volume = last["Volume"] > vol_ma * 2.5
 
         # ==================================================
-        # 🚀 🔟 HALT
+        # 🚀 HALT
         # ==================================================
 
         if detect_halt_from_data(item):
             return None
 
         # ==================================================
-        # 🚀 1️⃣1️⃣ BRÜT
+        # 🚀 BRÜT TAKAS (FIX + THREAD SAFE)
         # ==================================================
 
-        brut = symbol in BRUT_LIST
+        clean_symbol = symbol.replace(".IS", "").upper()
+
+        with BRUT_LOCK:
+            brut = (
+                BRUT_MAP.get(symbol) or
+                BRUT_MAP.get(clean_symbol) or
+                BRUT_MAP.get(clean_symbol + ".IS")
+            )
+
+        if brut:
+            print(f"🚨 BRUT DETECTED → {symbol} | {brut}")
 
         # ==================================================
-        # 🚀 1️⃣2️⃣ KAP
+        # 🚀 KAP
         # ==================================================
 
         kap = kap_cache.get(symbol)
@@ -196,7 +223,7 @@ def detect_kap_volume_momentum(item, kap_cache):
                 kap = None
 
         # ==================================================
-        # 🚀 1️⃣3️⃣ SCORE
+        # 🚀 SCORE
         # ==================================================
 
         score = 0
@@ -226,7 +253,7 @@ def detect_kap_volume_momentum(item, kap_cache):
             score += 25
 
         # ==================================================
-        # 🚀 1️⃣4️⃣ KALİTE
+        # 🚀 KALİTE
         # ==================================================
 
         if score >= 65:
@@ -237,10 +264,6 @@ def detect_kap_volume_momentum(item, kap_cache):
             quality = "B"
         else:
             return None
-
-        # ==================================================
-        # 🚀 🎯 ELİT FİLTRE (YENİ)
-        # ==================================================
 
         if quality not in ["A+", "A"]:
             return None
