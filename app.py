@@ -194,8 +194,14 @@ def send_momentum_signal(data):
 📊 <b>{symbol}</b>
 """
 
+    # ✅ BRÜT TAKAS (GÜN SAYISIYLA)
     if brut:
-        msg += "\n‼️ BRÜT TAKAS VAR"
+        days = brut.get("days_left")
+
+        if days is not None:
+            msg += f"\n‼️ BRÜT TAKAS ({days} gün kaldı)"
+        else:
+            msg += "\n‼️ BRÜT TAKAS VAR"
 
     msg += f"""
 
