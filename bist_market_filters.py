@@ -29,7 +29,7 @@ def parse_date_safe(date_str):
     try:
         if not date_str:
             return None
-        return parser.parse(date_str, dayfirst=True).date()
+        return parser.parse(date_str).date()
     except:
         return None
 
@@ -44,7 +44,7 @@ def days_left_calc(dt):
 
 
 # ======================================================
-# 🔥 SCRAPER (YEDEK)
+# 🔥 SCRAPER (YEDEK - SON ÇARE)
 # ======================================================
 
 def fetch_bist_tedbirleri_scrape():
@@ -78,7 +78,7 @@ def fetch_bist_tedbirleri_scrape():
 
             results[symbol] = {
                 "start_date": "-",
-                "end_date": str(end_dt),
+                "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
                 "days_left": days_left,
                 "type": "Brüt Takas"
             }
@@ -97,7 +97,8 @@ def fetch_bist_tedbirleri_scrape():
 
 def fetch_vbts():
 
-    url = "https://www.kap.org.tr/tr/api/vbts"
+    # 🔥 ÇALIŞAN ENDPOINT
+    url = "https://www.kap.org.tr/en/api/vbts"
     results = {}
 
     try:
@@ -114,8 +115,8 @@ def fetch_vbts():
 
             tedbir = str(item.get("measureType", "")).upper()
 
-            # 🔥 sadece BRÜT
-            if "BRÜT" not in tedbir and "BRUT" not in tedbir:
+            # sadece BRÜT TAKAS
+            if "BRUT" not in tedbir:
                 continue
 
             code = item.get("stockCode")
@@ -133,10 +134,10 @@ def fetch_vbts():
                 continue
 
             results[symbol] = {
-                "start_date": str(start_dt) if start_dt else "-",
-                "end_date": str(end_dt) if end_dt else "-",
+                "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
+                "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
                 "days_left": days_left,
-                "type": tedbir or "Brüt Takas"
+                "type": "Brüt Takas"
             }
 
         print(f"📡 API BRÜT: {len(results)}")
@@ -148,7 +149,7 @@ def fetch_vbts():
 
 
 # ======================================================
-# 🔥 MAIN (SMART MERGE + FALLBACK)
+# 🔥 MAIN (SMART MERGE + FALLBACK + CACHE)
 # ======================================================
 
 def get_brut_list():
@@ -163,25 +164,25 @@ def get_brut_list():
 
     final = {}
 
-    # 🔥 1. API
+    # 1️⃣ API (ANA)
     api_data = fetch_vbts()
     final.update(api_data)
 
-    # 🔥 2. SCRAPE fallback
+    # 2️⃣ SCRAPE fallback
     if len(final) == 0:
         print("⚠ API boş → SCRAPE fallback")
         scrape_data = fetch_bist_tedbirleri_scrape()
         final.update(scrape_data)
 
+    # CLEAN
     clean = {}
 
     for k, v in final.items():
-
         if not k or not k.endswith(".IS"):
             continue
-
         clean[k] = v
 
+    # TAMAMEN BOŞSA CACHE
     if not clean:
         print("⚠ BRÜT BOŞ → CACHE KULLANILIYOR")
         return BRUT_CACHE
