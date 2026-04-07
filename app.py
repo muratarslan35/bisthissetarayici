@@ -50,7 +50,8 @@ from bist_market_filters import get_brut_list
 from brut_tracker import (
     detect_new_bruts,
     build_daily_message,
-    build_new_message
+    build_new_message,
+    safe_get_brut
 )
 
 # ======================================================
