@@ -19,13 +19,15 @@ def load_state():
         print("STATE LOAD ERROR:", e)
         return {}
 
+
 def save_state(data):
     try:
         os.makedirs("data", exist_ok=True)
         with open(STATE_FILE, "w") as f:
-            json.dump(data, f)
+            json.dump(data, f, indent=2)
     except Exception as e:
         print("STATE SAVE ERROR:", e)
+
 
 # ======================================================
 # SAFE BRUT FETCH (EN KRİTİK)
@@ -35,25 +37,50 @@ def safe_get_brut():
     try:
         data = get_brut_list()
 
+        # ✅ GERÇEK DATA GELDİ
         if data and isinstance(data, dict) and len(data) > 0:
             print(f"✅ BRUT OK → {len(data)} adet")
-            save_state(data)
-            return data
+            return data  # ❗ BURADA SAVE YOK
 
+        # ⚠ FALLBACK
         print("⚠ BRUT BOŞ → CACHE KULLANILIYOR")
-        return load_state()
+        cached = load_state()
+
+        if cached:
+            print(f"📦 CACHE BRUT → {len(cached)} adet")
+        else:
+            print("❌ CACHE DE BOŞ")
+
+        return cached
 
     except Exception as e:
         print("❌ BRUT ÇEKME HATASI:", e)
-        return load_state()
+
+        cached = load_state()
+
+        if cached:
+            print(f"📦 CACHE BRUT → {len(cached)} adet")
+        else:
+            print("❌ CACHE DE BOŞ")
+
+        return cached
+
 
 # ======================================================
 # YENİ BRÜT TESPİT
 # ======================================================
 
 def detect_new_bruts():
+
     current = safe_get_brut()
     old = load_state()
+
+    # 🧠 İLK ÇALIŞMA KORUMA
+    if not old:
+        print("ℹ İlk çalıştırma → cache oluşturuluyor")
+        if current:
+            save_state(current)
+        return {}
 
     new = {}
 
@@ -61,18 +88,21 @@ def detect_new_bruts():
         if sym not in old:
             new[sym] = data
 
-    # cache güncelle
-    save_state(current)
+    # ✅ SADECE DOLU DATA VARSA SAVE
+    if current and len(current) > 0:
+        save_state(current)
 
     print(f"🆕 YENİ BRUT: {len(new)} adet")
 
     return new
+
 
 # ======================================================
 # GÜNLÜK MESAJ
 # ======================================================
 
 def build_daily_message(now):
+
     brut = safe_get_brut()
 
     if not brut:
@@ -85,6 +115,7 @@ def build_daily_message(now):
     lines.append("────────────")
 
     for sym, d in sorted(brut.items()):
+
         name = sym.replace(".IS","")
 
         lines.append(f"📌 <b>{name}</b>")
@@ -97,6 +128,7 @@ def build_daily_message(now):
     print(f"📤 GÜNLÜK BRUT GÖNDERİLDİ → {len(brut)} adet")
 
     return "\n".join(lines)
+
 
 # ======================================================
 # YENİ BRÜT MESAJI
@@ -112,6 +144,7 @@ def build_new_message(new, now):
     lines.append("────────────")
 
     for sym, d in new.items():
+
         name = sym.replace(".IS","")
 
         lines.append(f"📌 <b>{name}</b>")
