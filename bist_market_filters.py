@@ -189,3 +189,80 @@ def get_brut_list():
     print(f"✅ BRÜT TOPLAM: {len(clean)}")
 
     return clean
+
+# ======================================================
+# 🔥 HALT DETECTOR (GERİ EKLENDİ)
+# ======================================================
+
+def detect_halt_from_data(item):
+
+    try:
+
+        tf15 = item.get("tf", {}).get("15m")
+        if not tf15:
+            return False
+
+        df = tf15.get("df")
+
+        if df is None or len(df) < 5:
+            return False
+
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+
+        if last["Close"] == prev["Close"]:
+
+            vol_ma = df["Volume"].rolling(20).mean().iloc[-1]
+
+            if vol_ma and last["Volume"] < vol_ma * 0.05:
+                return True
+
+        return False
+
+    except:
+        return False
+
+
+# ======================================================
+# 🔥 HALT LIST (OPSİYONEL AMA İYİ)
+# ======================================================
+
+LAST_HALT_CACHE = set()
+LAST_HALT_UPDATE = None
+HALT_CACHE_TTL = 30
+
+
+def get_halt_list(data=None):
+
+    global LAST_HALT_CACHE, LAST_HALT_UPDATE
+
+    now = datetime.now()
+
+    if LAST_HALT_UPDATE and (now - LAST_HALT_UPDATE).seconds < HALT_CACHE_TTL:
+        return LAST_HALT_CACHE
+
+    halt_set = set()
+
+    if not data:
+        return halt_set
+
+    try:
+        for item in data:
+
+            symbol = item.get("symbol")
+
+            if not symbol:
+                continue
+
+            if detect_halt_from_data(item):
+                halt_set.add(symbol)
+
+    except Exception as e:
+        print("HALT scan error:", e)
+
+    LAST_HALT_CACHE = halt_set
+    LAST_HALT_UPDATE = now
+
+    print(f"⛔ HALT SAYISI: {len(halt_set)}")
+
+    return halt_set
