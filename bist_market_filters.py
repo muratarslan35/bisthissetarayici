@@ -95,18 +95,69 @@ def fetch_vbts():
                 }
 
             if results:
-                print(f"✅ API BRÜT: {len(results)}")
+                print(f"✅ KAP API BRÜT: {len(results)}")
                 return results
 
-        except Exception:
+        except Exception as e:
+            print("KAP API error:", e)
             continue
 
-    print("⚠ API FAILED")
+    print("⚠ KAP API FAILED")
     return {}
 
 
 # ======================================================
-# 🔥 2. ALTERNATİF KAYNAKLAR (SİTE SCRAPE)
+# 🔥 2. İŞ YATIRIM (EN GÜÇLÜ ALTERNATİF)
+# ======================================================
+
+def fetch_isyatirim_brut():
+
+    url = "https://www.isyatirim.com.tr/_layouts/15/IsYatirim.Website/Common/Data.aspx/VBTSList"
+
+    results = {}
+
+    try:
+        r = requests.post(url, headers=HEADERS, timeout=10)
+
+        if r.status_code != 200:
+            return results
+
+        data = r.json().get("d", {}).get("data", [])
+
+        for item in data:
+
+            text = str(item).upper()
+
+            if "BRÜT" not in text and "BRUT" not in text:
+                continue
+
+            code = item.get("Kod")
+            if not code:
+                continue
+
+            symbol = normalize_symbol(code)
+
+            start_dt = parse_date_safe(item.get("BaslangicTarihi"))
+            end_dt = parse_date_safe(item.get("BitisTarihi"))
+
+            results[symbol] = {
+                "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
+                "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
+                "days_left": days_left_calc(end_dt),
+                "type": "Brüt Takas (İş Yatırım)"
+            }
+
+        if results:
+            print(f"🟢 ISYATIRIM BRÜT: {len(results)}")
+
+    except Exception as e:
+        print("ISYATIRIM error:", e)
+
+    return results
+
+
+# ======================================================
+# 🔥 3. ALTERNATİF SİTELER (ZAYIF AMA FAYDALI)
 # ======================================================
 
 def fetch_alternative_sources():
@@ -139,10 +190,11 @@ def fetch_alternative_sources():
                         "start_date": "-",
                         "end_date": "-",
                         "days_left": None,
-                        "type": "Brüt Takas"
+                        "type": "Brüt Takas (Web)"
                     }
 
-        except Exception:
+        except Exception as e:
+            print("ALT SOURCE error:", e)
             continue
 
     if results:
@@ -152,7 +204,7 @@ def fetch_alternative_sources():
 
 
 # ======================================================
-# 🔥 3. KAP SAYFA SCRAPE (SON ÇARE)
+# 🔥 4. KAP SAYFA SCRAPE (SON ÇARE)
 # ======================================================
 
 def fetch_bist_tedbirleri_scrape():
@@ -188,19 +240,19 @@ def fetch_bist_tedbirleri_scrape():
                 "start_date": "-",
                 "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
                 "days_left": days_left,
-                "type": "Brüt Takas"
+                "type": "Brüt Takas (Scrape)"
             }
 
         print(f"📡 SCRAPE BRÜT: {len(results)}")
 
-    except Exception:
-        pass
+    except Exception as e:
+        print("SCRAPE error:", e)
 
     return results
 
 
 # ======================================================
-# 🔥 MAIN ENGINE
+# 🔥 MAIN ENGINE (ULTRA ROBUST)
 # ======================================================
 
 def get_brut_list():
@@ -215,17 +267,21 @@ def get_brut_list():
 
     final = {}
 
-    # 1️⃣ API
+    # 1️⃣ KAP API
     api_data = fetch_vbts()
     final.update(api_data)
 
-    # 2️⃣ ALT SOURCE
-    if len(final) < 3:
+    # 2️⃣ İŞ YATIRIM (EN KRİTİK)
+    isy_data = fetch_isyatirim_brut()
+    final.update(isy_data)
+
+    # 3️⃣ ALT SOURCE
+    if len(final) < 5:
         alt_data = fetch_alternative_sources()
         final.update(alt_data)
 
-    # 3️⃣ SCRAPE
-    if len(final) < 3:
+    # 4️⃣ SCRAPE
+    if len(final) < 5:
         scrape_data = fetch_bist_tedbirleri_scrape()
         final.update(scrape_data)
 
