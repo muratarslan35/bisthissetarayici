@@ -737,7 +737,7 @@ def scalping_signal(item):
     if now.hour < 10:
         return None
 
-    if now.hour >= 13:
+    if now.hour >= 17:
         return None
 
     # ==================================================
