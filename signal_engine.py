@@ -659,7 +659,39 @@ def helper_indicators(item):
             helpers.append(("MOST 1D AŞAĞI", -30))
 
     return helpers
+# ======================================================
+# RVOL BAR SYSTEM
+# ======================================================
 
+def rvol_to_pct(r):
+    if r is None:
+        return 0
+    return round((r - 1) * 100)
+
+
+def rvol_to_blocks(r, max_blocks=10):
+    if r is None:
+        return "░" * max_blocks
+
+    # 1.0 = baseline
+    filled = int(min(max(r / 3, 0), 1) * max_blocks)
+    return "█" * filled + "░" * (max_blocks - filled)
+
+
+def format_rvol_line(label, r):
+    if r is None:
+        return f"• {label}: veri yok"
+
+    pct = rvol_to_pct(r)
+
+    if pct >= 0:
+        pct_str = f"%{pct} üstü"
+    else:
+        pct_str = f"%{abs(pct)} altı"
+
+    bar = rvol_to_blocks(r)
+
+    return f"• {label}: {round(r,2)}x → {bar}  ({pct_str})"
 # ======================================================
 # MAIN ALGORITHMS
 # ======================================================
@@ -1826,8 +1858,15 @@ def format_signal_message(signal):
         lines.append(
             f"📊 {signal['volume_label']} | "
             f"Anlık: {format_vol(vol)} | "
-            f"Günlük: {format_vol(dvol)}\n"
-            f"• REAL: {signal.get('rvol_real')} | LIVE: {signal.get('rvol_live')}"
+            f"Günlük: {format_vol(dvol)}"
+        )
+
+        lines.append(
+            format_rvol_line("REAL", signal.get("rvol_real"))
+        )
+
+        lines.append(
+            format_rvol_line("LIVE", signal.get("rvol_live"))
         )
 
     # =====================================
