@@ -82,6 +82,13 @@ SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL", "3"))
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
+REPORT_CHAT_IDS = os.getenv("REPORT_CHAT_IDS", "")
+
+REPORT_CHAT_IDS = [
+    int(x.strip())
+    for x in REPORT_CHAT_IDS.split(",")
+    if x.strip()
+]
 
 # ======================================================
 # FLASK
@@ -177,6 +184,13 @@ def send_to_channel(text):
         )
     except Exception as e:
         print("Channel send error:", e)
+
+def send_report_to_admins(text):
+    for cid in REPORT_CHAT_IDS:
+        try:
+            send_user_telegram(cid, text)
+        except Exception as e:
+            print(f"Report send error ({cid}):", e)
 # ======================================================
 # 🚀 MOMENTUM MESSAGE FORMAT (INLINE)
 # ======================================================
@@ -638,7 +652,7 @@ def scanner_loop():
                     report = build_daily_success_report()
 
                     if report:
-                        broadcast_signal(report)
+                        send_report_to_admins(report)
 
                     last_daily_report = now.date()
 
@@ -651,7 +665,7 @@ def scanner_loop():
                         report = build_weekly_success_report()
 
                         if report:
-                            broadcast_signal(report)
+                            send_report_to_admins(report)
 
                         last_weekly_report = week_id
 
