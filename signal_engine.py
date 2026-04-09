@@ -552,7 +552,23 @@ def detect_order_block(df):
         return False
 
     return df.iloc[-1]["Close"] > reds.iloc[-1]["High"]
+    
+def get_real_rvol(df):
 
+    try:
+        if df is None or len(df) < 20:
+            return 0
+
+        last = df["Volume"].iloc[-1]
+        avg = df["Volume"].rolling(20).mean().iloc[-1]
+
+        if not avg or avg == 0:
+            return 0
+
+        return round(last / avg, 2)
+
+    except:
+        return 0
 # ======================================================
 # HELPER INDICATORS (ANA TOPLAMA)
 # ======================================================
@@ -779,14 +795,17 @@ def scalping_signal(item):
     if avg_volume_30 == 0:
         return None
 
-    # 🔥 RVOL FIX (TEK KAYNAK ÖNCELİK)
-    ext_rvol = get_rvol(item["symbol"])
+    real_rvol = get_real_rvol(df15)
+    rvol_live = get_rvol(item["symbol"]) or 0
 
-    if ext_rvol and ext_rvol > 0.5:
-        rvol = ext_rvol
-    else:
-        rvol = last["Volume"] / avg_volume_30
-    if rvol < 1.5:
+    if rvol_live < 0.5:
+        rvol_live = last["Volume"] / avg_volume_30
+
+    # 🔥 AYRI DOĞRULAMA (MAX YOK)
+    if real_rvol < 1.3:
+        return None
+
+    if rvol_live < 1.2:
         return None
 
     # ==================================================
@@ -918,9 +937,6 @@ def scalping_signal(item):
     if last["Volume"] > vol_ma_last * 2:
         volume_boost += 4
 
-    if rvol > 2:
-        rvol_boost += 5
-
     if sweep_detected:
         sweep_boost += 4
 
@@ -942,9 +958,6 @@ def process_symbol_signals(item):
     
     symbol = item["symbol"]
 
-    # 🔥 HER ZAMAN TANIMLA
-    df15 = item["tf"]["15m"]["df"]
-
     # 🔥 REALTIME GUARD
     price = item.get("current_price")
 
@@ -962,9 +975,19 @@ def process_symbol_signals(item):
 
     rvol_live = get_rvol(symbol)
 
+    df15 = item.get("tf", {}).get("15m", {}).get("df")
+
+    if df15 is None or len(df15) < 5:
+        return []
+
+    real_rvol = get_real_rvol(df15)
+
+    # 🔕 PROD SAFE LOG
+    if rvol_live < 1 or real_rvol > 2:
+        print(symbol, "tick:", rvol_live, "real:", real_rvol)
+
     if not rvol_live or rvol_live < 0.5:
         try:
-            df15 = item["tf"]["15m"]["df"]
             last = df15.iloc[-1]
             avg = df15["Volume"].rolling(30).mean().iloc[-1]
 
@@ -972,11 +995,10 @@ def process_symbol_signals(item):
                 rvol_live = last["Volume"] / avg
             else:
                 rvol_live = 0
-
         except:
             rvol_live = 0
 
-    volume_label = classify_volume_from_value(rvol_live)
+    volume_label = classify_volume_from_value(real_rvol)
 
     # 🔥 ANLIK HACİM
     last_volume = None
@@ -1074,13 +1096,19 @@ def process_symbol_signals(item):
 
     total_power = base_strength + helper_power
 
-    # HACİM BOOST
-    if rvol_live >= 2.5:
+    # 🔥 HACİM DOĞRULAMA MODELİ (FINAL)
+
+    if real_rvol >= 1.5 and rvol_live >= 1.5:
         total_power += 6
-    elif rvol_live >= 1.8:
+
+    elif real_rvol >= 1.5:
         total_power += 3
-    elif rvol_live < 1:
-        total_power -= 4
+
+    elif rvol_live >= 2.2:
+        total_power += 2   # spike ama düşük güven
+
+    elif real_rvol < 0.8 and rvol_live < 1.2:
+        total_power -= 10
     power_delta = total_power - prev_power
 
     levels = {"A": 0, "B": 0, "C": 0}
@@ -1299,7 +1327,8 @@ def process_symbol_signals(item):
         "most_1h_level": most_1h_level,
         "most_4h_level": most_4h_level,
         "volume_label": volume_label,
-        "rvol": round(rvol_live, 2),
+        "rvol_real": round(real_rvol, 2),
+        "rvol_live": round(rvol_live, 2),
         "volume": int(last_volume) if last_volume else None,
         "daily_volume": int(daily_volume) if daily_volume else None,
         "power": total_power,
@@ -1331,7 +1360,12 @@ def process_symbol_signals(item):
 
     if action == "GÜÇLÜ AL":
 
-        if rvol_live < 1.0:
+        # 🔥 minimum kalite filtresi
+        if real_rvol < 0.8 and rvol_live < 1.5:
+            return []
+
+        # 🔥 güçlü sinyal için en az bir taraf sağlam olmalı
+        if real_rvol < 1.2 and rvol_live < 1.8:
             return []
 
         if "ORDER BLOCK" not in helper_names:
@@ -1768,8 +1802,8 @@ def format_signal_message(signal):
         lines.append(
             f"📊 {signal['volume_label']} | "
             f"Anlık: {format_vol(vol)} | "
-            f"Günlük: {format_vol(dvol)} "
-            f"(RVOL: {signal.get('rvol')})"
+            f"Günlük: {format_vol(dvol)}\n"
+            f"• REAL: {signal.get('rvol_real')} | LIVE: {signal.get('rvol_live')}"
         )
 
     # =====================================
