@@ -1248,9 +1248,13 @@ def process_symbol_signals(item):
         base_entry = price
     else:
         base_entry = entry_price if entry_price is not None else price
-    if not is_reentry:
-        if TP1_HIT_SYMBOLS.get((symbol, algo)) == today_key():
-            return []
+    # 🔒 TP1 GLOBAL LOCK (algo bağımsız)
+    if any(
+        k[0] == symbol and v == today_key()
+        for k, v in TP1_HIT_SYMBOLS.items()
+    ):
+        return []
+        
     tp1 = None
     tp2 = None
     tp3 = None
@@ -1348,10 +1352,30 @@ def process_symbol_signals(item):
         ):
             return []
 
-    # 🔁 GÜN İÇİ TEKRAR FİLTRESİ (SMART)
+    # =====================================
+    # 🔒 GÜN İÇİ TEKRAR FİLTRESİ (SYMBOL BAZLI)
+    # =====================================
 
-    if DAILY_SENT.get((symbol, algo, "re" if is_reentry else "pr")) == today_key():
-        if not (strengthened or weakened or most_upgrade or most_downgrade):
+    today = t_key  # tek kaynak
+
+    # 🚫 TP1 vurmuşsa → tamamen sustur (FULL LOCK)
+    if TP1_HIT_SYMBOLS.get(symbol) == today:
+        return []
+
+    # 🔁 RE-ENTRY → günde sadece 1 adet
+    if is_reentry:
+        if any(
+            k[0] == symbol and k[2] == "re" and v == today
+            for k, v in DAILY_SENT.items()
+        ):
+            return []
+
+    # 🚫 PRIMARY → aynı hisseden tekrar sinyal gelmesin
+    else:
+        if any(
+            k[0] == symbol and k[2] == "pr" and v == today
+            for k, v in DAILY_SENT.items()
+        ):
             return []
 
     # =====================================
@@ -1483,7 +1507,7 @@ def update_success_targets(symbol, price):
             continue
 
         if price >= d["target"]:
-            TP1_HIT_SYMBOLS[(symbol, algo)] = today_key()
+            TP1_HIT_SYMBOLS[symbol] = today_key()
             d["hit"] = True
             d["hit_price"] = price
             d["hit_time"] = tr_now().strftime("%H:%M:%S")
@@ -1812,13 +1836,9 @@ def format_signal_message(signal):
     if signal.get("tp1"):
         lines.append("")
         lines.append("────────────")
-        lines.append("🎯 HEDEFLER")
+        lines.append("🎯 HEDEF")
         lines.append(f"• TP1: {signal['tp1']}")
-        if signal.get("tp2"):
-            lines.append(f"• TP2: {signal['tp2']}")
-        if signal.get("tp3"):
-            lines.append(f"• TP3: {signal['tp3']}")
-
+        
     # =====================================
     # LIVE GAIN
     # =====================================
