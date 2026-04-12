@@ -53,6 +53,7 @@ from brut_tracker import (
     build_new_message,
     safe_get_brut
 )
+from momentum_card import build_momentum_card
 
 # ======================================================
 # ENV
@@ -105,7 +106,7 @@ init_db()
 # ======================================================
 RVOL_CACHE = {}
 ACTIVE_TRADES = {}
-
+LAST_SEND_TIME = 0
 # ======================================================
 # RVOL ENGINE
 # ======================================================
@@ -149,6 +150,10 @@ def subscription_valid(user_row):
     except:
         return False
 
+# ======================================================
+# HELPERS
+# ======================================================
+
 def send_user_telegram(chat_id, text):
     if not TELEGRAM_TOKEN or not chat_id:
         return
@@ -167,6 +172,47 @@ def send_user_telegram(chat_id, text):
     except Exception as e:
         print("Telegram send error:", e)
 
+# ======================================================
+# 📸 TELEGRAM PHOTO
+# ======================================================
+
+def send_photo(chat_id, image_path, caption=None):
+    import requests
+
+    global LAST_SEND_TIME
+
+    try:
+        # 🚦 RATE LIMIT
+        now = time.time()
+        if now - LAST_SEND_TIME < 0.4:
+            time.sleep(0.4)
+
+        LAST_SEND_TIME = time.time()
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+
+        with open(image_path, "rb") as f:
+            requests.post(
+                url,
+                data={
+                    "chat_id": chat_id,
+                    "caption": caption
+                },
+                files={"photo": f},
+                timeout=10
+            )
+
+    except Exception as e:
+        print("Photo send error:", e)
+
+
+def send_report_to_admins(text):
+    for cid in REPORT_CHAT_IDS:
+        try:
+            send_user_telegram(cid, text)
+        except Exception as e:
+            print(f"Report send error ({cid}):", e)
+
 def send_to_channel(text):
     if not TELEGRAM_TOKEN or not CHANNEL_ID:
         return
@@ -184,80 +230,71 @@ def send_to_channel(text):
         )
     except Exception as e:
         print("Channel send error:", e)
-
-def send_report_to_admins(text):
-    for cid in REPORT_CHAT_IDS:
-        try:
-            send_user_telegram(cid, text)
-        except Exception as e:
-            print(f"Report send error ({cid}):", e)
 # ======================================================
-# 🚀 MOMENTUM MESSAGE FORMAT (INLINE)
+# 🚀 MOMENTUM SIGNAL (IMAGE + CHART)
 # ======================================================
 
 def send_momentum_signal(data):
 
-    symbol = data.get("symbol")
-    entry = data.get("entry_price")
-    score = data.get("score")
-    quality = data.get("quality")
-    rvol = data.get("rvol")
-    phase = data.get("phase")
-    entry_type = data.get("entry_type")
-    momentum = data.get("momentum_pct")
-    vwap_dist = data.get("vwap_distance")
-    brut = data.get("brut")
+    try:
+        symbol = data.get("symbol")
+        entry = data.get("entry_price")
+        score = data.get("score")
+        quality = data.get("quality")
+        entry_type = data.get("entry_type")
+        momentum = data.get("momentum_pct")
+        vwap_dist = data.get("vwap_distance")
 
-    msg = f"""
-🚀 <b>MOMENTUM SİNYALİ</b>
+        # 🔥 GRAFİK DATA
+        df15 = data.get("df15")
 
-📊 <b>{symbol}</b>
-"""
+        # SAFE FORMAT
+        entry = round(entry, 2) if entry is not None else 0
+        momentum = round(momentum, 2) if momentum is not None else 0
+        vwap_dist = round(vwap_dist, 2) if vwap_dist is not None else 0
 
-    # ✅ BRÜT TAKAS (GÜN SAYISIYLA)
-    if brut:
-        days = brut.get("days_left")
+        # 🎯 CARD DATA
+        card_data = {
+            "symbol": symbol,
+            "entry": entry,
+            "type": entry_type,
+            "score": f"{score} ({quality})",
+            "momentum": momentum,
+            "vwap": vwap_dist,
+            "df15": df15
+        }
 
-        if days is not None:
-            msg += f"\n‼️ BRÜT TAKAS ({days} gün kaldı)"
-        else:
-            msg += "\n‼️ BRÜT TAKAS VAR"
+        # 🖼 GÖRSEL
+        img_path = build_momentum_card(card_data)
 
-    msg += f"""
+        caption = f"{symbol} | {entry_type} | {score}"
 
-💰 Giriş: {round(entry,2)}
+        # 🚀 GÖNDER
+        send_photo(CHANNEL_ID, img_path, caption)
 
-⚡ Tür: {entry_type}
-🧠 Skor: {score} ({quality})
-📊 RVOL: {rvol}
-📈 Faz: {phase}
+        # 🧹 TEMİZLE
+        try:
+            os.remove(img_path)
+        except:
+            pass
 
-💹 Momentum: %{momentum}
-📉 VWAP Mesafe: %{vwap_dist}
+    except Exception as e:
+        print("MOMENTUM CARD ERROR:", e)
 
-🕒 {now_tr().strftime('%H:%M:%S')}
-"""
+        try:
+            symbol = data.get("symbol")
+            entry = data.get("entry_price")
+            entry_type = data.get("entry_type")
 
-    send_to_channel(msg)
+            send_to_channel(f"""
+🚀 MOMENTUM
 
-def broadcast_signal(text):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT telegram_chat_id, subscription_end, status
-        FROM users
-        WHERE is_active=1
-    """)
-    users = cur.fetchall()
-
-    for u in users:
-        if u["status"] != "approved":
-            continue
-        if not subscription_valid(u):
-            continue
-        send_user_telegram(u["telegram_chat_id"], text)
-
-    conn.close()
+📊 {symbol}
+💰 {entry}
+⚡ {entry_type}
+""")
+        except:
+            pass
 # ======================================================
 # BRUT TAKAS RAPORU
 # ======================================================
@@ -874,31 +911,38 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             del ACTIVE_TRADES[symbol]
 
                     # --------------------------------------------------
-                    # 🚀 KAP MOMENTUM
-                    # --------------------------------------------------
+                # 🚀 KAP MOMENTUM
+                # --------------------------------------------------
 
-                    kap_signal = detect_kap_volume_momentum(item, kap_cache)
+                kap_signal = detect_kap_volume_momentum(item, kap_cache)
 
-                    if kap_signal:
+                if kap_signal:
 
-                        kap_symbol = kap_signal["symbol"]
+                    # 🔥 GRAFİK DATA EKLE (SAFE)
+                    try:
+                        kap_signal["df15"] = item.get("tf", {}).get("15m", {}).get("df")
+                    except:
+                        kap_signal["df15"] = None
 
-                        if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
+                    kap_symbol = kap_signal["symbol"]
 
-                            entry_price = kap_signal["entry_price"]
-                            target_price = entry_price * 1.01
+                    if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
-                            # ✅ TRADE KAYDET
-                            ACTIVE_TRADES[kap_symbol] = {
-                                "entry": entry_price,
-                                "target": target_price,
-                                "time": now
-                            }
+                        entry_price = kap_signal["entry_price"]
+                        target_price = entry_price * 1.01
 
-                            send_momentum_signal(kap_signal)
+                        # ✅ TRADE KAYDET
+                        ACTIVE_TRADES[kap_symbol] = {
+                            "entry": entry_price,
+                            "target": target_price,
+                            "time": now
+                        }
 
-                            kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
+                        # 🚀 GÖNDER
+                        send_momentum_signal(kap_signal)
 
+                        # 🔒 TEKRAR ATMASIN
+                        kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
                     # --------------------------------------------------
                     # NORMAL ENGINE
                     # --------------------------------------------------
