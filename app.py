@@ -938,8 +938,9 @@ def scanner_loop():
                 if symbol and isinstance(price, (int, float)):
                     dashboard.LIVE_PRICES[symbol] = price
 
+
                 try:
-                
+
                     # ==================================================
                     # 🎯 TARGET TRACKING
                     # ==================================================
@@ -994,21 +995,25 @@ Zarar: %{round((price-entry)/entry*100,2)}
                         try:
                             import pandas as pd
 
-                            # 🔥 GERÇEK 15M DATA (YF + CANLI)
                             df = get_15m_df(symbol, live_price=price)
 
-                            if df is not None and len(df) > 5:
+                            if df is not None:
 
                                 if not isinstance(df, pd.DataFrame):
                                     df = pd.DataFrame(df)
 
                                 df.columns = [c.lower() for c in df.columns]
+                                df = df.dropna()
 
-                                if all(c in df.columns for c in ["open", "high", "low", "close"]):
+                                if len(df) > 10 and all(c in df.columns for c in ["open", "high", "low", "close"]):
+
                                     kap_signal["df15"] = df
+                                    print(f"✅ DF OK: {symbol} | len={len(df)}")
+
                                 else:
-                                    print("❌ DF kolon hatalı:", df.columns)
+                                    print(f"❌ DF ZAYIF: {symbol} | len={len(df)}")
                                     kap_signal["df15"] = None
+
                             else:
                                 print("❌ DF yok:", symbol)
                                 kap_signal["df15"] = None
@@ -1017,7 +1022,6 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             print("DF ERROR:", e)
                             kap_signal["df15"] = None
 
-                        # ✅ CANLI FİYAT
                         kap_signal["live_price"] = float(price)
 
                         kap_symbol = kap_signal["symbol"]
@@ -1033,13 +1037,10 @@ Zarar: %{round((price-entry)/entry*100,2)}
                                 "time": now
                             }
 
-                            # 🚀 MOMENTUM GÖNDER
                             send_momentum_signal(kap_signal)
 
-                            # 🔒 TEKRAR ATMASIN
                             kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
-                    
-                    
+
                     # --------------------------------------------------
                     # NORMAL ENGINE
                     # --------------------------------------------------
