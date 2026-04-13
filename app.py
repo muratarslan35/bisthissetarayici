@@ -233,12 +233,29 @@ def send_to_channel(text):
 
 def broadcast_signal(msg):
 
-    # sadece abonelere
-    for cid in REPORT_CHAT_IDS:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT telegram_chat_id
+        FROM users
+        WHERE is_active = 1
+        AND telegram_chat_id IS NOT NULL
+    """)
+
+    users = cur.fetchall()
+    conn.close()
+
+    for u in users:
         try:
+            cid = int(u["telegram_chat_id"])
+
             send_user_telegram(cid, msg)
-        except:
-            pass
+
+            time.sleep(0.05)  # 🚦 rate limit (çok kritik)
+
+        except Exception as e:
+            print(f"Broadcast error ({cid}):", e)
 # ======================================================
 # 🚀 MOMENTUM SIGNAL (IMAGE + CHART)
 # ======================================================
@@ -260,6 +277,7 @@ def send_momentum_signal(data):
 
         # SAFE FORMAT
         entry = round(entry, 2) if entry is not None else 0
+        live_price = round(live_price, 2) if live_price is not None else 0
         momentum = round(momentum, 2) if momentum is not None else 0
         vwap_dist = round(vwap_dist, 2) if vwap_dist is not None else 0
 
@@ -275,12 +293,43 @@ def send_momentum_signal(data):
             "df15": df15
         }
 
-        # 🖼 GÖRSEL
+        # --------------------------------------------------
+        # 🖼 KART OLUŞTUR
+        # --------------------------------------------------
+
         img_path = build_momentum_card(card_data)
 
-        caption = f"{symbol} | {entry_type} | {score}"
+        # ❌ KART OLUŞMADI → FULL FALLBACK
+        if not img_path or not os.path.exists(img_path):
 
-        # 🚀 GÖNDER
+            fallback_msg = f"""
+🚀 MOMENTUM DETAY
+
+📊 {symbol}
+💰 Giriş: {entry}
+📡 Anlık: {live_price}
+
+⚡ Tür: {entry_type}
+📊 Skor: {score} ({quality})
+
+📈 Momentum: %{momentum}
+📉 VWAP: %{vwap_dist}
+
+🧠 Yorum:
+- Momentum: {"Güçlü" if momentum > 1.2 else "Orta" if momentum > 0.7 else "Zayıf"}
+- VWAP: {"Uzak" if vwap_dist > 1.5 else "Sağlıklı"}
+
+🕒 {datetime.now().strftime('%H:%M:%S')}
+"""
+
+            send_to_channel(fallback_msg)
+            return
+
+        # --------------------------------------------------
+        # 🚀 GÖNDER (GÖRSEL)
+        # --------------------------------------------------
+
+        caption = f"{symbol} | {entry_type} | {score}"
         send_photo(CHANNEL_ID, img_path, caption)
 
         # 🧹 TEMİZLE
@@ -292,20 +341,37 @@ def send_momentum_signal(data):
     except Exception as e:
         print("MOMENTUM CARD ERROR:", e)
 
+        # 🔥 FULL SAFE FALLBACK (BURASI EN KRİTİK)
         try:
-            symbol = data.get("symbol")
-            entry = data.get("entry_price")
-            entry_type = data.get("entry_type")
+            symbol = data.get("symbol", "-")
+            entry = data.get("entry_price", 0)
+            entry_type = data.get("entry_type", "-")
+            score = data.get("score", "-")
+            quality = data.get("quality", "-")
+            live_price = data.get("live_price", 0)
+            momentum = data.get("momentum_pct", 0)
+            vwap_dist = data.get("vwap_distance", 0)
 
-            send_to_channel(f"""
-🚀 MOMENTUM
+            fallback_msg = f"""
+🚀 MOMENTUM (HATA SONRASI)
 
 📊 {symbol}
-💰 {entry}
-⚡ {entry_type}
-""")
-        except:
-            pass
+💰 Giriş: {entry}
+📡 Anlık: {live_price}
+
+⚡ Tür: {entry_type}
+📊 Skor: {score} ({quality})
+
+📈 Momentum: %{momentum}
+📉 VWAP: %{vwap_dist}
+
+🕒 {datetime.now().strftime('%H:%M:%S')}
+"""
+
+            send_to_channel(fallback_msg)
+
+        except Exception as e2:
+            print("FALLBACK ERROR:", e2)
 # ======================================================
 # BRUT TAKAS RAPORU
 # ======================================================
