@@ -19,17 +19,23 @@ GRAY = (140, 150, 170)
 
 def get_font(size):
     try:
-        return ImageFont.truetype("arial.ttf", size)
+        return ImageFont.truetype("DejaVuSans.ttf", size)
     except:
-        return ImageFont.load_default()
+        try:
+            return ImageFont.truetype("arial.ttf", size)
+        except:
+            return ImageFont.load_default()
 
 # --------------------------------------------------
 # BAR
 # --------------------------------------------------
 
 def build_bar(value, max_blocks=10):
-    filled = int(min(max(value / 2, 0), 1) * max_blocks)
-    return "▰" * filled + "▱" * (max_blocks - filled)
+    try:
+        filled = int(min(max(value / 2, 0), 1) * max_blocks)
+        return "▰" * filled + "▱" * (max_blocks - filled)
+    except:
+        return "▱" * max_blocks
 
 # --------------------------------------------------
 # CANDLE CHART
@@ -37,45 +43,52 @@ def build_bar(value, max_blocks=10):
 
 def draw_candles(draw, df, x, y, w, h):
 
-    if df is None or len(df) < 5:
-        return
+    try:
+        if df is None or len(df) < 5:
+            return
 
-    data = df.tail(30)
+        if not all(c in df.columns for c in ["open","close","high","low"]):
+            return
 
-    highs = data["high"].max()
-    lows = data["low"].min()
+        data = df.tail(30)
 
-    def price_to_y(p):
-        return y + h - (p - lows) / (highs - lows + 1e-9) * h
+        highs = data["high"].max()
+        lows = data["low"].min()
 
-    candle_w = w / len(data)
+        def price_to_y(p):
+            return y + h - (p - lows) / (highs - lows + 1e-9) * h
 
-    for i, (_, row) in enumerate(data.iterrows()):
+        candle_w = w / len(data)
 
-        cx = x + i * candle_w + candle_w * 0.2
+        for i, (_, row) in enumerate(data.iterrows()):
 
-        o = row["open"]
-        c = row["close"]
-        hi = row["high"]
-        lo = row["low"]
+            cx = x + i * candle_w + candle_w * 0.2
 
-        color = GREEN if c >= o else RED
+            o = row["open"]
+            c = row["close"]
+            hi = row["high"]
+            lo = row["low"]
 
-        # wick
-        draw.line(
-            [cx + candle_w*0.3, price_to_y(hi),
-             cx + candle_w*0.3, price_to_y(lo)],
-            fill=color,
-            width=1
-        )
+            color = GREEN if c >= o else RED
 
-        # body
-        draw.rectangle([
-            cx,
-            price_to_y(max(o, c)),
-            cx + candle_w*0.6,
-            price_to_y(min(o, c))
-        ], fill=color)
+            # wick
+            draw.line(
+                [cx + candle_w*0.3, price_to_y(hi),
+                 cx + candle_w*0.3, price_to_y(lo)],
+                fill=color,
+                width=1
+            )
+
+            # body
+            draw.rectangle([
+                cx,
+                price_to_y(max(o, c)),
+                cx + candle_w*0.6,
+                price_to_y(min(o, c))
+            ], fill=color)
+
+    except Exception as e:
+        print("CANDLE ERROR:", e)
 
 # --------------------------------------------------
 # MAIN CARD
@@ -83,106 +96,122 @@ def draw_candles(draw, df, x, y, w, h):
 
 def build_momentum_card(data):
 
-    img = Image.new("RGB", (WIDTH, HEIGHT), BG)
-    draw = ImageDraw.Draw(img)
+    try:
+        if not data:
+            return None
 
-    font_big = get_font(36)
-    font_mid = get_font(22)
-    font_small = get_font(16)
+        symbol = str(data.get("symbol", "UNKNOWN"))
 
-    # CARD BG
-    draw.rectangle([20, 20, WIDTH-20, HEIGHT-20], fill=CARD)
+        img = Image.new("RGB", (WIDTH, HEIGHT), BG)
+        draw = ImageDraw.Draw(img)
 
-    # HEADER
-    draw.text((40, 30), data["symbol"], fill=WHITE, font=font_big)
-    draw.text((650, 30), "MOMENTUM ANALİZ", fill=YELLOW, font=font_mid)
+        font_big = get_font(36)
+        font_mid = get_font(22)
+        font_small = get_font(16)
 
-    # ENTRY + LIVE
-    entry = round(data.get("entry", 0), 2)
-    live = round(data.get("live_price", 0), 2)
+        # CARD BG
+        draw.rectangle([20, 20, WIDTH-20, HEIGHT-20], fill=CARD)
 
-    draw.text((40, 90), f"Giriş: {entry}", fill=WHITE, font=font_mid)
+        # HEADER
+        draw.text((40, 30), symbol, fill=WHITE, font=font_big)
+        draw.text((650, 30), "MOMENTUM ANALİZ", fill=YELLOW, font=font_mid)
 
-    if live:
-        draw.text((220, 90), f"Anlık: {live}", fill=GREEN, font=font_mid)
+        # ENTRY + LIVE
+        entry = float(data.get("entry", 0) or 0)
+        live = float(data.get("live_price", 0) or 0)
 
-    # --------------------------------------------------
-    # CHART AREA
-    # --------------------------------------------------
+        draw.text((40, 90), f"Giriş: {round(entry,2)}", fill=WHITE, font=font_mid)
 
-    chart_x = 40
-    chart_y = 140
-    chart_w = 600
-    chart_h = 300
+        if live > 0:
+            draw.text((220, 90), f"Anlık: {round(live,2)}", fill=GREEN, font=font_mid)
 
-    draw.rectangle(
-        [chart_x, chart_y, chart_x+chart_w, chart_y+chart_h],
-        outline=(50, 60, 80)
-    )
+        # --------------------------------------------------
+        # CHART AREA
+        # --------------------------------------------------
 
-    df = data.get("df15")
+        chart_x, chart_y = 40, 140
+        chart_w, chart_h = 600, 300
 
-    draw_candles(draw, df, chart_x, chart_y, chart_w, chart_h)
-
-    # --------------------------------------------------
-    # LIVE PRICE LINE
-    # --------------------------------------------------
-
-    if df is not None and live:
-
-        highs = df["high"].max()
-        lows = df["low"].min()
-
-        py = chart_y + chart_h - (live - lows) / (highs - lows + 1e-9) * chart_h
-
-        draw.line(
-            [chart_x, py, chart_x + chart_w],
-            fill=YELLOW,
-            width=1
+        draw.rectangle(
+            [chart_x, chart_y, chart_x+chart_w, chart_y+chart_h],
+            outline=(50, 60, 80)
         )
 
-        draw.text((chart_x + chart_w + 5, py - 10), f"{live}", fill=YELLOW, font=font_small)
+        df = data.get("df15")
 
-    # --------------------------------------------------
-    # RIGHT PANEL
-    # --------------------------------------------------
+        if df is not None and len(df) > 5 and all(c in df.columns for c in ["open","close","high","low"]):
 
-    px = 700
+            draw_candles(draw, df, chart_x, chart_y, chart_w, chart_h)
 
-    m = round(data.get("momentum", 0), 2)
-    v = round(data.get("vwap", 0), 2)
+            # LIVE PRICE LINE
+            if live > 0:
+                try:
+                    highs = df["high"].max()
+                    lows = df["low"].min()
 
-    draw.text((px, 150), f"Momentum Gücü: %{m}", fill=GREEN, font=font_mid)
-    draw.text((px, 180), build_bar(m), fill=GREEN, font=font_mid)
+                    py = chart_y + chart_h - (live - lows) / (highs - lows + 1e-9) * chart_h
 
-    draw.text((px, 240), f"VWAP Mesafe: %{v}", fill=YELLOW, font=font_mid)
-    draw.text((px, 270), build_bar(v), fill=YELLOW, font=font_mid)
+                    draw.line(
+                        [chart_x, py, chart_x + chart_w],
+                        fill=YELLOW,
+                        width=1
+                    )
 
-    # --------------------------------------------------
-    # DECISION ENGINE (TÜRKÇE)
-    # --------------------------------------------------
+                    draw.text(
+                        (chart_x + chart_w + 5, py - 10),
+                        f"{round(live,2)}",
+                        fill=YELLOW,
+                        font=font_small
+                    )
+                except Exception as e:
+                    print("LINE ERROR:", e)
 
-    decision = "BEKLE"
+        # --------------------------------------------------
+        # RIGHT PANEL
+        # --------------------------------------------------
 
-    if m > 1.2 and v < 1.5:
-        decision = "GÜÇLÜ AL"
-        color = GREEN
-    elif m > 0.7:
-        decision = "TREND BAŞLIYOR"
-        color = YELLOW
-    else:
-        decision = "RİSKLİ"
-        color = RED
+        px = 700
 
-    draw.text((px, 350), "Karar:", fill=WHITE, font=font_mid)
-    draw.text((px, 380), decision, fill=color, font=font_big)
+        m = float(data.get("momentum", 0) or 0)
+        v = float(data.get("vwap", 0) or 0)
 
-    # --------------------------------------------------
-    # SAVE
-    # --------------------------------------------------
+        draw.text((px, 150), f"Momentum Gücü: %{round(m,2)}", fill=GREEN, font=font_mid)
+        draw.text((px, 180), build_bar(m), fill=GREEN, font=font_mid)
 
-    os.makedirs("cards", exist_ok=True)
-    path = f"cards/{data['symbol']}.png"
-    img.save(path)
+        draw.text((px, 240), f"VWAP Mesafe: %{round(v,2)}", fill=YELLOW, font=font_mid)
+        draw.text((px, 270), build_bar(v), fill=YELLOW, font=font_mid)
 
-    return path
+        # --------------------------------------------------
+        # DECISION ENGINE
+        # --------------------------------------------------
+
+        decision = "BEKLE"
+        color = WHITE
+
+        if m > 1.2 and v < 1.5:
+            decision = "GÜÇLÜ AL"
+            color = GREEN
+        elif m > 0.7:
+            decision = "TREND BAŞLIYOR"
+            color = YELLOW
+        else:
+            decision = "RİSKLİ"
+            color = RED
+
+        draw.text((px, 350), "Karar:", fill=WHITE, font=font_mid)
+        draw.text((px, 380), decision, fill=color, font=font_big)
+
+        # --------------------------------------------------
+        # SAVE
+        # --------------------------------------------------
+
+        os.makedirs("cards", exist_ok=True)
+        path = f"cards/{symbol}.png"
+
+        img.save(path)
+
+        return path
+
+    except Exception as e:
+        print("CARD ERROR:", e)
+        return None
