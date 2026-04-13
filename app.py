@@ -848,7 +848,7 @@ def scanner_loop():
                 # 🔥 REALTIME PRICE FORCE
                 live_price = get_price(symbol)
 
-                if live_price:
+                if live_price is not None and live_price > 0:
                     price = live_price
                     item["current_price"] = price
 
@@ -875,7 +875,7 @@ def scanner_loop():
                 try:
                 
                     # ==================================================
-                    # 🎯 TARGET TRACKING (EN KRİTİK)
+                    # 🎯 TARGET TRACKING
                     # ==================================================
 
                     if symbol in ACTIVE_TRADES:
@@ -885,7 +885,6 @@ def scanner_loop():
                         entry = trade["entry"]
                         target = trade["target"]
 
-                        # ✅ HEDEF GELDİ
                         if price >= target:
 
                             msg = f"""
@@ -900,10 +899,8 @@ def scanner_loop():
 """
 
                             send_to_channel(msg)
-
                             del ACTIVE_TRADES[symbol]
 
-                        # ❌ STOP
                         elif price <= entry * 0.95:
 
                             msg = f"""
@@ -918,25 +915,29 @@ Zarar: %{round((price-entry)/entry*100,2)}
 """
 
                             send_to_channel(msg)
-
                             del ACTIVE_TRADES[symbol]
 
-                    
                     # --------------------------------------------------
                     # 🚀 KAP MOMENTUM
                     # --------------------------------------------------
 
                     kap_signal = detect_kap_volume_momentum(item, kap_cache)
 
-                    if kap_signal:
+                    if kap_signal and kap_signal.get("entry_price"):
 
-                        # 🔥 GRAFİK DATA EKLE (SAFE)
                         try:
                             kap_signal["df15"] = item.get("tf", {}).get("15m", {}).get("df")
                         except:
                             kap_signal["df15"] = None
 
-                        kap_signal["live_price"] = price
+                        kap_signal["live_price"] = float(price)
+
+                        if kap_signal.get("df15") is not None:
+                            try:
+                                df = kap_signal["df15"]
+                                df.iloc[-1, df.columns.get_loc("close")] = price
+                            except:
+                                pass
 
                         kap_symbol = kap_signal["symbol"]
 
@@ -954,7 +955,7 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             send_momentum_signal(kap_signal)
 
                             kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
-
+                    
                     
                     # --------------------------------------------------
                     # NORMAL ENGINE
