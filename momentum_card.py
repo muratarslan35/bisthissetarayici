@@ -32,7 +32,7 @@ def get_font(size):
 
 def build_bar(value, max_blocks=10):
     try:
-        filled = int(min(max(value / 2, 0), 1) * max_blocks)
+        filled = int(min(value / 2, 1) * max_blocks)  # 🔥 FIX (daha doğru scaling)
         return "▰" * filled + "▱" * (max_blocks - filled)
     except:
         return "▱" * max_blocks
@@ -55,8 +55,12 @@ def draw_candles(draw, df, x, y, w, h):
         highs = data["high"].max()
         lows = data["low"].min()
 
+        # 🔥 ZERO DIVISION FIX
+        if highs == lows:
+            return
+
         def price_to_y(p):
-            return y + h - (p - lows) / (highs - lows + 1e-9) * h
+            return y + h - (p - lows) / (highs - lows) * h
 
         candle_w = w / len(data)
 
@@ -141,39 +145,38 @@ def build_momentum_card(data):
 
         if df is not None:
 
-            # 🔥 TEMİZLE
             df = df.dropna()
 
-            # 🔥 ZAYIF DATA BLOKLA
-            if len(df) < 10:
-                return
-
-            if all(c in df.columns for c in ["open","close","high","low"]):
+            # ❗ FIX: kartı öldürme → sadece chart skip
+            if len(df) >= 10 and all(c in df.columns for c in ["open","close","high","low"]):
 
                 draw_candles(draw, df, chart_x, chart_y, chart_w, chart_h)
 
-            # LIVE PRICE LINE
-            if live > 0:
-                try:
-                    highs = df["high"].max()
-                    lows = df["low"].min()
+                # LIVE PRICE LINE
+                if live > 0:
+                    try:
+                        highs = df["high"].max()
+                        lows = df["low"].min()
 
-                    py = chart_y + chart_h - (live - lows) / (highs - lows + 1e-9) * chart_h
+                        # 🔥 ZERO DIVISION FIX
+                        range_val = highs - lows if highs != lows else 1
 
-                    draw.line(
-                        [chart_x, py, chart_x + chart_w],
-                        fill=YELLOW,
-                        width=1
-                    )
+                        py = chart_y + chart_h - (live - lows) / range_val * chart_h
 
-                    draw.text(
-                        (chart_x + chart_w + 5, py - 10),
-                        f"{round(live,2)}",
-                        fill=YELLOW,
-                        font=font_small
-                    )
-                except Exception as e:
-                    print("LINE ERROR:", e)
+                        draw.line(
+                            [chart_x, py, chart_x + chart_w],
+                            fill=YELLOW,
+                            width=1
+                        )
+
+                        draw.text(
+                            (chart_x + chart_w + 5, py - 10),
+                            f"{round(live,2)}",
+                            fill=YELLOW,
+                            font=font_small
+                        )
+                    except Exception as e:
+                        print("LINE ERROR:", e)
 
         # --------------------------------------------------
         # RIGHT PANEL
