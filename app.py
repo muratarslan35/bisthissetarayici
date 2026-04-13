@@ -54,7 +54,7 @@ from brut_tracker import (
     safe_get_brut
 )
 from momentum_card import build_momentum_card
-
+from candle_engine import get_15m_df
 # ======================================================
 # ENV
 # ======================================================
@@ -992,18 +992,33 @@ Zarar: %{round((price-entry)/entry*100,2)}
                     if kap_signal and kap_signal.get("entry_price"):
 
                         try:
-                            kap_signal["df15"] = item.get("tf", {}).get("15m", {}).get("df")
-                        except:
+                            import pandas as pd
+
+                            # 🔥 GERÇEK 15M DATA (YF + CANLI)
+                            df = get_15m_df(symbol, live_price=price)
+
+                            if df is not None and len(df) > 5:
+
+                                if not isinstance(df, pd.DataFrame):
+                                    df = pd.DataFrame(df)
+
+                                df.columns = [c.lower() for c in df.columns]
+
+                                if all(c in df.columns for c in ["open", "high", "low", "close"]):
+                                    kap_signal["df15"] = df
+                                else:
+                                    print("❌ DF kolon hatalı:", df.columns)
+                                    kap_signal["df15"] = None
+                            else:
+                                print("❌ DF yok:", symbol)
+                                kap_signal["df15"] = None
+
+                        except Exception as e:
+                            print("DF ERROR:", e)
                             kap_signal["df15"] = None
 
+                        # ✅ CANLI FİYAT
                         kap_signal["live_price"] = float(price)
-
-                        if kap_signal.get("df15") is not None:
-                            try:
-                                df = kap_signal["df15"]
-                                df.iloc[-1, df.columns.get_loc("close")] = price
-                            except:
-                                pass
 
                         kap_symbol = kap_signal["symbol"]
 
@@ -1018,8 +1033,10 @@ Zarar: %{round((price-entry)/entry*100,2)}
                                 "time": now
                             }
 
+                            # 🚀 MOMENTUM GÖNDER
                             send_momentum_signal(kap_signal)
 
+                            # 🔒 TEKRAR ATMASIN
                             kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
                     
                     
