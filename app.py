@@ -108,6 +108,11 @@ RVOL_CACHE = {}
 ACTIVE_TRADES = {}
 LAST_SEND_TIME = 0
 # ======================================================
+# 📊 MOMENTUM TRACKING
+# ======================================================
+
+MOMENTUM_TRADES = {}
+# ======================================================
 # RVOL ENGINE
 # ======================================================
 
@@ -417,6 +422,65 @@ def send_startup_message():
 
     send_user_telegram(ADMIN_CHAT_ID, msg)
 
+# ======================================================
+# 📊 MOMENTUM DAILY REPORT
+# ======================================================
+
+def build_momentum_daily_report():
+
+    if not MOMENTUM_TRADES:
+        return None
+
+    total = len(MOMENTUM_TRADES)
+    success = 0
+    fail = 0
+    active = 0
+
+    lines = []
+    lines.append("🚀 MOMENTUM GÜN SONU RAPORU\n")
+
+    for symbol, t in MOMENTUM_TRADES.items():
+
+        status = t.get("status")
+
+        if status == "success":
+            success += 1
+            emoji = "✅"
+        elif status == "fail":
+            fail += 1
+            emoji = "❌"
+        else:
+            active += 1
+            emoji = "⏳"
+
+        entry = t.get("entry")
+        exit_price = t.get("exit", "-")
+
+        lines.append(f"{emoji} {symbol} | Giriş: {entry} → {exit_price}")
+
+    lines.append("\n📊 ÖZET")
+    lines.append(f"Toplam: {total}")
+    lines.append(f"✅ Başarılı: {success}")
+    lines.append(f"❌ Başarısız: {fail}")
+    lines.append(f"⏳ Açık: {active}")
+
+    success_rate = round((success / total) * 100, 2) if total > 0 else 0
+    lines.append(f"\n📈 Başarı Oranı: %{success_rate}")
+
+    lines.append(f"\n🕒 {now_tr().strftime('%H:%M')}")
+
+    return "\n".join(lines)
+# ======================================================
+# 🔄 MOMENTUM RESET
+# ======================================================
+
+def reset_momentum_if_needed(last_reset_date, now):
+
+    if last_reset_date != now.date() and now.time() > BIST_CLOSE:
+        MOMENTUM_TRADES.clear()
+        return now.date()
+
+    return last_reset_date
 # ======================================================
 # INVITE CODE
 # ======================================================
@@ -737,6 +801,7 @@ def scanner_loop():
     last_brut_report = None
     last_daily_report = None
     last_weekly_report = None
+    last_momentum_reset = None
 
     while True:
 
@@ -767,6 +832,12 @@ def scanner_loop():
 
                     if report:
                         send_report_to_admins(report)
+
+                    m_report = build_momentum_daily_report()
+                    if m_report:
+                        send_to_channel(m_report)
+
+                    last_momentum_reset = reset_momentum_if_needed(last_momentum_reset, now)
 
                     last_daily_report = now.date()
 
@@ -984,6 +1055,26 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             send_to_channel(msg)
                             del ACTIVE_TRADES[symbol]
 
+
+                    # ==================================================
+                    # 📊 MOMENTUM RESULT TRACK
+                    # ==================================================
+
+                    if symbol in MOMENTUM_TRADES:
+
+                        m_trade = MOMENTUM_TRADES[symbol]
+                        entry = m_trade["entry"]
+
+                        if m_trade.get("status") == "active":
+
+                            if price >= entry * 1.01:
+                                m_trade["status"] = "success"
+                                m_trade["exit"] = price
+
+                            elif price <= entry * 0.95:
+                                m_trade["status"] = "fail"
+                                m_trade["exit"] = price
+
                     # --------------------------------------------------
                     # 🚀 KAP MOMENTUM
                     # --------------------------------------------------
@@ -1038,6 +1129,13 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             }
 
                             send_momentum_signal(kap_signal)
+
+                            # 📊 MOMENTUM TRACK
+                            MOMENTUM_TRADES[kap_symbol] = {
+                                "entry": entry_price,
+                                "time": now,
+                                "status": "active"
+                            }
 
                             kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
 
