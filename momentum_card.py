@@ -139,9 +139,18 @@ def build_momentum_card(data):
 
         df = data.get("df15")
 
-        if df is not None and len(df) > 5 and all(c in df.columns for c in ["open","close","high","low"]):
+        if df is not None:
 
-            draw_candles(draw, df, chart_x, chart_y, chart_w, chart_h)
+            # 🔥 TEMİZLE
+            df = df.dropna()
+
+            # 🔥 ZAYIF DATA BLOKLA
+            if len(df) < 10:
+                return
+
+            if all(c in df.columns for c in ["open","close","high","low"]):
+
+                draw_candles(draw, df, chart_x, chart_y, chart_w, chart_h)
 
             # LIVE PRICE LINE
             if live > 0:
