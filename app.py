@@ -230,6 +230,15 @@ def send_to_channel(text):
         )
     except Exception as e:
         print("Channel send error:", e)
+
+def broadcast_signal(msg):
+
+    # sadece abonelere
+    for cid in REPORT_CHAT_IDS:
+        try:
+            send_user_telegram(cid, msg)
+        except:
+            pass
 # ======================================================
 # 🚀 MOMENTUM SIGNAL (IMAGE + CHART)
 # ======================================================
@@ -242,6 +251,7 @@ def send_momentum_signal(data):
         score = data.get("score")
         quality = data.get("quality")
         entry_type = data.get("entry_type")
+        live_price = data.get("live_price")
         momentum = data.get("momentum_pct")
         vwap_dist = data.get("vwap_distance")
 
@@ -257,6 +267,7 @@ def send_momentum_signal(data):
         card_data = {
             "symbol": symbol,
             "entry": entry,
+            "live_price": live_price,
             "type": entry_type,
             "score": f"{score} ({quality})",
             "momentum": momentum,
@@ -910,39 +921,41 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
                             del ACTIVE_TRADES[symbol]
 
+                    
                     # --------------------------------------------------
-                # 🚀 KAP MOMENTUM
-                # --------------------------------------------------
+                    # 🚀 KAP MOMENTUM
+                    # --------------------------------------------------
 
-                kap_signal = detect_kap_volume_momentum(item, kap_cache)
+                    kap_signal = detect_kap_volume_momentum(item, kap_cache)
 
-                if kap_signal:
+                    if kap_signal:
 
-                    # 🔥 GRAFİK DATA EKLE (SAFE)
-                    try:
-                        kap_signal["df15"] = item.get("tf", {}).get("15m", {}).get("df")
-                    except:
-                        kap_signal["df15"] = None
+                        # 🔥 GRAFİK DATA EKLE (SAFE)
+                        try:
+                            kap_signal["df15"] = item.get("tf", {}).get("15m", {}).get("df")
+                        except:
+                            kap_signal["df15"] = None
 
-                    kap_symbol = kap_signal["symbol"]
+                        kap_signal["live_price"] = price
 
-                    if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
+                        kap_symbol = kap_signal["symbol"]
 
-                        entry_price = kap_signal["entry_price"]
-                        target_price = entry_price * 1.01
+                        if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
-                        # ✅ TRADE KAYDET
-                        ACTIVE_TRADES[kap_symbol] = {
-                            "entry": entry_price,
-                            "target": target_price,
-                            "time": now
-                        }
+                            entry_price = kap_signal["entry_price"]
+                            target_price = entry_price * 1.01
 
-                        # 🚀 GÖNDER
-                        send_momentum_signal(kap_signal)
+                            ACTIVE_TRADES[kap_symbol] = {
+                                "entry": entry_price,
+                                "target": target_price,
+                                "time": now
+                            }
 
-                        # 🔒 TEKRAR ATMASIN
-                        kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
+                            send_momentum_signal(kap_signal)
+
+                            kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
+
+                    
                     # --------------------------------------------------
                     # NORMAL ENGINE
                     # --------------------------------------------------
