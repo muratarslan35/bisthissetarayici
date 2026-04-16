@@ -11,6 +11,7 @@ WHITE = (255, 255, 255)
 GREEN = (0, 230, 140)
 RED = (255, 80, 80)
 YELLOW = (255, 190, 0)
+BLUE = (0, 200, 255)
 GRAY = (140, 150, 170)
 
 # --------------------------------------------------
@@ -32,7 +33,7 @@ def get_font(size):
 
 def build_bar(value, max_blocks=10):
     try:
-        filled = int(min(value / 2, 1) * max_blocks)  # 🔥 FIX (daha doğru scaling)
+        filled = int(min(value / 2, 1) * max_blocks)
         return "▰" * filled + "▱" * (max_blocks - filled)
     except:
         return "▱" * max_blocks
@@ -43,56 +44,49 @@ def build_bar(value, max_blocks=10):
 
 def draw_candles(draw, df, x, y, w, h):
 
-    try:
-        if df is None or len(df) < 5:
-            return
+    if df is None or len(df) < 5:
+        return
 
-        if not all(c in df.columns for c in ["open","close","high","low"]):
-            return
+    if not all(c in df.columns for c in ["open","close","high","low"]):
+        return
 
-        data = df.tail(30)
+    data = df.tail(30)
 
-        highs = data["high"].max()
-        lows = data["low"].min()
+    highs = data["high"].max()
+    lows = data["low"].min()
 
-        # 🔥 ZERO DIVISION FIX
-        if highs == lows:
-            return
+    if highs == lows:
+        return
 
-        def price_to_y(p):
-            return y + h - (p - lows) / (highs - lows) * h
+    def price_to_y(p):
+        return y + h - (p - lows) / (highs - lows) * h
 
-        candle_w = w / len(data)
+    candle_w = w / len(data)
 
-        for i, (_, row) in enumerate(data.iterrows()):
+    for i, (_, row) in enumerate(data.iterrows()):
 
-            cx = x + i * candle_w + candle_w * 0.2
+        cx = x + i * candle_w + candle_w * 0.2
 
-            o = row["open"]
-            c = row["close"]
-            hi = row["high"]
-            lo = row["low"]
+        o = row["open"]
+        c = row["close"]
+        hi = row["high"]
+        lo = row["low"]
 
-            color = GREEN if c >= o else RED
+        color = GREEN if c >= o else RED
 
-            # wick
-            draw.line(
-                [cx + candle_w*0.3, price_to_y(hi),
-                 cx + candle_w*0.3, price_to_y(lo)],
-                fill=color,
-                width=1
-            )
+        draw.line(
+            [cx + candle_w*0.3, price_to_y(hi),
+             cx + candle_w*0.3, price_to_y(lo)],
+            fill=color,
+            width=1
+        )
 
-            # body
-            draw.rectangle([
-                cx,
-                price_to_y(max(o, c)),
-                cx + candle_w*0.6,
-                price_to_y(min(o, c))
-            ], fill=color)
-
-    except Exception as e:
-        print("CANDLE ERROR:", e)
+        draw.rectangle([
+            cx,
+            price_to_y(max(o, c)),
+            cx + candle_w*0.6,
+            price_to_y(min(o, c))
+        ], fill=color)
 
 # --------------------------------------------------
 # MAIN CARD
@@ -109,32 +103,43 @@ def build_momentum_card(data):
         img = Image.new("RGB", (WIDTH, HEIGHT), BG)
         draw = ImageDraw.Draw(img)
 
-        font_big = get_font(36)
-        font_mid = get_font(22)
+        # 🔥 FONTLAR (BÜYÜTÜLDÜ)
+        font_big = get_font(40)
+        font_mid = get_font(24)
         font_small = get_font(16)
+        font_price = get_font(28)
 
-        # CARD BG
         draw.rectangle([20, 20, WIDTH-20, HEIGHT-20], fill=CARD)
 
         # HEADER
         draw.text((40, 30), symbol, fill=WHITE, font=font_big)
         draw.text((650, 30), "MOMENTUM ANALİZ", fill=YELLOW, font=font_mid)
 
-        # ENTRY + LIVE
+        # --------------------------------------------------
+        # PRICES
+        # --------------------------------------------------
+
         entry = float(data.get("entry", 0) or 0)
         live = float(data.get("live_price", 0) or 0)
+        tp1 = float(data.get("tp1", 0) or 0)
 
-        draw.text((40, 90), f"Giriş: {round(entry,2)}", fill=WHITE, font=font_mid)
+        draw.text((40, 90), "Giriş", fill=GRAY, font=font_small)
+        draw.text((40, 115), f"{round(entry,2)}", fill=WHITE, font=font_price)
 
         if live > 0:
-            draw.text((220, 90), f"Anlık: {round(live,2)}", fill=GREEN, font=font_mid)
+            draw.text((200, 90), "Anlık", fill=GRAY, font=font_small)
+            draw.text((200, 115), f"{round(live,2)}", fill=GREEN, font=font_price)
+
+        if tp1 > 0:
+            draw.text((360, 90), "TP1", fill=GRAY, font=font_small)
+            draw.text((360, 115), f"{round(tp1,2)}", fill=BLUE, font=font_price)
 
         # --------------------------------------------------
-        # CHART AREA
+        # CHART
         # --------------------------------------------------
 
-        chart_x, chart_y = 40, 140
-        chart_w, chart_h = 600, 300
+        chart_x, chart_y = 40, 160
+        chart_w, chart_h = 600, 320
 
         draw.rectangle(
             [chart_x, chart_y, chart_x+chart_w, chart_y+chart_h],
@@ -147,36 +152,32 @@ def build_momentum_card(data):
 
             df = df.dropna()
 
-            # ❗ FIX: kartı öldürme → sadece chart skip
             if len(df) >= 10 and all(c in df.columns for c in ["open","close","high","low"]):
 
                 draw_candles(draw, df, chart_x, chart_y, chart_w, chart_h)
 
-                # LIVE PRICE LINE
+                highs = max(df["high"].max(), tp1 if tp1 > 0 else df["high"].max())
+                lows = df["low"].min()
+
+                range_val = highs - lows if highs != lows else 1
+
+                def get_y(price):
+                    py = chart_y + chart_h - (price - lows) / range_val * chart_h
+                    return max(chart_y, min(chart_y + chart_h, py))
+
+                # LIVE LINE
                 if live > 0:
-                    try:
-                        highs = df["high"].max()
-                        lows = df["low"].min()
+                    py = get_y(live)
 
-                        # 🔥 ZERO DIVISION FIX
-                        range_val = highs - lows if highs != lows else 1
+                    draw.line([chart_x, py, chart_x + chart_w], fill=YELLOW, width=1)
+                    draw.text((chart_x + chart_w + 5, py - 10), f"{round(live,2)}", fill=YELLOW, font=font_small)
 
-                        py = chart_y + chart_h - (live - lows) / range_val * chart_h
+                # TP1 LINE
+                if tp1 > 0:
+                    py_tp = get_y(tp1)
 
-                        draw.line(
-                            [chart_x, py, chart_x + chart_w],
-                            fill=YELLOW,
-                            width=1
-                        )
-
-                        draw.text(
-                            (chart_x + chart_w + 5, py - 10),
-                            f"{round(live,2)}",
-                            fill=YELLOW,
-                            font=font_small
-                        )
-                    except Exception as e:
-                        print("LINE ERROR:", e)
+                    draw.line([chart_x, py_tp, chart_x + chart_w], fill=BLUE, width=2)
+                    draw.text((chart_x + chart_w + 5, py_tp - 10), f"TP1 {round(tp1,2)}", fill=BLUE, font=font_small)
 
         # --------------------------------------------------
         # RIGHT PANEL
@@ -193,8 +194,13 @@ def build_momentum_card(data):
         draw.text((px, 240), f"VWAP Mesafe: %{round(v,2)}", fill=YELLOW, font=font_mid)
         draw.text((px, 270), build_bar(v), fill=YELLOW, font=font_mid)
 
+        # TP1 sağ panel
+        if tp1 > 0:
+            draw.text((px, 320), "TP1", fill=GRAY, font=font_small)
+            draw.text((px, 345), f"{round(tp1,2)}", fill=BLUE, font=font_mid)
+
         # --------------------------------------------------
-        # DECISION ENGINE
+        # DECISION
         # --------------------------------------------------
 
         decision = "BEKLE"
@@ -210,8 +216,8 @@ def build_momentum_card(data):
             decision = "RİSKLİ"
             color = RED
 
-        draw.text((px, 350), "Karar:", fill=WHITE, font=font_mid)
-        draw.text((px, 380), decision, fill=color, font=font_big)
+        draw.text((px, 400), "Karar:", fill=WHITE, font=font_mid)
+        draw.text((px, 430), decision, fill=color, font=font_big)
 
         # --------------------------------------------------
         # SAVE
