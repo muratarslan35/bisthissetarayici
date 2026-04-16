@@ -61,6 +61,8 @@ def get_15m_df(symbol, live_price=None):
             return None
 
         df = df[required_cols]
+        # 🔥 TIMEZONE FIX (KRİTİK)
+        df.index = df.index.tz_localize(None)
 
         # --------------------------------------------------
         # 🔥 CANLI FİYAT ENJEKTE
