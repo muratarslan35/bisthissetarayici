@@ -67,24 +67,30 @@ def draw_candles(draw, df, x, y, w, h):
 
         cx = x + i * candle_w + candle_w * 0.2
 
-        o = row["open"]
-        c = row["close"]
-        hi = row["high"]
-        lo = row["low"]
+        o = float(row["open"])
+        c = float(row["close"])
+        hi = float(row["high"])
+        lo = float(row["low"])
 
         color = GREEN if c >= o else RED
 
+        # wick
         draw.line(
-            [cx + candle_w*0.3, price_to_y(hi),
-             cx + candle_w*0.3, price_to_y(lo)],
+            [
+                cx + candle_w * 0.3,
+                price_to_y(hi),
+                cx + candle_w * 0.3,
+                price_to_y(lo)
+            ],
             fill=color,
             width=1
         )
 
+        # body
         draw.rectangle([
             cx,
             price_to_y(max(o, c)),
-            cx + candle_w*0.6,
+            cx + candle_w * 0.6,
             price_to_y(min(o, c))
         ], fill=color)
 
@@ -103,7 +109,7 @@ def build_momentum_card(data):
         img = Image.new("RGB", (WIDTH, HEIGHT), BG)
         draw = ImageDraw.Draw(img)
 
-        # 🔥 FONTLAR (BÜYÜTÜLDÜ)
+        # FONTLAR
         font_big = get_font(40)
         font_mid = get_font(24)
         font_small = get_font(16)
@@ -130,6 +136,7 @@ def build_momentum_card(data):
             draw.text((200, 90), "Anlık", fill=GRAY, font=font_small)
             draw.text((200, 115), f"{round(live,2)}", fill=GREEN, font=font_price)
 
+        # 🔥 TP1 sadece burada
         if tp1 > 0:
             draw.text((360, 90), "TP1", fill=GRAY, font=font_small)
             draw.text((360, 115), f"{round(tp1,2)}", fill=BLUE, font=font_price)
@@ -165,19 +172,39 @@ def build_momentum_card(data):
                     py = chart_y + chart_h - (price - lows) / range_val * chart_h
                     return max(chart_y, min(chart_y + chart_h, py))
 
-                # LIVE LINE
+                # ✅ LIVE LINE (FIXED)
                 if live > 0:
                     py = get_y(live)
 
-                    draw.line([chart_x, py, chart_x + chart_w], fill=YELLOW, width=1)
-                    draw.text((chart_x + chart_w + 5, py - 10), f"{round(live,2)}", fill=YELLOW, font=font_small)
+                    draw.line(
+                        [chart_x, py, chart_x + chart_w, py],
+                        fill=YELLOW,
+                        width=1
+                    )
 
-                # TP1 LINE
+                    draw.text(
+                        (chart_x + chart_w + 5, py - 10),
+                        f"{round(live,2)}",
+                        fill=YELLOW,
+                        font=font_small
+                    )
+
+                # ✅ TP1 LINE (FIXED)
                 if tp1 > 0:
                     py_tp = get_y(tp1)
 
-                    draw.line([chart_x, py_tp, chart_x + chart_w], fill=BLUE, width=2)
-                    draw.text((chart_x + chart_w + 5, py_tp - 10), f"TP1 {round(tp1,2)}", fill=BLUE, font=font_small)
+                    draw.line(
+                        [chart_x, py_tp, chart_x + chart_w, py_tp],
+                        fill=BLUE,
+                        width=2
+                    )
+
+                    draw.text(
+                        (chart_x + chart_w + 5, py_tp - 10),
+                        f"{round(tp1,2)}",
+                        fill=BLUE,
+                        font=font_small
+                    )
 
         # --------------------------------------------------
         # RIGHT PANEL
@@ -193,11 +220,6 @@ def build_momentum_card(data):
 
         draw.text((px, 240), f"VWAP Mesafe: %{round(v,2)}", fill=YELLOW, font=font_mid)
         draw.text((px, 270), build_bar(v), fill=YELLOW, font=font_mid)
-
-        # TP1 sağ panel
-        if tp1 > 0:
-            draw.text((px, 320), "TP1", fill=GRAY, font=font_small)
-            draw.text((px, 345), f"{round(tp1,2)}", fill=BLUE, font=font_mid)
 
         # --------------------------------------------------
         # DECISION
