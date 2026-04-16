@@ -4,66 +4,73 @@ import os
 WIDTH = 1000
 HEIGHT = 600
 
-BG = (8, 12, 20)
-CARD = (15, 22, 35)
+BG_TOP = (10, 15, 25)
+BG_BOTTOM = (5, 10, 18)
 
 WHITE = (255, 255, 255)
-GREEN = (0, 230, 140)
-RED = (255, 80, 80)
+GREEN = (0, 255, 160)
+RED = (255, 70, 70)
 YELLOW = (255, 190, 0)
 BLUE = (0, 200, 255)
 GRAY = (140, 150, 170)
 
 # --------------------------------------------------
-# SAFE FONT
+# FONT
 # --------------------------------------------------
 
 def get_font(size):
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size)
     except:
-        try:
-            return ImageFont.truetype("arial.ttf", size)
-        except:
-            return ImageFont.load_default()
+        return ImageFont.load_default()
 
 # --------------------------------------------------
-# BAR
+# GRADIENT BG
 # --------------------------------------------------
 
-def build_bar(value, max_blocks=10):
-    try:
-        filled = int(min(value / 2, 1) * max_blocks)
-        return "▰" * filled + "▱" * (max_blocks - filled)
-    except:
-        return "▱" * max_blocks
+def draw_gradient(draw):
+    for i in range(HEIGHT):
+        ratio = i / HEIGHT
+        r = int(BG_TOP[0] * (1 - ratio) + BG_BOTTOM[0] * ratio)
+        g = int(BG_TOP[1] * (1 - ratio) + BG_BOTTOM[1] * ratio)
+        b = int(BG_TOP[2] * (1 - ratio) + BG_BOTTOM[2] * ratio)
+        draw.line([(0, i), (WIDTH, i)], fill=(r, g, b))
 
 # --------------------------------------------------
-# CANDLE CHART
+# GRID
+# --------------------------------------------------
+
+def draw_grid(draw, x, y, w, h):
+    for i in range(5):
+        yy = y + i * (h / 4)
+        draw.line([x, yy, x + w, yy], fill=(30, 40, 60), width=1)
+
+# --------------------------------------------------
+# CANDLES
 # --------------------------------------------------
 
 def draw_candles(draw, df, x, y, w, h):
 
-    if df is None or len(df) < 5:
+    if df is None or len(df) < 10:
         return
 
     if not all(c in df.columns for c in ["open","close","high","low"]):
         return
 
-    data = df.tail(30)
+    df = df.tail(30)
 
-    highs = data["high"].max()
-    lows = data["low"].min()
+    highs = df["high"].max()
+    lows = df["low"].min()
 
     if highs == lows:
         return
 
-    def price_to_y(p):
+    def py(p):
         return y + h - (p - lows) / (highs - lows) * h
 
-    candle_w = w / len(data)
+    candle_w = w / len(df)
 
-    for i, (_, row) in enumerate(data.iterrows()):
+    for i, (_, row) in enumerate(df.iterrows()):
 
         cx = x + i * candle_w + candle_w * 0.2
 
@@ -76,26 +83,72 @@ def draw_candles(draw, df, x, y, w, h):
 
         # wick
         draw.line(
-            [
-                cx + candle_w * 0.3,
-                price_to_y(hi),
-                cx + candle_w * 0.3,
-                price_to_y(lo)
-            ],
+            [cx + candle_w * 0.3, py(hi), cx + candle_w * 0.3, py(lo)],
             fill=color,
             width=1
         )
 
         # body
+        top = py(max(o, c))
+        bot = py(min(o, c))
+
+        if abs(top - bot) < 1:
+            bot = top + 1  # ultra küçük mum fix
+
+        draw.rectangle(
+            [cx, top, cx + candle_w * 0.6, bot],
+            fill=color
+        )
+
+        # son mum glow
+        if i == len(df) - 1:
+            draw.rectangle(
+                [cx - 2, top - 2, cx + candle_w * 0.6 + 2, bot + 2],
+                outline=color,
+                width=2
+            )
+
+# --------------------------------------------------
+# VOLUME (YENİ)
+# --------------------------------------------------
+
+def draw_volume(draw, df, x, y, w, h):
+
+    if df is None or len(df) < 10:
+        return
+
+    if "volume" not in df.columns:
+        return
+
+    df = df.tail(30)
+
+    max_vol = df["volume"].max()
+    if max_vol == 0:
+        return
+
+    bar_w = w / len(df)
+
+    for i, (_, row) in enumerate(df.iterrows()):
+
+        cx = x + i * bar_w + bar_w * 0.2
+
+        vol = float(row["volume"])
+        o = float(row["open"])
+        c = float(row["close"])
+
+        bar_h = (vol / max_vol) * h
+
+        color = GREEN if c >= o else RED
+
         draw.rectangle([
             cx,
-            price_to_y(max(o, c)),
-            cx + candle_w * 0.6,
-            price_to_y(min(o, c))
+            y + h - bar_h,
+            cx + bar_w * 0.6,
+            y + h
         ], fill=color)
 
 # --------------------------------------------------
-# MAIN CARD
+# MAIN
 # --------------------------------------------------
 
 def build_momentum_card(data):
@@ -104,129 +157,92 @@ def build_momentum_card(data):
         if not data:
             return None
 
-        symbol = str(data.get("symbol", "UNKNOWN"))
-
-        img = Image.new("RGB", (WIDTH, HEIGHT), BG)
+        img = Image.new("RGB", (WIDTH, HEIGHT))
         draw = ImageDraw.Draw(img)
 
-        # FONTLAR
-        font_big = get_font(40)
+        draw_gradient(draw)
+
+        # FONT
+        font_big = get_font(42)
         font_mid = get_font(24)
         font_small = get_font(16)
-        font_price = get_font(28)
-
-        draw.rectangle([20, 20, WIDTH-20, HEIGHT-20], fill=CARD)
+        font_price_big = get_font(34)
 
         # HEADER
+        symbol = data.get("symbol", "")
         draw.text((40, 30), symbol, fill=WHITE, font=font_big)
         draw.text((650, 30), "MOMENTUM ANALİZ", fill=YELLOW, font=font_mid)
 
-        # --------------------------------------------------
         # PRICES
-        # --------------------------------------------------
-
         entry = float(data.get("entry", 0) or 0)
         live = float(data.get("live_price", 0) or 0)
         tp1 = float(data.get("tp1", 0) or 0)
 
         draw.text((40, 90), "Giriş", fill=GRAY, font=font_small)
-        draw.text((40, 115), f"{round(entry,2)}", fill=WHITE, font=font_price)
+        draw.text((40, 115), f"{entry:.2f}", fill=WHITE, font=font_price_big)
 
-        if live > 0:
-            draw.text((200, 90), "Anlık", fill=GRAY, font=font_small)
-            draw.text((200, 115), f"{round(live,2)}", fill=GREEN, font=font_price)
+        draw.text((200, 90), "Anlık", fill=GRAY, font=font_small)
+        draw.text((200, 115), f"{live:.2f}", fill=GREEN, font=font_price_big)
 
-        # 🔥 TP1 sadece burada
         if tp1 > 0:
             draw.text((360, 90), "TP1", fill=GRAY, font=font_small)
-            draw.text((360, 115), f"{round(tp1,2)}", fill=BLUE, font=font_price)
+            draw.text((360, 115), f"{tp1:.2f}", fill=BLUE, font=font_price_big)
 
-        # --------------------------------------------------
-        # CHART
-        # --------------------------------------------------
-
+        # CHART AREA SPLIT
         chart_x, chart_y = 40, 160
         chart_w, chart_h = 600, 320
 
-        draw.rectangle(
-            [chart_x, chart_y, chart_x+chart_w, chart_y+chart_h],
-            outline=(50, 60, 80)
-        )
+        volume_h = 70
+        price_h = chart_h - volume_h - 10
+
+        # GRID
+        draw_grid(draw, chart_x, chart_y, chart_w, price_h)
 
         df = data.get("df15")
 
         if df is not None:
-
             df = df.dropna()
 
-            if len(df) >= 10 and all(c in df.columns for c in ["open","close","high","low"]):
+            # candles
+            draw_candles(draw, df, chart_x, chart_y, chart_w, price_h)
 
-                draw_candles(draw, df, chart_x, chart_y, chart_w, chart_h)
+            # volume
+            draw_volume(draw, df, chart_x, chart_y + price_h + 10, chart_w, volume_h)
 
-                highs = max(df["high"].max(), tp1 if tp1 > 0 else df["high"].max())
-                lows = df["low"].min()
+            highs = max(df["high"].max(), tp1 if tp1 else df["high"].max())
+            lows = df["low"].min()
+            rng = highs - lows if highs != lows else 1
 
-                range_val = highs - lows if highs != lows else 1
+            def get_y(p):
+                py = chart_y + price_h - (p - lows) / rng * price_h
+                return max(chart_y, min(chart_y + price_h, py))
 
-                def get_y(price):
-                    py = chart_y + chart_h - (price - lows) / range_val * chart_h
-                    return max(chart_y, min(chart_y + chart_h, py))
+            # LIVE LINE
+            if live > 0:
+                py = get_y(live)
+                draw.line([chart_x, py, chart_x + chart_w, py], fill=YELLOW, width=1)
 
-                # ✅ LIVE LINE (FIXED)
-                if live > 0:
-                    py = get_y(live)
+            # TP1 DASHED
+            if tp1 > 0:
+                py = get_y(tp1)
+                for i in range(chart_x, chart_x + chart_w, 12):
+                    draw.line([i, py, i+6, py], fill=BLUE, width=2)
 
-                    draw.line(
-                        [chart_x, py, chart_x + chart_w, py],
-                        fill=YELLOW,
-                        width=1
-                    )
-
-                    draw.text(
-                        (chart_x + chart_w + 5, py - 10),
-                        f"{round(live,2)}",
-                        fill=YELLOW,
-                        font=font_small
-                    )
-
-                # ✅ TP1 LINE (FIXED)
-                if tp1 > 0:
-                    py_tp = get_y(tp1)
-
-                    draw.line(
-                        [chart_x, py_tp, chart_x + chart_w, py_tp],
-                        fill=BLUE,
-                        width=2
-                    )
-
-                    draw.text(
-                        (chart_x + chart_w + 5, py_tp - 10),
-                        f"{round(tp1,2)}",
-                        fill=BLUE,
-                        font=font_small
-                    )
-
-        # --------------------------------------------------
         # RIGHT PANEL
-        # --------------------------------------------------
-
         px = 700
 
         m = float(data.get("momentum", 0) or 0)
         v = float(data.get("vwap", 0) or 0)
 
-        draw.text((px, 150), f"Momentum Gücü: %{round(m,2)}", fill=GREEN, font=font_mid)
-        draw.text((px, 180), build_bar(m), fill=GREEN, font=font_mid)
+        draw.text((px, 150), f"Momentum Gücü: %{m:.2f}", fill=GREEN, font=font_mid)
+        draw.text((px, 180), "▰" * int(min(m*5,10)), fill=GREEN, font=font_mid)
 
-        draw.text((px, 240), f"VWAP Mesafe: %{round(v,2)}", fill=YELLOW, font=font_mid)
-        draw.text((px, 270), build_bar(v), fill=YELLOW, font=font_mid)
+        draw.text((px, 240), f"VWAP Mesafe: %{v:.2f}", fill=YELLOW, font=font_mid)
+        draw.text((px, 270), "▰" * int(min(v*5,10)), fill=YELLOW, font=font_mid)
 
-        # --------------------------------------------------
         # DECISION
-        # --------------------------------------------------
-
-        decision = "BEKLE"
-        color = WHITE
+        decision = "RİSKLİ"
+        color = RED
 
         if m > 1.2 and v < 1.5:
             decision = "GÜÇLÜ AL"
@@ -234,20 +250,13 @@ def build_momentum_card(data):
         elif m > 0.7:
             decision = "TREND BAŞLIYOR"
             color = YELLOW
-        else:
-            decision = "RİSKLİ"
-            color = RED
 
         draw.text((px, 400), "Karar:", fill=WHITE, font=font_mid)
         draw.text((px, 430), decision, fill=color, font=font_big)
 
-        # --------------------------------------------------
         # SAVE
-        # --------------------------------------------------
-
         os.makedirs("cards", exist_ok=True)
         path = f"cards/{symbol}.png"
-
         img.save(path)
 
         return path
