@@ -198,9 +198,9 @@ button:hover{ transform:translateY(-1px); }
 <h2 class="section-title">⚠️ Brüt Takas Yönetimi</h2>
 
 <div style="margin-bottom:15px;">
-<input type="text" id="brut_symbol" placeholder="Hisse (örn: ASELS)">
-<input type="text" id="brut_end" placeholder="Bitiş (opsiyonel)">
-<button class="btn-add" onclick="addBrut()">Ekle</button>
+    <input type="text" id="brut_symbol" placeholder="Hisse (örn: ASELS)">
+    <input type="date" id="brut_end">
+    <button class="btn-add" onclick="addBrut()">Ekle</button>
 </div>
 
 <div class="table-wrapper">
@@ -209,6 +209,7 @@ button:hover{ transform:translateY(-1px); }
 <tr>
 <th>Hisse</th>
 <th>Bitiş</th>
+<th>Kalan Gün</th>
 <th>Tip</th>
 <th>Sil</th>
 </tr>
@@ -353,72 +354,109 @@ loadCodes();
 
 async function addBrut(){
 
-    const symbol = document.getElementById("brut_symbol").value;
-    const end = document.getElementById("brut_end").value;
+    const symbolInput = document.getElementById("brut_symbol").value.trim();
+    const rawDate = document.getElementById("brut_end").value;
 
-    if(!symbol){
+    if(!symbolInput){
         alert("Hisse gir!");
         return;
     }
 
-    const res = await fetch("/admin/add-brut",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            symbol:symbol,
-            end_date:end
-        })
-    });
+    const symbol = symbolInput.toUpperCase().replace(".IS","");
 
-    const data = await res.json();
+    // DATE FORMAT FIX (YYYY-MM-DD → DD.MM.YYYY)
+    let end = null;
 
-    if(data.status !== "ok"){
-        alert("Hata oluştu");
-        return;
+    if(rawDate){
+        const parts = rawDate.split("-");
+        end = `${parts[2]}.${parts[1]}.${parts[0]}`;
     }
 
-    alert("Brüt eklendi");
+    try{
 
-    document.getElementById("brut_symbol").value="";
-    document.getElementById("brut_end").value="";
+        const res = await fetch("/admin/add-brut",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+                symbol: symbol,
+                end_date: end
+            })
+        });
 
-    loadBruts();
+        const data = await res.json();
+
+        if(data.status !== "ok"){
+            alert("Hata oluştu");
+            return;
+        }
+
+        alert(`Brüt eklendi: ${symbol}`);
+
+        document.getElementById("brut_symbol").value="";
+        document.getElementById("brut_end").value="";
+
+        loadBruts();
+
+    }catch(e){
+        alert("Sunucu hatası");
+    }
 }
+
 
 async function loadBruts(){
 
-    const res = await fetch("/admin/get-bruts");
-    const data = await res.json();
+    try{
 
-    const tbody = document.getElementById("brutTable");
-    tbody.innerHTML="";
+        const res = await fetch("/admin/get-bruts");
+        const data = await res.json();
 
-    Object.entries(data).forEach(([sym,val])=>{
+        const tbody = document.getElementById("brutTable");
+        tbody.innerHTML="";
 
-        const tr=document.createElement("tr");
+        if(!data || Object.keys(data).length === 0){
+            tbody.innerHTML = `<tr><td colspan="5">Veri yok</td></tr>`;
+            return;
+        }
 
-        tr.innerHTML=`
-        <td>${sym.replace(".IS","")}</td>
-        <td>${val.end_date || "-"}</td>
-        <td>${val.type}</td>
-        <td><button class="btn-delete" onclick="deleteBrut('${sym}')">Sil</button></td>
-        `;
+        Object.entries(data).forEach(([sym,val])=>{
 
-        tbody.appendChild(tr);
-    });
+            const tr=document.createElement("tr");
+
+            tr.innerHTML=`
+            <td>${sym.replace(".IS","")}</td>
+            <td>${val.end_date || "-"}</td>
+            <td>${val.days_left ?? "-"}</td>
+            <td>${val.type}</td>
+            <td><button class="btn-delete" onclick="deleteBrut('${sym}')">Sil</button></td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+
+    }catch(e){
+        console.log("Brut load error:", e);
+    }
 }
+
 
 async function deleteBrut(symbol){
 
-    await fetch("/admin/delete-brut",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({symbol:symbol})
-    });
+    if(!confirm(`${symbol} silinsin mi?`)) return;
 
-    loadBruts();
+    try{
+
+        await fetch("/admin/delete-brut",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({symbol:symbol})
+        });
+
+        loadBruts();
+
+    }catch(e){
+        alert("Silme hatası");
+    }
 }
-
 loadUsers();
 
 </script>
