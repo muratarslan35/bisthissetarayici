@@ -112,6 +112,29 @@ LAST_SEND_TIME = 0
 # ======================================================
 
 MOMENTUM_TRADES = {}
+
+# ======================================================
+# 🔥 BRUT SAFE REFRESH (5 DK CACHE)
+# ======================================================
+
+LAST_BRUT_REFRESH = 0
+
+def safe_refresh_brut():
+
+    global LAST_BRUT_REFRESH
+
+    now_ts = time.time()
+
+    # 5 dakikada 1 güncelle
+    if now_ts - LAST_BRUT_REFRESH > 300:
+
+        try:
+            refresh_brut_list()
+            LAST_BRUT_REFRESH = now_ts
+            print("✅ BRUT REFRESH OK")
+
+        except Exception as e:
+            print("❌ BRUT REFRESH ERROR:", e)
 # ======================================================
 # RVOL ENGINE
 # ======================================================
@@ -977,6 +1000,8 @@ def scanner_loop():
 
             dashboard.SYSTEM_ACTIVE = True
             print("✅ MARKET AÇIK → TARAMA", flush=True)
+            # 🔥 BRUT MAP HER ZAMAN GÜNCEL
+            safe_refresh_brut()
 
             # --------------------------------------------------
             # BRUT TAKAS RAPORU
