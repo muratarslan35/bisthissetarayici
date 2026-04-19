@@ -2,6 +2,70 @@ import requests
 import re
 from datetime import datetime
 from dateutil import parser
+import feedparser
+import json
+import os
+
+# 🔥 GEMINI AI
+import google.generativeai as genai
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+def gemini_parse_brut(text):
+
+    try:
+
+        if not GEMINI_API_KEY:
+            return {}
+
+        model = genai.GenerativeModel("gemini-1.5-flash")
+
+        prompt = f"""
+Aşağıdaki metinden brüt takas uygulanan hisseleri çıkar.
+
+Sadece JSON dön:
+
+[
+  {{
+    "symbol": "XXX.IS"
+  }}
+]
+
+Metin:
+{text}
+"""
+
+        response = model.generate_content(prompt)
+
+        raw = response.text.strip()
+
+        data = json.loads(raw)
+
+        results = {}
+
+        for item in data:
+            sym = item.get("symbol")
+            if sym:
+                results[sym] = {
+                    "start_date": "-",
+                    "end_date": "-",
+                    "days_left": None,
+                    "type": "Brüt Takas (AI)",
+                    "priority": 80
+                }
+
+        return results
+
+    except Exception as e:
+        print("GEMINI ERROR:", e)
+        return {}
+
+# ======================================================
+# CONFIG
+# ======================================================
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
@@ -13,6 +77,7 @@ CACHE_TTL = 300
 BRUT_CACHE = {}
 LAST_UPDATE = None
 
+MANUAL_FILE = "data/manual_brut.json"
 
 # ======================================================
 # SAFE HELPERS
@@ -44,7 +109,32 @@ def days_left_calc(dt):
 
 
 # ======================================================
-# 🔥 1. KAP API (PRIMARY - MULTI TRY)
+# MANUAL OVERRIDE
+# ======================================================
+
+def load_manual():
+    if not os.path.exists(MANUAL_FILE):
+        return {}
+    try:
+        with open(MANUAL_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+
+def merge_manual(data):
+
+    manual = load_manual()
+
+    for k, v in manual.items():
+        v["priority"] = 999  # 🔥 her zaman kazanır
+        data[k] = v
+
+    return data
+
+
+# ======================================================
+# 🔥 1. KAP API
 # ======================================================
 
 def fetch_vbts():
@@ -91,7 +181,8 @@ def fetch_vbts():
                     "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
                     "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
                     "days_left": days_left,
-                    "type": tedbir or "Brüt Takas"
+                    "type": tedbir or "Brüt Takas",
+                    "priority": 100
                 }
 
             if results:
@@ -107,7 +198,7 @@ def fetch_vbts():
 
 
 # ======================================================
-# 🔥 2. İŞ YATIRIM (EN GÜÇLÜ ALTERNATİF)
+# 🔥 2. İŞ YATIRIM
 # ======================================================
 
 def fetch_isyatirim_brut():
@@ -144,7 +235,8 @@ def fetch_isyatirim_brut():
                 "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
                 "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
                 "days_left": days_left_calc(end_dt),
-                "type": "Brüt Takas (İş Yatırım)"
+                "type": "Brüt Takas (İş Yatırım)",
+                "priority": 90
             }
 
         if results:
@@ -157,102 +249,104 @@ def fetch_isyatirim_brut():
 
 
 # ======================================================
-# 🔥 3. ALTERNATİF SİTELER (ZAYIF AMA FAYDALI)
+# 🔥 3. KAP RSS + AI
 # ======================================================
 
-def fetch_alternative_sources():
+def fetch_kap_news_brut():
 
-    urls = [
-        "https://borsa.doviz.com/brut-takas",
-        "https://bigpara.hurriyet.com.tr/borsa/brut-takas/"
-    ]
-
-    results = {}
-
-    for url in urls:
-
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=8)
-
-            if r.status_code != 200:
-                continue
-
-            html = r.text.upper()
-
-            matches = re.findall(r'\b[A-Z]{3,5}\b', html)
-
-            for sym in matches:
-
-                symbol = normalize_symbol(sym)
-
-                if symbol not in results:
-                    results[symbol] = {
-                        "start_date": "-",
-                        "end_date": "-",
-                        "days_left": None,
-                        "type": "Brüt Takas (Web)"
-                    }
-
-        except Exception as e:
-            print("ALT SOURCE error:", e)
-            continue
-
-    if results:
-        print(f"🟡 ALT BRÜT: {len(results)}")
-
-    return results
-
-
-# ======================================================
-# 🔥 4. KAP SAYFA SCRAPE (SON ÇARE)
-# ======================================================
-
-def fetch_bist_tedbirleri_scrape():
-
-    url = "https://www.kap.org.tr/tr/BistTedbirleri"
     results = {}
 
     try:
+        feed = feedparser.parse("https://www.kap.org.tr/tr/rss/all")
 
-        r = requests.get(url, headers=HEADERS, timeout=10)
+        for entry in feed.entries[:30]:
 
-        if r.status_code != 200:
-            return results
+            title = entry.title.lower()
 
-        html = r.text.upper()
-
-        matches = re.findall(
-            r'([A-Z]{3,5})\s+.*?(\d{2}\.\d{2}\.\d{4})',
-            html
-        )
-
-        for sym, date_str in matches:
-
-            symbol = normalize_symbol(sym)
-
-            end_dt = parse_date_safe(date_str)
-            days_left = days_left_calc(end_dt)
-
-            if days_left is not None and days_left < 0:
+            if "brüt" not in title and "brut" not in title:
                 continue
 
-            results[symbol] = {
-                "start_date": "-",
-                "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
-                "days_left": days_left,
-                "type": "Brüt Takas (Scrape)"
-            }
+            try:
+                r = requests.get(entry.link, headers=HEADERS, timeout=8)
 
-        print(f"📡 SCRAPE BRÜT: {len(results)}")
+                html = r.text
+
+                ai_data = gemini_parse_brut(html)
+
+                results.update(ai_data)
+
+            except:
+                continue
 
     except Exception as e:
-        print("SCRAPE error:", e)
+        print("KAP RSS ERROR:", e)
 
     return results
 
 
 # ======================================================
-# 🔥 MAIN ENGINE (ULTRA ROBUST)
+# 🔥 4. DOVIZ HABER + AI
+# ======================================================
+
+def fetch_doviz_news_brut():
+
+    base_url = "https://m.doviz.com"
+    list_url = "https://m.doviz.com/haber/borsa-haberleri/"
+
+    results = {}
+
+    try:
+        r = requests.get(list_url, headers=HEADERS, timeout=10)
+
+        links = re.findall(r'href="(/haber/[^"]+)"', r.text)
+
+        for link in set(links)[:15]:
+
+            try:
+                full_url = base_url + link
+                hr = requests.get(full_url, headers=HEADERS, timeout=8)
+
+                text = hr.text
+
+                if "brüt" not in text.lower():
+                    continue
+
+                ai_data = gemini_parse_brut(text)
+
+                results.update(ai_data)
+
+            except:
+                continue
+
+    except Exception as e:
+        print("DOVIZ ERROR:", e)
+
+    return results
+
+
+# ======================================================
+# 🔥 MERGE
+# ======================================================
+
+def merge_all(*sources):
+
+    final = {}
+
+    for source in sources:
+
+        for k, v in source.items():
+
+            if k not in final:
+                final[k] = v
+            else:
+                if v.get("priority", 0) > final[k].get("priority", 0):
+                    final[k] = v
+
+    return final
+
+
+# ======================================================
+# 🔥 MAIN ENGINE
 # ======================================================
 
 def get_brut_list():
@@ -261,46 +355,28 @@ def get_brut_list():
 
     now = datetime.now()
 
-    # CACHE
     if LAST_UPDATE and (now - LAST_UPDATE).seconds < CACHE_TTL:
         return BRUT_CACHE
 
-    final = {}
+    kap = fetch_vbts()
+    isy = fetch_isyatirim_brut()
+    kap_news = fetch_kap_news_brut()
+    doviz = fetch_doviz_news_brut()
 
-    # 1️⃣ KAP API
-    api_data = fetch_vbts()
-    final.update(api_data)
+    final = merge_all(kap, isy, kap_news, doviz)
 
-    # 2️⃣ İŞ YATIRIM (EN KRİTİK)
-    isy_data = fetch_isyatirim_brut()
-    final.update(isy_data)
+    final = merge_manual(final)
 
-    # 3️⃣ ALT SOURCE
-    if len(final) < 5:
-        alt_data = fetch_alternative_sources()
-        final.update(alt_data)
-
-    # 4️⃣ SCRAPE
-    if len(final) < 5:
-        scrape_data = fetch_bist_tedbirleri_scrape()
-        final.update(scrape_data)
-
-    clean = {}
-
-    for k, v in final.items():
-        if k and k.endswith(".IS"):
-            clean[k] = v
-
-    if not clean:
+    if not final:
         print("❌ BRÜT BOŞ → CACHE")
         return BRUT_CACHE
 
-    BRUT_CACHE = clean
+    BRUT_CACHE = final
     LAST_UPDATE = now
 
-    print(f"🔥 FINAL BRÜT: {len(clean)}")
+    print(f"🔥 FINAL BRÜT: {len(final)}")
 
-    return clean
+    return final
 
 
 # ======================================================
