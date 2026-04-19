@@ -715,46 +715,118 @@ def update_subscription():
     return jsonify({"status": "ok"})
 
 # ======================================================
-# 🛠 MANUAL BRUT ADD (ADMIN)
+# 🛠 MANUAL BRUT SYSTEM (AUTO CLEAN)
 # ======================================================
 
+MANUAL_BRUT_FILE = "data/manual_brut.json"
+
+
+def load_manual_bruts():
+    if not os.path.exists(MANUAL_BRUT_FILE):
+        return {}
+    try:
+        with open(MANUAL_BRUT_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+
+def save_manual_bruts(data):
+    os.makedirs("data", exist_ok=True)
+    with open(MANUAL_BRUT_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def clean_bruts(data):
+    today = datetime.now().date()
+    cleaned = {}
+
+    for sym, d in data.items():
+
+        end = d.get("end_date")
+
+        if not end or end == "-":
+            d["days_left"] = None
+            cleaned[sym] = d
+            continue
+
+        try:
+            end_dt = datetime.strptime(end, "%d.%m.%Y").date()
+            days_left = (end_dt - today).days
+
+            if days_left >= 0:
+                d["days_left"] = days_left
+                cleaned[sym] = d
+
+        except:
+            cleaned[sym] = d
+
+    return cleaned
+
+
+# ------------------------------------------------------
+# ADD
+# ------------------------------------------------------
 @app.route("/admin/add-brut", methods=["POST"])
 @admin_required
 def add_brut():
 
     data = request.json
-
     symbol = data.get("symbol")
     end_date = data.get("end_date")
 
     if not symbol:
-        return jsonify({"error": "symbol required"}), 400
+        return jsonify({"status":"error"}),400
 
-    symbol = symbol.upper().replace(".IS", "") + ".IS"
+    symbol = symbol.upper().replace(".IS","") + ".IS"
 
-    file_path = "data/manual_brut.json"
-
-    # load
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            brut_data = json.load(f)
-    else:
-        brut_data = {}
+    brut_data = load_manual_bruts()
 
     brut_data[symbol] = {
         "start_date": datetime.now().strftime("%d.%m.%Y"),
         "end_date": end_date or "-",
         "days_left": None,
-        "type": "Manual (Admin)"
+        "type": "Manual (Admin)",
+        "priority": 999
     }
 
-    os.makedirs("data", exist_ok=True)
+    brut_data = clean_bruts(brut_data)
+    save_manual_bruts(brut_data)
 
-    with open(file_path, "w") as f:
-        json.dump(brut_data, f, indent=2)
+    return jsonify({"status":"ok"})
 
-    return jsonify({"status": "ok"})
 
+# ------------------------------------------------------
+# GET (AUTO CLEAN)
+# ------------------------------------------------------
+@app.route("/admin/get-bruts")
+@admin_required
+def get_bruts():
+
+    brut_data = load_manual_bruts()
+    brut_data = clean_bruts(brut_data)
+    save_manual_bruts(brut_data)
+
+    return jsonify(brut_data)
+
+
+# ------------------------------------------------------
+# DELETE
+# ------------------------------------------------------
+@app.route("/admin/delete-brut", methods=["POST"])
+@admin_required
+def delete_brut():
+
+    symbol = request.json.get("symbol")
+
+    brut_data = load_manual_bruts()
+
+    brut_data.pop(symbol, None)
+
+    save_manual_bruts(brut_data)
+
+    return jsonify({"ok":True})
+    
 @app.route("/admin/invite-codes")
 @admin_required
 def admin_invite_codes():
