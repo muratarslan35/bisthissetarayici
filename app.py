@@ -714,6 +714,47 @@ def update_subscription():
     conn.close()
     return jsonify({"status": "ok"})
 
+# ======================================================
+# 🛠 MANUAL BRUT ADD (ADMIN)
+# ======================================================
+
+@app.route("/admin/add-brut", methods=["POST"])
+@admin_required
+def add_brut():
+
+    data = request.json
+
+    symbol = data.get("symbol")
+    end_date = data.get("end_date")
+
+    if not symbol:
+        return jsonify({"error": "symbol required"}), 400
+
+    symbol = symbol.upper().replace(".IS", "") + ".IS"
+
+    file_path = "data/manual_brut.json"
+
+    # load
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            brut_data = json.load(f)
+    else:
+        brut_data = {}
+
+    brut_data[symbol] = {
+        "start_date": datetime.now().strftime("%d.%m.%Y"),
+        "end_date": end_date or "-",
+        "days_left": None,
+        "type": "Manual (Admin)"
+    }
+
+    os.makedirs("data", exist_ok=True)
+
+    with open(file_path, "w") as f:
+        json.dump(brut_data, f, indent=2)
+
+    return jsonify({"status": "ok"})
+
 @app.route("/admin/invite-codes")
 @admin_required
 def admin_invite_codes():
