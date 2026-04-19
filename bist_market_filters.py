@@ -6,56 +6,96 @@ import feedparser
 import json
 import os
 
-# 🔥 GEMINI AI
+# ======================================================
+# 🔥 GEMINI AI (NEW SDK + SAFE JSON)
+# ======================================================
+
 from google import genai
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+client = None
+
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ Gemini aktif")
+    except Exception as e:
+        print("❌ Gemini init error:", e)
+
+
+def extract_json_safe(text):
+    try:
+        if not text:
+            return []
+
+        text = text.replace("```json", "").replace("```", "").strip()
+
+        match = re.search(r"\[.*\]", text, re.DOTALL)
+
+        if match:
+            return json.loads(match.group(0))
+
+        return []
+
+    except Exception as e:
+        print("JSON PARSE ERROR:", e)
+        return []
+
 
 def gemini_parse_brut(text):
 
     try:
 
-        if not GEMINI_API_KEY:
+        if not client:
             return {}
-
-        model = genai.GenerativeModel("gemini-1.5-flash")
 
         prompt = f"""
 Aşağıdaki metinden brüt takas uygulanan hisseleri çıkar.
 
-Sadece JSON dön:
+SADECE JSON ARRAY dön:
 
 [
-  {{
-    "symbol": "XXX.IS"
-  }}
+  {{"symbol": "XXX"}}
 ]
+
+Kurallar:
+- Sadece hisse kodu
+- .IS olabilir olmayabilir
+- Tahmin yapma
+- Emin değilsen ekleme
+- Boşsa [] dön
 
 Metin:
 {text}
 """
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
 
         raw = response.text.strip()
 
-        data = json.loads(raw)
+        data = extract_json_safe(raw)
 
         results = {}
 
         for item in data:
             sym = item.get("symbol")
-            if sym:
-                results[sym] = {
-                    "start_date": "-",
-                    "end_date": "-",
-                    "days_left": None,
-                    "type": "Brüt Takas (AI)",
-                    "priority": 80
-                }
+
+            if not sym:
+                continue
+
+            sym = sym.upper().replace(".IS", "") + ".IS"
+
+            results[sym] = {
+                "start_date": "-",
+                "end_date": "-",
+                "days_left": None,
+                "type": "Brüt Takas (AI)",
+                "priority": 80
+            }
 
         return results
 
@@ -109,7 +149,7 @@ def days_left_calc(dt):
 
 
 # ======================================================
-# MANUAL OVERRIDE
+# MANUAL OVERRIDE (TEK DOĞRU VERSİYON)
 # ======================================================
 
 def load_manual():
@@ -127,34 +167,14 @@ def merge_manual(data):
     manual = load_manual()
 
     for k, v in manual.items():
-        v["priority"] = 999  # 🔥 her zaman kazanır
+        v["priority"] = 999
         data[k] = v
 
     return data
 
+
 # ======================================================
-# MANUAL OVERRIDE
-# ======================================================
-
-def load_manual():
-    if not os.path.exists(MANUAL_FILE):
-        return {}
-    try:
-        with open(MANUAL_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-
-def merge_manual(data):
-    manual = load_manual()
-    data.update(manual)
-    return data
-
-
-# 👇 BURAYA EKLE
-# ======================================================
-# MANUAL MERGE + CLEAN
+# MANUAL CLEAN
 # ======================================================
 
 def load_manual_brut():
@@ -182,12 +202,15 @@ def clean_expired(data):
             end_dt = datetime.strptime(end,"%d.%m.%Y").date()
 
             if end_dt >= today:
+                d["days_left"] = (end_dt - today).days
                 cleaned[sym] = d
 
         except:
             cleaned[sym] = d
 
     return cleaned
+
+
 # ======================================================
 # 🔥 1. KAP API
 # ======================================================
