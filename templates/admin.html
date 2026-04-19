@@ -6,16 +6,8 @@
 <title>ADMIN PANEL | BIST TRADE</title>
 
 <style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
-
-html,body{
-    height:100%;
-}
-
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
 body{
     min-height:100vh;
     background:url('/static/bist-bg.jpg') center center no-repeat fixed;
@@ -24,8 +16,6 @@ body{
     color:#e6e6e6;
     position:relative;
 }
-
-/* DARK OVERLAY */
 body::before{
     content:"";
     position:fixed;
@@ -34,8 +24,6 @@ body::before{
     z-index:0;
     pointer-events:none;
 }
-
-/* ANIMATED BORDER WRAPPER */
 .border-wrap{
     position:relative;
     margin:40px auto;
@@ -47,46 +35,30 @@ body::before{
     animation:borderMove 6s linear infinite;
     z-index:2;
 }
-
 @keyframes borderMove{
     0%{background-position:0% 50%;}
     50%{background-position:100% 50%;}
     100%{background-position:0% 50%;}
 }
-
-/* PANEL */
 .panel{
     background:rgba(15,23,42,.97);
     border-radius:18px;
     backdrop-filter:blur(15px);
     padding-bottom:40px;
 }
-
-/* HEADER */
 .header{
     padding:20px 30px;
     font-size:22px;
     font-weight:800;
     border-bottom:1px solid #1e293b;
 }
-
-/* CONTAINER */
-.container{
-    padding:30px;
-}
-
-/* SECTION TITLE */
+.container{padding:30px;}
 .section-title{
     font-size:18px;
     font-weight:700;
     margin:40px 0 15px 0;
 }
-
-/* TABLE */
-.table-wrapper{
-    overflow-x:auto;
-}
-
+.table-wrapper{overflow-x:auto;}
 .table{
     width:100%;
     border-collapse:collapse;
@@ -95,7 +67,6 @@ body::before{
     overflow:hidden;
     min-width:1100px;
 }
-
 .table th{
     background:#111827;
     padding:14px;
@@ -103,26 +74,21 @@ body::before{
     text-align:left;
     border-bottom:1px solid #1e293b;
 }
-
 .table td{
     padding:12px;
     font-size:13px;
     border-bottom:1px solid #1e293b;
 }
-
-/* BADGES */
 .badge{
     padding:4px 10px;
     border-radius:999px;
     font-size:11px;
     font-weight:700;
 }
-
 .badge.active{ background:#14532d; color:#22c55e; }
 .badge.expired{ background:#7f1d1d; color:#ef4444; }
 .badge.warning{ background:#78350f; color:#fbbf24; }
 
-/* INPUT */
 input{
     padding:6px;
     border-radius:8px;
@@ -131,11 +97,9 @@ input{
     color:#fff;
     outline:none;
 }
-
 input[type=number]{ width:70px; }
-input[type=text]{ width:120px; }
+input[type=text]{ width:140px; }
 
-/* BUTTONS */
 button{
     padding:6px 10px;
     border:none;
@@ -145,14 +109,12 @@ button{
     font-weight:700;
     transition:.2s;
 }
-
 button:hover{ transform:translateY(-1px); }
 
 .btn-add{ background:#14532d; color:#22c55e; }
 .btn-sub{ background:#7f1d1d; color:#ef4444; }
 .btn-delete{ background:#7f1d1d; color:#fff; }
 .btn-reset{ background:#1e3a8a; color:#93c5fd; }
-
 .btn-refresh{
     background:#2563eb;
     color:#fff;
@@ -161,7 +123,6 @@ button:hover{ transform:translateY(-1px); }
     border-radius:10px;
     font-size:14px;
 }
-
 .btn-generate{ background:#f59e0b; color:#000; }
 
 .chatid{
@@ -232,6 +193,30 @@ button:hover{ transform:translateY(-1px); }
 </table>
 </div>
 
+<hr>
+
+<h2 class="section-title">⚠️ Brüt Takas Yönetimi</h2>
+
+<div style="margin-bottom:15px;">
+<input type="text" id="brut_symbol" placeholder="Hisse (örn: ASELS)">
+<input type="text" id="brut_end" placeholder="Bitiş (opsiyonel)">
+<button class="btn-add" onclick="addBrut()">Ekle</button>
+</div>
+
+<div class="table-wrapper">
+<table class="table">
+<thead>
+<tr>
+<th>Hisse</th>
+<th>Bitiş</th>
+<th>Tip</th>
+<th>Sil</th>
+</tr>
+</thead>
+<tbody id="brutTable"></tbody>
+</table>
+</div>
+
 </div>
 </div>
 </div>
@@ -249,12 +234,6 @@ if(!dateStr) return 0;
 const now=new Date();
 const end=new Date(dateStr);
 return Math.ceil((end-now)/(1000*60*60*24));
-}
-
-function statusBadge(days){
-if(days<=0) return `<span class="badge expired">SÜRE BİTTİ</span>`;
-if(days<=1) return `<span class="badge warning">1 GÜN</span>`;
-return `<span class="badge active">AKTİF</span>`;
 }
 
 async function updateSub(userId, days){
@@ -298,6 +277,7 @@ tbody.innerHTML="";
 
 users.forEach(u=>{
 const days=daysLeft(u.subscription_end);
+
 const tr=document.createElement("tr");
 
 tr.innerHTML=`
@@ -324,6 +304,7 @@ tbody.appendChild(tr);
 });
 
 loadCodes();
+loadBruts();
 }
 
 async function generateCodes(){
@@ -368,6 +349,74 @@ headers:{"Content-Type":"application/json"},
 body:JSON.stringify({ code:code })
 });
 loadCodes();
+}
+
+async function addBrut(){
+
+    const symbol = document.getElementById("brut_symbol").value;
+    const end = document.getElementById("brut_end").value;
+
+    if(!symbol){
+        alert("Hisse gir!");
+        return;
+    }
+
+    const res = await fetch("/admin/add-brut",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            symbol:symbol,
+            end_date:end
+        })
+    });
+
+    const data = await res.json();
+
+    if(data.status !== "ok"){
+        alert("Hata oluştu");
+        return;
+    }
+
+    alert("Brüt eklendi");
+
+    document.getElementById("brut_symbol").value="";
+    document.getElementById("brut_end").value="";
+
+    loadBruts();
+}
+
+async function loadBruts(){
+
+    const res = await fetch("/admin/get-bruts");
+    const data = await res.json();
+
+    const tbody = document.getElementById("brutTable");
+    tbody.innerHTML="";
+
+    Object.entries(data).forEach(([sym,val])=>{
+
+        const tr=document.createElement("tr");
+
+        tr.innerHTML=`
+        <td>${sym.replace(".IS","")}</td>
+        <td>${val.end_date || "-"}</td>
+        <td>${val.type}</td>
+        <td><button class="btn-delete" onclick="deleteBrut('${sym}')">Sil</button></td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+async function deleteBrut(symbol){
+
+    await fetch("/admin/delete-brut",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({symbol:symbol})
+    });
+
+    loadBruts();
 }
 
 loadUsers();
