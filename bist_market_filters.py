@@ -132,7 +132,62 @@ def merge_manual(data):
 
     return data
 
+# ======================================================
+# MANUAL OVERRIDE
+# ======================================================
 
+def load_manual():
+    if not os.path.exists(MANUAL_FILE):
+        return {}
+    try:
+        with open(MANUAL_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+
+def merge_manual(data):
+    manual = load_manual()
+    data.update(manual)
+    return data
+
+
+# 👇 BURAYA EKLE
+# ======================================================
+# MANUAL MERGE + CLEAN
+# ======================================================
+
+def load_manual_brut():
+    try:
+        with open("data/manual_brut.json","r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+
+def clean_expired(data):
+
+    today = datetime.now().date()
+    cleaned = {}
+
+    for sym,d in data.items():
+
+        end = d.get("end_date")
+
+        if not end or end == "-":
+            cleaned[sym] = d
+            continue
+
+        try:
+            end_dt = datetime.strptime(end,"%d.%m.%Y").date()
+
+            if end_dt >= today:
+                cleaned[sym] = d
+
+        except:
+            cleaned[sym] = d
+
+    return cleaned
 # ======================================================
 # 🔥 1. KAP API
 # ======================================================
@@ -366,6 +421,7 @@ def get_brut_list():
     final = merge_all(kap, isy, kap_news, doviz)
 
     final = merge_manual(final)
+    final = clean_expired(final)
 
     if not final:
         print("❌ BRÜT BOŞ → CACHE")
