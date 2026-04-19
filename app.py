@@ -402,7 +402,7 @@ def send_momentum_signal(data):
         except Exception as e2:
             print("FALLBACK ERROR:", e2)
 # ======================================================
-# BRUT TAKAS RAPORU
+# BRUT TAKAS RAPORU (PRO)
 # ======================================================
 
 def build_brut_report():
@@ -417,14 +417,28 @@ def build_brut_report():
     lines.append("⚠️ BUGÜN BRÜT TAKAS OLAN HİSSELER")
     lines.append("")
 
-    for symbol, data in sorted(brut_map.items()):
+    # 🔥 GÜNE GÖRE SIRALA (EN YAKIN BİTEN ÜSTTE)
+    sorted_items = sorted(
+        brut_map.items(),
+        key=lambda x: (x[1].get("days_left") if x[1].get("days_left") is not None else 999)
+    )
+
+    for symbol, data in sorted_items:
 
         days = data.get("days_left")
 
         if days is None:
             continue
 
-        lines.append(f"{symbol.replace('.IS','')} → {days} gün")
+        sym = symbol.replace(".IS", "")
+
+        # 🔥 PROFESYONEL GÖSTERİM
+        if days == 0:
+            lines.append(f"🔴 {sym} → SON GÜN")
+        elif days == 1:
+            lines.append(f"🟠 {sym} → 1 gün")
+        else:
+            lines.append(f"• {sym} → {days} gün")
 
     lines.append("")
     lines.append(f"🕒 {now_tr().strftime('%H:%M')}")
@@ -1004,7 +1018,7 @@ def scanner_loop():
             safe_refresh_brut()
 
             # --------------------------------------------------
-            # BRUT TAKAS RAPORU
+            # 📢 GÜNLÜK BRUT TAKAS RAPORU (09:40)
             # --------------------------------------------------
 
             if (
@@ -1013,18 +1027,26 @@ def scanner_loop():
                 and now.time() >= dtime(9, 40)
             ):
 
-                msg = build_daily_message(now)
+                try:
 
-                if msg:
-                    send_to_channel(msg)
+                    # 🔥 önce güncelle
+                    safe_refresh_brut()
 
-                last_brut_report = now.date()
+                    msg = build_brut_report()
 
-            now_ts = time.time()
+                    if msg:
+                        send_to_channel(msg)
+                        print("✅ BRUT RAPOR GÖNDERİLDİ")
+
+                    last_brut_report = now.date()
+
+                except Exception as e:
+                    print("BRUT REPORT ERROR:", e)
 
             # --------------------------------------------------
             # KAP TARAMA
             # --------------------------------------------------
+            now_ts = time.time()
 
             if now_ts - last_kap_check > KAP_INTERVAL:
 
