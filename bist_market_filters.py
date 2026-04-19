@@ -7,7 +7,7 @@ import json
 import os
 
 # 🔥 GEMINI AI
-import google.generativeai as genai
+from google import genai
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
