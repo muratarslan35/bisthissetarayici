@@ -50,21 +50,22 @@ def gemini_parse_brut(text):
         if not client:
             return {}
 
+        text = text[:15000]
+
         prompt = f"""
-Aşağıdaki metinden brüt takas uygulanan hisseleri çıkar.
+Aşağıdaki metinden SADECE brüt takas hisselerini çıkar.
 
-SADECE JSON ARRAY dön:
+Kurallar:
+- Sadece hisse kodu (örn: ASELS)
+- Tahmin yapma
+- Emin değilsen ekleme
+- JSON dışında hiçbir şey yazma
+- Boşsa [] dön
 
+Format:
 [
   {{"symbol": "XXX"}}
 ]
-
-Kurallar:
-- Sadece hisse kodu
-- .IS olabilir olmayabilir
-- Tahmin yapma
-- Emin değilsen ekleme
-- Boşsa [] dön
 
 Metin:
 {text}
@@ -75,9 +76,7 @@ Metin:
             contents=prompt
         )
 
-        raw = response.text.strip()
-
-        data = extract_json_safe(raw)
+        data = extract_json_safe(response.text)
 
         results = {}
 
@@ -88,6 +87,9 @@ Metin:
                 continue
 
             sym = sym.upper().replace(".IS", "") + ".IS"
+
+            if len(sym) > 8:
+                continue
 
             results[sym] = {
                 "start_date": "-",
@@ -102,6 +104,37 @@ Metin:
     except Exception as e:
         print("GEMINI ERROR:", e)
         return {}
+
+# ======================================================
+# 🔥 HTML SOURCE (BAN SAFE)
+# ======================================================
+
+def fetch_brut_html_sources():
+
+    urls = [
+        "https://www.kap.org.tr/tr/rss/all",
+        "https://m.doviz.com/haber/borsa-haberleri/"
+    ]
+
+    pages = []
+
+    for url in urls:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=10)
+
+            if r.status_code != 200:
+                continue
+
+            text = r.text.lower()
+
+            if any(x in text for x in ["brüt", "brut", "vbts"]):
+                pages.append(r.text[:15000])
+
+        except Exception as e:
+            print("HTML FETCH ERROR:", e)
+
+    return pages
+
 
 # ======================================================
 # CONFIG
@@ -149,7 +182,7 @@ def days_left_calc(dt):
 
 
 # ======================================================
-# MANUAL OVERRIDE (TEK DOĞRU VERSİYON)
+# MANUAL OVERRIDE
 # ======================================================
 
 def load_manual():
@@ -177,20 +210,12 @@ def merge_manual(data):
 # MANUAL CLEAN
 # ======================================================
 
-def load_manual_brut():
-    try:
-        with open("data/manual_brut.json","r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-
 def clean_expired(data):
 
     today = datetime.now().date()
     cleaned = {}
 
-    for sym,d in data.items():
+    for sym, d in data.items():
 
         end = d.get("end_date")
 
@@ -199,7 +224,7 @@ def clean_expired(data):
             continue
 
         try:
-            end_dt = datetime.strptime(end,"%d.%m.%Y").date()
+            end_dt = datetime.strptime(end, "%d.%m.%Y").date()
 
             if end_dt >= today:
                 d["days_left"] = (end_dt - today).days
@@ -212,219 +237,7 @@ def clean_expired(data):
 
 
 # ======================================================
-# 🔥 1. KAP API
-# ======================================================
-
-def fetch_vbts():
-
-    urls = [
-        "https://www.kap.org.tr/tr/api/vbts",
-        "https://www.kap.org.tr/en/api/vbts"
-    ]
-
-    results = {}
-
-    for url in urls:
-
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=8)
-
-            if r.status_code != 200:
-                continue
-
-            data = r.json()
-
-            for item in data:
-
-                tedbir = str(item.get("measureType", "")).upper()
-
-                if "BRUT" not in tedbir and "BRÜT" not in tedbir:
-                    continue
-
-                code = item.get("stockCode")
-                if not code:
-                    continue
-
-                symbol = normalize_symbol(code)
-
-                start_dt = parse_date_safe(item.get("startDate"))
-                end_dt = parse_date_safe(item.get("endDate"))
-
-                days_left = days_left_calc(end_dt)
-
-                if days_left is not None and days_left < 0:
-                    continue
-
-                results[symbol] = {
-                    "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
-                    "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
-                    "days_left": days_left,
-                    "type": tedbir or "Brüt Takas",
-                    "priority": 100
-                }
-
-            if results:
-                print(f"✅ KAP API BRÜT: {len(results)}")
-                return results
-
-        except Exception as e:
-            print("KAP API error:", e)
-            continue
-
-    print("⚠ KAP API FAILED")
-    return {}
-
-
-# ======================================================
-# 🔥 2. İŞ YATIRIM
-# ======================================================
-
-def fetch_isyatirim_brut():
-
-    url = "https://www.isyatirim.com.tr/_layouts/15/IsYatirim.Website/Common/Data.aspx/VBTSList"
-
-    results = {}
-
-    try:
-        r = requests.post(url, headers=HEADERS, timeout=10)
-
-        if r.status_code != 200:
-            return results
-
-        data = r.json().get("d", {}).get("data", [])
-
-        for item in data:
-
-            text = str(item).upper()
-
-            if "BRÜT" not in text and "BRUT" not in text:
-                continue
-
-            code = item.get("Kod")
-            if not code:
-                continue
-
-            symbol = normalize_symbol(code)
-
-            start_dt = parse_date_safe(item.get("BaslangicTarihi"))
-            end_dt = parse_date_safe(item.get("BitisTarihi"))
-
-            results[symbol] = {
-                "start_date": start_dt.strftime("%d.%m.%Y") if start_dt else "-",
-                "end_date": end_dt.strftime("%d.%m.%Y") if end_dt else "-",
-                "days_left": days_left_calc(end_dt),
-                "type": "Brüt Takas (İş Yatırım)",
-                "priority": 90
-            }
-
-        if results:
-            print(f"🟢 ISYATIRIM BRÜT: {len(results)}")
-
-    except Exception as e:
-        print("ISYATIRIM error:", e)
-
-    return results
-
-
-# ======================================================
-# 🔥 3. KAP RSS + AI
-# ======================================================
-
-def fetch_kap_news_brut():
-
-    results = {}
-
-    try:
-        feed = feedparser.parse("https://www.kap.org.tr/tr/rss/all")
-
-        for entry in feed.entries[:30]:
-
-            title = entry.title.lower()
-
-            if "brüt" not in title and "brut" not in title:
-                continue
-
-            try:
-                r = requests.get(entry.link, headers=HEADERS, timeout=8)
-
-                html = r.text
-
-                ai_data = gemini_parse_brut(html)
-
-                results.update(ai_data)
-
-            except:
-                continue
-
-    except Exception as e:
-        print("KAP RSS ERROR:", e)
-
-    return results
-
-
-# ======================================================
-# 🔥 4. DOVIZ HABER + AI
-# ======================================================
-
-def fetch_doviz_news_brut():
-
-    base_url = "https://m.doviz.com"
-    list_url = "https://m.doviz.com/haber/borsa-haberleri/"
-
-    results = {}
-
-    try:
-        r = requests.get(list_url, headers=HEADERS, timeout=10)
-
-        links = re.findall(r'href="(/haber/[^"]+)"', r.text)
-
-        for link in set(links)[:15]:
-
-            try:
-                full_url = base_url + link
-                hr = requests.get(full_url, headers=HEADERS, timeout=8)
-
-                text = hr.text
-
-                if "brüt" not in text.lower():
-                    continue
-
-                ai_data = gemini_parse_brut(text)
-
-                results.update(ai_data)
-
-            except:
-                continue
-
-    except Exception as e:
-        print("DOVIZ ERROR:", e)
-
-    return results
-
-
-# ======================================================
-# 🔥 MERGE
-# ======================================================
-
-def merge_all(*sources):
-
-    final = {}
-
-    for source in sources:
-
-        for k, v in source.items():
-
-            if k not in final:
-                final[k] = v
-            else:
-                if v.get("priority", 0) > final[k].get("priority", 0):
-                    final[k] = v
-
-    return final
-
-
-# ======================================================
-# 🔥 MAIN ENGINE
+# 🔥 MAIN ENGINE (FIXED)
 # ======================================================
 
 def get_brut_list():
@@ -436,26 +249,32 @@ def get_brut_list():
     if LAST_UPDATE and (now - LAST_UPDATE).seconds < CACHE_TTL:
         return BRUT_CACHE
 
-    kap = fetch_vbts()
-    isy = fetch_isyatirim_brut()
-    kap_news = fetch_kap_news_brut()
-    doviz = fetch_doviz_news_brut()
+    results = {}
 
-    final = merge_all(kap, isy, kap_news, doviz)
+    # 🔥 HTML + AI
+    pages = fetch_brut_html_sources()
 
-    final = merge_manual(final)
-    final = clean_expired(final)
+    for page in pages:
+        try:
+            ai_data = gemini_parse_brut(page)
+            results.update(ai_data)
+        except Exception as e:
+            print("AI PARSE ERROR:", e)
 
-    if not final:
-        print("❌ BRÜT BOŞ → CACHE")
-        return BRUT_CACHE
+    # 🔥 MANUAL HER ZAMAN
+    results = merge_manual(results)
+    results = clean_expired(results)
 
-    BRUT_CACHE = final
+    if not results:
+        print("❌ BRÜT YOK → MANUAL")
+        return merge_manual({})
+
+    BRUT_CACHE = results
     LAST_UPDATE = now
 
-    print(f"🔥 FINAL BRÜT: {len(final)}")
+    print(f"🔥 BRÜT TOPLAM: {len(results)}")
 
-    return final
+    return results
 
 
 # ======================================================
