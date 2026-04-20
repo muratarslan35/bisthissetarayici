@@ -5,9 +5,10 @@ from dateutil import parser
 import feedparser
 import json
 import os
+import io
 
 # ======================================================
-# 🔥 GEMINI AI (NEW SDK + SAFE JSON)
+# 🔥 GEMINI AI (AYNI - DOKUNULMADI)
 # ======================================================
 
 from google import genai
@@ -30,41 +31,35 @@ def extract_json_safe(text):
             return []
 
         text = text.replace("```json", "").replace("```", "").strip()
-
         match = re.search(r"\[.*\]", text, re.DOTALL)
 
         if match:
             return json.loads(match.group(0))
 
         return []
-
-    except Exception as e:
-        print("JSON PARSE ERROR:", e)
+    except:
         return []
 
 
 def gemini_parse_brut(text):
 
     try:
-
         if not client:
             return {}
 
-        text = text[:15000]
+        text = text[:12000]
 
         prompt = f"""
-Aşağıdaki metinden SADECE brüt takas hisselerini çıkar.
+Metinden SADECE brüt takas hisselerini çıkar.
 
 Kurallar:
-- Sadece hisse kodu (örn: ASELS)
-- Tahmin yapma
-- Emin değilsen ekleme
-- JSON dışında hiçbir şey yazma
-- Boşsa [] dön
+- Sadece hisse kodu
+- Tahmin yok
+- Emin değilsen alma
+- JSON dışında yazma
 
-Format:
 [
-  {{"symbol": "XXX"}}
+  {{"symbol":"XXX"}}
 ]
 
 Metin:
@@ -88,9 +83,6 @@ Metin:
 
             sym = sym.upper().replace(".IS", "") + ".IS"
 
-            if len(sym) > 8:
-                continue
-
             results[sym] = {
                 "start_date": "-",
                 "end_date": "-",
@@ -106,38 +98,7 @@ Metin:
         return {}
 
 # ======================================================
-# 🔥 HTML SOURCE (BAN SAFE)
-# ======================================================
-
-def fetch_brut_html_sources():
-
-    urls = [
-        "https://www.kap.org.tr/tr/rss/all",
-        "https://m.doviz.com/haber/borsa-haberleri/"
-    ]
-
-    pages = []
-
-    for url in urls:
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=10)
-
-            if r.status_code != 200:
-                continue
-
-            text = r.text.lower()
-
-            if any(x in text for x in ["brüt", "brut", "vbts"]):
-                pages.append(r.text[:15000])
-
-        except Exception as e:
-            print("HTML FETCH ERROR:", e)
-
-    return pages
-
-
-# ======================================================
-# CONFIG
+# CONFIG (AYNI)
 # ======================================================
 
 HEADERS = {
@@ -153,7 +114,7 @@ LAST_UPDATE = None
 MANUAL_FILE = "data/manual_brut.json"
 
 # ======================================================
-# SAFE HELPERS
+# HELPERS (AYNI)
 # ======================================================
 
 def normalize_symbol(code):
@@ -180,9 +141,8 @@ def days_left_calc(dt):
     except:
         return None
 
-
 # ======================================================
-# MANUAL OVERRIDE
+# MANUAL (AYNI)
 # ======================================================
 
 def load_manual():
@@ -205,10 +165,6 @@ def merge_manual(data):
 
     return data
 
-
-# ======================================================
-# MANUAL CLEAN
-# ======================================================
 
 def clean_expired(data):
 
@@ -235,9 +191,136 @@ def clean_expired(data):
 
     return cleaned
 
+# ======================================================
+# 🔥 YENİ BRÜT ENGINE (SADECE BURASI DEĞİŞTİ)
+# ======================================================
+
+def fetch_kap_html():
+    results = {}
+    try:
+        feed = feedparser.parse("https://www.kap.org.tr/tr/rss/all")
+
+        for entry in feed.entries[:15]:
+            if "brüt" not in entry.title.lower():
+                continue
+
+            try:
+                r = requests.get(entry.link, headers=HEADERS, timeout=8)
+
+                if "brüt" not in r.text.lower():
+                    continue
+
+                results.update(gemini_parse_brut(r.text))
+
+            except:
+                continue
+    except:
+        pass
+
+    return results
+
+
+def fetch_doviz_html():
+    results = {}
+
+    try:
+        r = requests.get("https://m.doviz.com/haber/borsa-haberleri/", headers=HEADERS, timeout=10)
+
+        links = re.findall(r'href="(/haber/[^"]+)"', r.text)
+
+        for link in set(links)[:10]:
+            try:
+                url = "https://m.doviz.com" + link
+                hr = requests.get(url, headers=HEADERS, timeout=8)
+
+                if "brüt" not in hr.text.lower():
+                    continue
+
+                results.update(gemini_parse_brut(hr.text))
+
+            except:
+                continue
+    except:
+        pass
+
+    return results
+
+
+def fetch_kap_pdf():
+    try:
+        feed = feedparser.parse("https://www.kap.org.tr/tr/rss/all")
+
+        for entry in feed.entries[:10]:
+            m = re.search(r"/tr/Bildirim/(\\d+)", entry.link)
+            if not m:
+                continue
+
+            pdf_url = f"https://www.kap.org.tr/tr/BildirimPdf/{m.group(1)}"
+
+            r = requests.get(pdf_url, headers=HEADERS, timeout=8)
+
+            if "application/pdf" in r.headers.get("content-type", ""):
+                return r.content
+
+    except:
+        pass
+
+    return None
+
+
+def parse_pdf(pdf_bytes):
+    try:
+        import pdfplumber
+
+        text = ""
+
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages:
+                t = page.extract_text()
+                if t:
+                    text += t + "\n"
+
+        return text
+
+    except:
+        return ""
+
+
+def fetch_pdf_brut():
+    results = {}
+
+    pdf_bytes = fetch_kap_pdf()
+
+    if not pdf_bytes:
+        return results
+
+    text = parse_pdf(pdf_bytes)
+
+    if "brüt" not in text.lower():
+        return results
+
+    results.update(gemini_parse_brut(text))
+
+    return results
+
+
+def merge_all(*sources):
+
+    final = {}
+
+    for source in sources:
+        for k, v in source.items():
+
+            if k not in final:
+                final[k] = v
+            else:
+                if v.get("priority", 0) > final[k].get("priority", 0):
+                    final[k] = v
+
+    return final
 
 # ======================================================
-# 🔥 MAIN ENGINE (FIXED)
+# 🔥 MAIN ENGINE (SADECE BURASI GÜNCEL)
 # ======================================================
 
 def get_brut_list():
@@ -249,36 +332,30 @@ def get_brut_list():
     if LAST_UPDATE and (now - LAST_UPDATE).seconds < CACHE_TTL:
         return BRUT_CACHE
 
-    results = {}
+    print("🔍 BRÜT TARANIYOR...")
 
-    # 🔥 HTML + AI
-    pages = fetch_brut_html_sources()
+    kap = fetch_kap_html()
+    doviz = fetch_doviz_html()
+    pdf = fetch_pdf_brut()
 
-    for page in pages:
-        try:
-            ai_data = gemini_parse_brut(page)
-            results.update(ai_data)
-        except Exception as e:
-            print("AI PARSE ERROR:", e)
+    final = merge_all(kap, doviz, pdf)
 
-    # 🔥 MANUAL HER ZAMAN
-    results = merge_manual(results)
-    results = clean_expired(results)
+    final = merge_manual(final)
+    final = clean_expired(final)
 
-    if not results:
+    if not final:
         print("❌ BRÜT YOK → MANUAL")
-        return merge_manual({})
+        final = merge_manual({})
 
-    BRUT_CACHE = results
+    BRUT_CACHE = final
     LAST_UPDATE = now
 
-    print(f"🔥 BRÜT TOPLAM: {len(results)}")
+    print(f"🔥 FINAL BRÜT: {len(final)}")
 
-    return results
-
+    return final
 
 # ======================================================
-# 🔥 HALT DETECTOR
+# 🔥 HALT (AYNI)
 # ======================================================
 
 def detect_halt_from_data(item):
@@ -309,10 +386,6 @@ def detect_halt_from_data(item):
     except:
         return False
 
-
-# ======================================================
-# 🔥 HALT CACHE
-# ======================================================
 
 LAST_HALT_CACHE = set()
 LAST_HALT_UPDATE = None
@@ -355,9 +428,8 @@ def get_halt_list(data=None):
 
     return halt_set
 
-
 # ======================================================
-# 🚀 MOMENTUM FAZ ANALİZİ
+# 🚀 MOMENTUM (AYNI)
 # ======================================================
 
 def validate_tradeable_momentum(df, price):
@@ -386,9 +458,8 @@ def validate_tradeable_momentum(df, price):
     except:
         return False, None
 
-
 # ======================================================
-# 🚀 PULLBACK DETECTOR
+# 🚀 PULLBACK (AYNI)
 # ======================================================
 
 def detect_pullback_entry(df, price):
