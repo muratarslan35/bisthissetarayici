@@ -160,6 +160,7 @@ def merge_manual(data):
     manual = load_manual()
 
     for k, v in manual.items():
+        k = normalize_symbol(k)
         v["priority"] = 999
         data[k] = v
 
