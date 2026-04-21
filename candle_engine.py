@@ -79,9 +79,9 @@ def get_15m_df(symbol, live_price=None):
                 print("LIVE PRICE ERROR:", e)
 
         # --------------------------------------------------
-        # 🔥 SON 40 BAR (GRAFİK İÇİN)
+        # 🔥 SON 100 BAR (GRAFİK İÇİN)
         # --------------------------------------------------
-        df = df.tail(40)
+        df = df.tail(100)
 
         # --------------------------------------------------
         # CACHE SAVE
