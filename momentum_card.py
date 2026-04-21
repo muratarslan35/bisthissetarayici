@@ -54,7 +54,7 @@ def draw_candles(draw, df, x, y, w, h):
     if df is None or len(df) < 10:
         return
 
-    df = df.tail(30)
+    df = df.tail(60)
 
     highs = df["high"].max()
     lows = df["low"].min()
