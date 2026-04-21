@@ -437,9 +437,9 @@ def build_brut_report():
         if days == 0:
             lines.append(f"🔴 {sym} → SON GÜN")
         elif days == 1:
-            lines.append(f"🟠 {sym} → 1 gün")
+            lines.append(f"🟠 {sym} → 1 gün kaldı")
         else:
-            lines.append(f"• {sym} → {days} gün")
+            lines.append(f"• {sym} → {days} gün kaldı")
 
     lines.append("")
     lines.append(f"🕒 {now_tr().strftime('%H:%M')}")
