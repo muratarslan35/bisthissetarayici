@@ -1261,7 +1261,25 @@ Zarar: %{round((price-entry)/entry*100,2)}
                                 if len(df) > 10 and all(c in df.columns for c in ["open", "high", "low", "close"]):
 
                                     kap_signal["df15"] = df
+
+                                    # 🔥 1H DATA EKLE
+                                    try:
+                                        df1h = item.get("tf", {}).get("1h", {}).get("df")
+                                        kap_signal["df1h"] = df1h
+                                    except:
+                                        kap_signal["df1h"] = None
+
+                                    # 🔥 EXTRA DATA
+                                    kap_signal["support"] = item.get("support")
+                                    kap_signal["resistance"] = item.get("resistance")
+                                    kap_signal["trend"] = "YUKARI"
+
                                     print(f"✅ DF OK: {symbol} | len={len(df)}")
+
+                                else:
+                                    print(f"❌ DF ZAYIF: {symbol} | len={len(df)}")
+                                    kap_signal["df15"] = None
+    
 
                                 else:
                                     print(f"❌ DF ZAYIF: {symbol} | len={len(df)}")
