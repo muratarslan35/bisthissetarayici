@@ -45,7 +45,7 @@ from dashboard import (
 from kap_monitor import check_kap
 from kap_volume_signal import detect_kap_volume_momentum
 
-from utils import FALLBACK_SYMBOLS
+from utils import FALLBACK_SYMBOLS, get_last_resistance
 import dashboard
 from bist_market_filters import get_brut_list
 from brut_tracker import (
@@ -1318,7 +1318,7 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             # 🔥 DİRENÇ (REAL SAFE)
                             # ===============================
                             try:
-                                from utils import get_last_resistance
+                                
 
                                 r = None
 
