@@ -1262,16 +1262,30 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
                                     kap_signal["df15"] = df
 
-                                    # 🔥 1H DATA EKLE
+                                    # 🔥 1H DATA
                                     try:
                                         df1h = item.get("tf", {}).get("1h", {}).get("df")
                                         kap_signal["df1h"] = df1h
                                     except:
                                         kap_signal["df1h"] = None
 
-                                    # 🔥 EXTRA DATA
-                                    kap_signal["support"] = item.get("support")
-                                    kap_signal["resistance"] = item.get("resistance")
+                                    # 🔥 DESTEK / DİRENÇ (GERÇEK HESAP)
+                                    try:
+                                        from utils import get_last_resistance
+
+                                        if df1h is not None:
+                                            resistance = get_last_resistance(df1h)
+                                            support = df1h["low"].tail(20).min()
+
+                                            kap_signal["resistance"] = round(resistance, 2) if resistance else None
+                                            kap_signal["support"] = round(support, 2) if support else None
+                                        else:
+                                            kap_signal["resistance"] = None
+                                            kap_signal["support"] = None
+                                    except:
+                                        kap_signal["resistance"] = None
+                                        kap_signal["support"] = None
+
                                     kap_signal["trend"] = "YUKARI"
 
                                     print(f"✅ DF OK: {symbol} | len={len(df)}")
