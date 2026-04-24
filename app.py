@@ -1257,43 +1257,69 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
                                 df.columns = [c.lower() for c in df.columns]
                                 df = df.dropna()
-
                                 if len(df) > 10 and all(c in df.columns for c in ["open", "high", "low", "close"]):
 
                                     kap_signal["df15"] = df
 
-                                    # 🔥 1H DATA
+                                    # 🔥 EMA HESAPLA (15M)
+                                    try:
+                                        df["ema20"] = df["close"].ewm(span=20).mean()
+                                        df["ema50"] = df["close"].ewm(span=50).mean()
+                                    except:
+                                        pass
+
+                                    # 🔥 1H DATA + EMA
                                     try:
                                         df1h = item.get("tf", {}).get("1h", {}).get("df")
+
+                                        if df1h is not None and len(df1h) > 10:
+                                            df1h = df1h.copy()
+                                            df1h["ema20"] = df1h["close"].ewm(span=20).mean()
+                                            df1h["ema50"] = df1h["close"].ewm(span=50).mean()
+
                                         kap_signal["df1h"] = df1h
+
                                     except:
                                         kap_signal["df1h"] = None
 
-                                    # 🔥 DESTEK / DİRENÇ (GERÇEK HESAP)
+                                    # 🔥 DESTEK / DİRENÇ (GERÇEK)
                                     try:
-                                        from utils import get_last_resistance
+                                        from utils import get_last_resistance, get_last_support
 
-                                        if df1h is not None:
-                                            resistance = get_last_resistance(df1h)
-                                            support = df1h["low"].tail(20).min()
+                                        r1h = None
+                                        r4h = None
+                                        s1h = None
+                                        s4h = None
 
-                                            kap_signal["resistance"] = round(resistance, 2) if resistance else None
-                                            kap_signal["support"] = round(support, 2) if support else None
-                                        else:
-                                            kap_signal["resistance"] = None
-                                            kap_signal["support"] = None
+                                        if item.get("tf", {}).get("1h"):
+                                            r1h = get_last_resistance(item["tf"]["1h"]["df"])
+                                            s1h = get_last_support(item["tf"]["1h"]["df"])
+
+                                        if item.get("tf", {}).get("4h"):
+                                            r4h = get_last_resistance(item["tf"]["4h"]["df"])
+                                            s4h = get_last_support(item["tf"]["4h"]["df"])
+
+                                        kap_signal["resistance"] = r1h or r4h
+                                        kap_signal["support"] = s1h or s4h
+
                                     except:
                                         kap_signal["resistance"] = None
                                         kap_signal["support"] = None
 
-                                    kap_signal["trend"] = "YUKARI"
+                                    # 🔥 TREND (LIVE EMA)
+                                    try:
+                                        e20 = item.get("tf", {}).get("15m", {}).get("ema20_live")
+                                        e50 = item.get("tf", {}).get("15m", {}).get("ema50_live")
+
+                                        if e20 and e50:
+                                            kap_signal["trend"] = "YUKARI" if e20 > e50 else "AŞAĞI"
+                                        else:
+                                            kap_signal["trend"] = "YATAY"
+
+                                    except:
+                                        kap_signal["trend"] = "YATAY"
 
                                     print(f"✅ DF OK: {symbol} | len={len(df)}")
-
-                                else:
-                                    print(f"❌ DF ZAYIF: {symbol} | len={len(df)}")
-                                    kap_signal["df15"] = None
-    
 
                                 else:
                                     print(f"❌ DF ZAYIF: {symbol} | len={len(df)}")
