@@ -130,10 +130,16 @@ def draw_volume(draw, df, x, y, w, h):
             y + h
         ], fill=color)
 
+# --------------------------------------------------
+# EMA (FIXED SCALE + SINGLE)
+# --------------------------------------------------
+
 def draw_ema(draw, df, x, y, w, h, col, color):
 
     if df is None or col not in df.columns:
         return
+
+    df = df.tail(60)  # 🔥 SCALE FIX
 
     highs = df["high"].max()
     lows = df["low"].min()
@@ -152,7 +158,7 @@ def draw_ema(draw, df, x, y, w, h, col, color):
         points.append((px, py(v)))
 
     if len(points) > 1:
-        draw.line(points, fill=color, width=2)
+        draw.line(points, fill=color, width=3)  # 🔥 PRO LINE
 
 # --------------------------------------------------
 # MAIN
@@ -200,6 +206,10 @@ def build_momentum_card(data):
             draw_grid(draw, 40, 160, 700, 220)
             draw_candles(draw, df15, 40, 160, 700, 220)
             draw_volume(draw, df15, 40, 380, 700, 60)
+
+            # 🔥 EMA 15M EKLENDİ
+            draw_ema(draw, df15, 40, 160, 700, 220, "ema20", BLUE)
+            draw_ema(draw, df15, 40, 160, 700, 220, "ema50", YELLOW)
 
         # ---------------- 1H ----------------
         df1h = data.get("df1h")
