@@ -8,7 +8,7 @@ from uuid import uuid4
 from functools import wraps
 import random
 import string
-
+import pandas as pd
 
 from ultra_price_engine import start_engine
 from ultra_price_engine import get_price
@@ -1245,98 +1245,142 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
                     if kap_signal and kap_signal.get("entry_price"):
 
-                        try:
-                            import pandas as pd
+                        try:                       
 
                             df = get_15m_df(symbol, live_price=price)
 
+                            # ===============================
+                            # 🔥 15M DATA (FULL SAFE)
+                            # ===============================
                             if df is not None:
 
                                 if not isinstance(df, pd.DataFrame):
                                     df = pd.DataFrame(df)
 
+                                df = df.copy()
                                 df.columns = [c.lower() for c in df.columns]
                                 df = df.dropna()
-                                if len(df) > 10 and all(c in df.columns for c in ["open", "high", "low", "close"]):
+
+                                if len(df) > 20 and all(c in df.columns for c in ["open","high","low","close"]):
+
+                                    # 🔥 SON 120 BAR (PERF + STABILITY)
+                                    df = df.tail(120)
+
+                                    # 🔥 EMA (TRADINGVIEW FIX)
+                                    df["ema20"] = df["close"].ewm(span=20, adjust=False).mean()
+                                    df["ema50"] = df["close"].ewm(span=50, adjust=False).mean()
 
                                     kap_signal["df15"] = df
 
-                                    # 🔥 EMA HESAPLA (15M)
-                                    try:
-                                        df["ema20"] = df["close"].ewm(span=20).mean()
-                                        df["ema50"] = df["close"].ewm(span=50).mean()
-                                    except:
-                                        pass
-
-                                    # 🔥 1H DATA + EMA
-                                    try:
-                                        df1h = item.get("tf", {}).get("1h", {}).get("df")
-
-                                        if df1h is not None and len(df1h) > 10:
-                                            df1h = df1h.copy()
-                                            df1h["ema20"] = df1h["close"].ewm(span=20).mean()
-                                            df1h["ema50"] = df1h["close"].ewm(span=50).mean()
-
-                                        kap_signal["df1h"] = df1h
-
-                                    except:
-                                        kap_signal["df1h"] = None
-
-                                    # 🔥 DESTEK / DİRENÇ (GERÇEK)
-                                    try:
-                                        from utils import get_last_resistance, get_last_support
-
-                                        r1h = None
-                                        r4h = None
-                                        s1h = None
-                                        s4h = None
-
-                                        if item.get("tf", {}).get("1h"):
-                                            r1h = get_last_resistance(item["tf"]["1h"]["df"])
-                                            s1h = get_last_support(item["tf"]["1h"]["df"])
-
-                                        if item.get("tf", {}).get("4h"):
-                                            r4h = get_last_resistance(item["tf"]["4h"]["df"])
-                                            s4h = get_last_support(item["tf"]["4h"]["df"])
-
-                                        kap_signal["resistance"] = r1h or r4h
-                                        kap_signal["support"] = s1h or s4h
-
-                                    except:
-                                        kap_signal["resistance"] = None
-                                        kap_signal["support"] = None
-
-                                    # 🔥 TREND (LIVE EMA)
-                                    try:
-                                        e20 = item.get("tf", {}).get("15m", {}).get("ema20_live")
-                                        e50 = item.get("tf", {}).get("15m", {}).get("ema50_live")
-
-                                        if e20 and e50:
-                                            kap_signal["trend"] = "YUKARI" if e20 > e50 else "AŞAĞI"
-                                        else:
-                                            kap_signal["trend"] = "YATAY"
-
-                                    except:
-                                        kap_signal["trend"] = "YATAY"
-
-                                    print(f"✅ DF OK: {symbol} | len={len(df)}")
-
                                 else:
-                                    print(f"❌ DF ZAYIF: {symbol} | len={len(df)}")
                                     kap_signal["df15"] = None
 
                             else:
-                                print("❌ DF yok:", symbol)
                                 kap_signal["df15"] = None
 
-                        except Exception as e:
-                            print("DF ERROR:", e)
-                            kap_signal["df15"] = None
 
+                            # ===============================
+                            # 🔥 1H DATA (SAFE + CLEAN)
+                            # ===============================
+                            try:
+                                df1h = item.get("tf", {}).get("1h", {}).get("df")
+
+                                if df1h is not None:
+
+                                    if not isinstance(df1h, pd.DataFrame):
+                                        df1h = pd.DataFrame(df1h)
+
+                                    df1h = df1h.copy()
+                                    df1h.columns = [c.lower() for c in df1h.columns]
+                                    df1h = df1h.dropna()
+
+                                    if len(df1h) > 20 and all(c in df1h.columns for c in ["open","high","low","close"]):
+
+                                        df1h = df1h.tail(120)
+
+                                        df1h["ema20"] = df1h["close"].ewm(span=20, adjust=False).mean()
+                                        df1h["ema50"] = df1h["close"].ewm(span=50, adjust=False).mean()
+
+                                        kap_signal["df1h"] = df1h
+
+                                    else:
+                                        kap_signal["df1h"] = None
+
+                                else:
+                                    kap_signal["df1h"] = None
+
+                            except Exception as e:
+                                print("1H ERROR:", e)
+                                kap_signal["df1h"] = None
+
+
+                            # ===============================
+                            # 🔥 DİRENÇ (REAL SAFE)
+                            # ===============================
+                            try:
+                                from utils import get_last_resistance
+
+                                r = None
+
+                                if item.get("tf", {}).get("1h"):
+                                    r = get_last_resistance(item["tf"]["1h"]["df"])
+
+                                if not r and item.get("tf", {}).get("4h"):
+                                    r = get_last_resistance(item["tf"]["4h"]["df"])
+
+                                kap_signal["resistance"] = r
+
+                            except Exception as e:
+                                print("RES ERROR:", e)
+                                kap_signal["resistance"] = None
+
+
+                            # ===============================
+                            # 🔥 TREND (SMART)
+                            # ===============================
+                            try:
+                                trend = "YATAY"
+
+                                tf15 = item.get("tf", {}).get("15m", {})
+
+                                e20 = tf15.get("ema20_live") or tf15.get("ema20")
+                                e50 = tf15.get("ema50_live") or tf15.get("ema50")
+
+                                if e20 and e50:
+                                    trend = "YUKARI" if e20 > e50 else "AŞAĞI"
+
+                                elif kap_signal.get("df15") is not None:
+                                    last = kap_signal["df15"].iloc[-1]
+                                    if last["ema20"] > last["ema50"]:
+                                        trend = "YUKARI"
+                                    elif last["ema20"] < last["ema50"]:
+                                        trend = "AŞAĞI"
+
+                                kap_signal["trend"] = trend
+
+                            except Exception as e:
+                                print("TREND ERROR:", e)
+                                kap_signal["trend"] = "YATAY"
+
+
+                        except Exception as e:
+                            print("DF BLOCK ERROR:", e)
+                            kap_signal["df15"] = None
+                            kap_signal["df1h"] = None
+                            kap_signal["resistance"] = None
+                            kap_signal["trend"] = "YATAY"
+
+
+                        # ===============================
+                        # 🔥 LIVE PRICE
+                        # ===============================
                         kap_signal["live_price"] = float(price)
 
                         kap_symbol = kap_signal["symbol"]
 
+                        # ===============================
+                        # 🚀 SIGNAL FIRE
+                        # ===============================
                         if not kap_cache.get(kap_symbol, {}).get("alert_sent"):
 
                             entry_price = kap_signal["entry_price"]
@@ -1350,7 +1394,6 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
                             send_momentum_signal(kap_signal)
 
-                            # 📊 MOMENTUM TRACK
                             MOMENTUM_TRADES[kap_symbol] = {
                                 "entry": entry_price,
                                 "time": now,
@@ -1358,7 +1401,7 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             }
 
                             kap_cache.setdefault(kap_symbol, {})["alert_sent"] = True
-
+                                    
                     # --------------------------------------------------
                     # NORMAL ENGINE
                     # --------------------------------------------------
