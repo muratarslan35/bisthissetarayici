@@ -1,8 +1,8 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
 
-WIDTH = 1000
-HEIGHT = 600
+WIDTH = 1200
+HEIGHT = 750
 
 BG_TOP = (10, 15, 25)
 BG_BOTTOM = (5, 10, 18)
@@ -130,94 +130,54 @@ def draw_volume(draw, df, x, y, w, h):
             y + h
         ], fill=color)
 
+def draw_ema(draw, df, x, y, w, h, col, color):
+
+    if df is None or col not in df.columns:
+        return
+
+    highs = df["high"].max()
+    lows = df["low"].min()
+
+    if highs == lows:
+        return
+
+    def py(p):
+        return y + h - (p - lows) / (highs - lows) * h
+
+    step = w / len(df)
+
+    points = []
+    for i, v in enumerate(df[col].values):
+        px = x + i * step
+        points.append((px, py(v)))
+
+    if len(points) > 1:
+        draw.line(points, fill=color, width=2)
+
 # --------------------------------------------------
 # MAIN
 # --------------------------------------------------
 
-def build_momentum_card(data):
+def draw_ema(draw, df, x, y, w, h, col, color):
 
-    try:
-        img = Image.new("RGB", (WIDTH, HEIGHT))
-        draw = ImageDraw.Draw(img)
+    if df is None or col not in df.columns:
+        return
 
-        draw_gradient(draw)
+    highs = df["high"].max()
+    lows = df["low"].min()
 
-        font_big = get_font(38)      # küçüldü
-        font_mid = get_font(22)
-        font_small = get_font(15)
-        font_price = get_font(30)
+    if highs == lows:
+        return
 
-        # HEADER
-        symbol = data.get("symbol", "")
-        draw.text((40, 30), symbol, fill=WHITE, font=font_big)
-        draw.text((620, 30), "MOMENTUM ANALİZ", fill=YELLOW, font=font_mid)
+    def py(p):
+        return y + h - (p - lows) / (highs - lows) * h
 
-        # PRICES
-        entry = float(data.get("entry", 0) or 0)
-        live = float(data.get("live_price", 0) or 0)
-        tp1 = float(data.get("tp1", 0) or 0)
+    step = w / len(df)
 
-        draw.text((40, 85), "Giriş", fill=GRAY, font=font_small)
-        draw.text((40, 110), f"{entry:.2f}", fill=WHITE, font=font_price)
+    points = []
+    for i, v in enumerate(df[col].values):
+        px = x + i * step
+        points.append((px, py(v)))
 
-        draw.text((200, 85), "Anlık", fill=GRAY, font=font_small)
-        draw.text((200, 110), f"{live:.2f}", fill=GREEN, font=font_price)
-
-        if tp1 > 0:
-            draw.text((360, 85), "TP1", fill=GRAY, font=font_small)
-            draw.text((360, 110), f"{tp1:.2f}", fill=BLUE, font=font_price)
-
-        # 🔥 GRAFİK KÜÇÜLDÜ
-        chart_x, chart_y = 40, 150
-        chart_w, chart_h = 520, 280   # küçültüldü
-
-        volume_h = 80
-        price_h = chart_h - volume_h - 10
-
-        draw_grid(draw, chart_x, chart_y, chart_w, price_h)
-
-        df = data.get("df15")
-
-        if df is not None:
-            df = df.dropna()
-
-            draw_candles(draw, df, chart_x, chart_y, chart_w, price_h)
-            draw_volume(draw, df, chart_x, chart_y + price_h + 10, chart_w, volume_h)
-
-        # 🔥 SAĞ PANEL GENİŞLEDİ
-        px = 600
-
-        m = float(data.get("momentum", 0))
-        v = float(data.get("vwap", 0))
-
-        draw.text((px, 140), f"Momentum Gücü: %{m:.2f}", fill=GREEN, font=font_mid)
-        draw.text((px, 170), "▰" * int(min(m*5,10)), fill=GREEN, font=font_mid)
-
-        draw.text((px, 220), f"VWAP Mesafe: %{v:.2f}", fill=YELLOW, font=font_mid)
-        draw.text((px, 250), "▰" * int(min(v*5,10)), fill=YELLOW, font=font_mid)
-
-        # DECISION
-        decision = "RİSKLİ"
-        color = RED
-
-        if m > 1.2 and v < 1.5:
-            decision = "GÜÇLÜ AL"
-            color = GREEN
-        elif m > 0.7:
-            decision = "TREND BAŞLIYOR"
-            color = YELLOW
-
-        # 🔥 TAŞMA FIX
-        draw.text((px, 330), "Karar:", fill=WHITE, font=font_mid)
-        draw.text((px, 360), decision[:18], fill=color, font=get_font(32))
-
-        # SAVE
-        os.makedirs("cards", exist_ok=True)
-        path = f"cards/{symbol}.png"
-        img.save(path)
-
-        return path
-
-    except Exception as e:
-        print("CARD ERROR:", e)
-        return None
+    if len(points) > 1:
+        draw.line(points, fill=color, width=2)
