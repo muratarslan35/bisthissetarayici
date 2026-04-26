@@ -155,3 +155,84 @@ def get_last_resistance(df, min_strength=3):
 
 def fetch_live_price(symbol):
     return fetch_tradingview_price(symbol)
+
+def calculate_fibo_levels(df, lookback=80):
+
+    if df is None or len(df) < 20:
+        return []
+
+    df = df.tail(lookback)
+
+    high = df["high"].max()
+    low = df["low"].min()
+
+    if high == low:
+        return []
+
+    diff = high - low
+
+    return [
+        high - diff * 0.382,
+        high - diff * 0.5,
+        high - diff * 0.618,
+        high - diff * 0.786,
+    ]
+
+
+def extract_sr_levels(df):
+
+    if df is None or len(df) < 20:
+        return []
+
+    highs = df["high"].rolling(5).max()
+    lows = df["low"].rolling(5).min()
+
+    levels = []
+
+    levels.append(highs.iloc[-1])
+    levels.append(lows.iloc[-1])
+
+    return levels
+
+
+def compute_sr(entry, df15, df1h):
+
+    supports = []
+    resistances = []
+    strength = 0
+
+    def process(df, weight):
+
+        nonlocal strength
+
+        if df is None:
+            return
+
+        # 🔥 FIBO
+        fibs = calculate_fibo_levels(df)
+
+        # 🔥 REAL SR
+        srs = extract_sr_levels(df)
+
+        levels = fibs + srs
+
+        for lvl in levels:
+
+            if lvl < entry:
+                supports.append(lvl)
+            else:
+                resistances.append(lvl)
+
+        if len(levels) > 0:
+            strength += weight
+
+    # 15m = hızlı → düşük weight
+    process(df15, 1)
+
+    # 1h = güçlü → yüksek weight
+    process(df1h, 2)
+
+    support = max(supports) if supports else None
+    resistance = min(resistances) if resistances else None
+
+    return support, resistance, strength
