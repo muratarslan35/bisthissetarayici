@@ -322,6 +322,7 @@ def send_momentum_signal(data):
             "momentum": momentum,
             "vwap": vwap_dist,
             "df15": df15,
+            "df1h": data.get("df1h"),
             "tp1": entry * 1.01
         }
 
