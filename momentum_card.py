@@ -1,18 +1,19 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import os
 
 WIDTH = 1200
 HEIGHT = 800
 
-BG = (8, 12, 20)
-GRID = (25, 35, 55)
+# COLORS
+BG_TOP = (10,15,25)
+BG_BOTTOM = (5,10,18)
 
-WHITE = (255,255,255)
+WHITE = (240,240,240)
 GREEN = (0,255,160)
 RED = (255,70,70)
 YELLOW = (255,190,0)
 BLUE = (0,200,255)
-GRAY = (130,140,160)
+GRAY = (120,130,150)
 
 # --------------------------------------------------
 # FONT
@@ -24,245 +25,146 @@ def get_font(size):
         return ImageFont.load_default()
 
 # --------------------------------------------------
-# HELPERS
+# GRADIENT BG
 # --------------------------------------------------
-def get_bounds(df):
+def draw_bg(img):
+    draw = ImageDraw.Draw(img)
+    for y in range(HEIGHT):
+        ratio = y / HEIGHT
+        r = int(BG_TOP[0]*(1-ratio) + BG_BOTTOM[0]*ratio)
+        g = int(BG_TOP[1]*(1-ratio) + BG_BOTTOM[1]*ratio)
+        b = int(BG_TOP[2]*(1-ratio) + BG_BOTTOM[2]*ratio)
+        draw.line([(0,y),(WIDTH,y)], fill=(r,g,b))
+
+# --------------------------------------------------
+# GLOW LINE
+# --------------------------------------------------
+def glow_line(draw, pts, color):
+    draw.line(pts, fill=color, width=4)
+    draw.line(pts, fill=color, width=2)
+
+# --------------------------------------------------
+# SCALE
+# --------------------------------------------------
+def scale(df):
     return df["high"].max(), df["low"].min()
 
-def price_to_y(p, high, low, y, h):
-    return y + h - (p - low) / (high - low) * h
-
-# --------------------------------------------------
-# GRID
-# --------------------------------------------------
-def draw_grid(draw, x, y, w, h):
-    for i in range(6):
-        yy = y + i * (h/5)
-        draw.line([x,yy,x+w,yy], fill=GRID, width=1)
+def py(p, high, low, y, h):
+    return y + h - (p - low)/(high-low)*h
 
 # --------------------------------------------------
 # CANDLES
 # --------------------------------------------------
-def draw_candles(draw, df, x, y, w, h):
-
-    if df is None or len(df) < 10:
-        return
+def draw_candles(draw, df, x,y,w,h):
 
     df = df.tail(60)
-    high, low = get_bounds(df)
+    high, low = scale(df)
+    cw = w/len(df)
 
-    cw = w / len(df)
+    for i,row in enumerate(df.itertuples()):
+        cx = x + i*cw
+        o,c,hi,lo = row.open,row.close,row.high,row.low
+        color = GREEN if c>=o else RED
 
-    for i, row in enumerate(df.itertuples()):
-
-        cx = x + i * cw
-        body_w = cw * 0.55
-
-        o,c,hi,lo = row.open, row.close, row.high, row.low
-        color = GREEN if c >= o else RED
-
-        # wick
         draw.line([
-            cx + body_w/2,
-            price_to_y(hi,high,low,y,h),
-            cx + body_w/2,
-            price_to_y(lo,high,low,y,h)
+            cx+cw/3, py(hi,high,low,y,h),
+            cx+cw/3, py(lo,high,low,y,h)
         ], fill=color, width=2)
 
-        # body
-        top = price_to_y(max(o,c),high,low,y,h)
-        bot = price_to_y(min(o,c),high,low,y,h)
+        top = py(max(o,c),high,low,y,h)
+        bot = py(min(o,c),high,low,y,h)
 
-        if abs(top - bot) < 1:
-            bot = top + 1
+        if abs(top-bot)<1: bot=top+1
 
-        draw.rectangle([cx, top, cx+body_w, bot], fill=color)
+        draw.rectangle([cx,top,cx+cw*0.6,bot], fill=color)
 
 # --------------------------------------------------
-# EMA
+# EMA (SMOOTH)
 # --------------------------------------------------
-def draw_ema(draw, df, col, x, y, w, h, color):
+def draw_ema(draw, df, col, x,y,w,h,color):
 
-    if df is None or col not in df.columns:
+    if col not in df.columns:
         return
 
     df = df.tail(60)
-    high, low = get_bounds(df)
-    step = w / len(df)
+    high,low = scale(df)
+    step = w/len(df)
 
-    pts = []
+    pts=[]
+    for i,v in enumerate(df[col]):
+        pts.append((x+i*step, py(v,high,low,y,h)))
 
-    for i, v in enumerate(df[col]):
-        px = x + i * step
-        py = price_to_y(v, high, low, y, h)
-        pts.append((px, py))
-
-    if len(pts) > 1:
-        draw.line(pts, fill=color, width=3)
+    glow_line(draw, pts, color)
 
 # --------------------------------------------------
-# PRICE AXIS (SAĞDA FİYATLAR)
+# GRID
 # --------------------------------------------------
-def draw_price_axis(draw, df, x, y, w, h):
+def draw_grid(draw,x,y,w,h):
+    for i in range(6):
+        yy = y + i*(h/5)
+        draw.line([x,yy,x+w,yy], fill=(30,40,60), width=1)
 
-    if df is None or len(df) < 10:
-        return
+# --------------------------------------------------
+# PRICE AXIS
+# --------------------------------------------------
+def draw_price_axis(draw, df, x,y,w,h):
 
     df = df.tail(60)
+    high,low = scale(df)
+    step=(high-low)/5
 
-    high = df["high"].max()
-    low = df["low"].min()
+    for i in range(6):
+        price = low + i*step
+        yy = py(price,high,low,y,h)
 
-    if high == low:
-        return
-
-    steps = 5
-    step_val = (high - low) / steps
-
-    for i in range(steps + 1):
-
-        price = low + step_val * i
-        py = y + h - (price - low) / (high - low) * h
-
-        draw.text(
-            (x + w + 10, py - 8),
-            f"{price:.2f}",
-            fill=(180,190,210),
-            font=get_font(14)
-        )
+        draw.text((x+w+10,yy-8),f"{price:.2f}",fill=GRAY,font=get_font(14))
 
 # --------------------------------------------------
-# CURRENT PRICE LINE
+# CURRENT PRICE
 # --------------------------------------------------
-def draw_current_price(draw, price, df, x, y, w, h):
+def draw_price_line(draw, price, df, x,y,w,h):
 
-    if df is None or price is None:
-        return
+    high,low = scale(df)
+    yy = py(price,high,low,y,h)
 
-    high, low = get_bounds(df)
+    draw.line([x,yy,x+w,yy], fill=GREEN, width=2)
 
-    if high == low:
-        return
-
-    py = price_to_y(price, high, low, y, h)
-
-    draw.line([(x, py), (x + w, py)], fill=GREEN, width=2)
-
-    # fiyat kutusu
-    draw.rectangle([x + w + 5, py - 10, x + w + 70, py + 10], fill=GREEN)
-
-    draw.text(
-        (x + w + 8, py - 8),
-        f"{price:.2f}",
-        fill=(0,0,0),
-        font=get_font(14)
-    )
+    draw.rectangle([x+w+5,yy-10,x+w+75,yy+10], fill=GREEN)
+    draw.text((x+w+8,yy-8),f"{price:.2f}",fill=(0,0,0),font=get_font(14))
 
 # --------------------------------------------------
-# TIME AXIS
+# PANEL BOX
 # --------------------------------------------------
-def draw_time(draw, df, x, y, w):
-
-    if df is None:
-        return
-
-    step = w / len(df)
-
-    for i in range(0, len(df), 10):
-
-        try:
-            t = df.index[i]
-            label = t.strftime("%H:%M")
-            draw.text((x + i*step, y), label, fill=GRAY, font=get_font(11))
-        except:
-            pass
+def panel(draw,x,y,w,h):
+    draw.rectangle([x,y,x+w,y+h], fill=(15,20,30))
 
 # --------------------------------------------------
-# LEVEL LINES
-# --------------------------------------------------
-def draw_level(draw, price, df, x, y, w, h, color):
-
-    if not price or df is None:
-        return
-
-    high, low = get_bounds(df)
-
-    if high == low:
-        return
-
-    py = price_to_y(price, high, low, y, h)
-
-    draw.line([x, py, x + w, py], fill=color, width=2)
-
-# --------------------------------------------------
-# VOLUME
-# --------------------------------------------------
-def draw_volume(draw, df, x, y, w, h):
-
-    if df is None or len(df) < 10:
-        return
-
-    df = df.tail(60)
-    maxv = df["volume"].max()
-
-    if maxv == 0:
-        return
-
-    bw = w / len(df)
-
-    for i, row in enumerate(df.itertuples()):
-
-        v = row.volume
-        o,c = row.open, row.close
-
-        bh = (v / maxv) * h
-        color = GREEN if c >= o else RED
-
-        draw.rectangle([
-            x + i*bw,
-            y + h - bh,
-            x + i*bw + bw*0.5,
-            y + h
-        ], fill=color)
-
-# --------------------------------------------------
-# MAIN CARD
+# MAIN
 # --------------------------------------------------
 def build_momentum_card(data):
 
-    img = Image.new("RGB",(WIDTH,HEIGHT),BG)
+    img = Image.new("RGB",(WIDTH,HEIGHT))
+    draw_bg(img)
     draw = ImageDraw.Draw(img)
 
     font_big = get_font(40)
-    font_mid = get_font(18)
-    font_small = get_font(13)
+    font_mid = get_font(20)
+    font_small = get_font(14)
 
     symbol = data.get("symbol","")
 
     # HEADER
-    draw.text((40,20), symbol, fill=WHITE, font=font_big)
-    draw.text((400,25),"MOMENTUM ANALİZ", fill=YELLOW, font=font_mid)
+    draw.text((40,20),symbol,fill=WHITE,font=font_big)
+    draw.text((400,30),"MOMENTUM ANALİZ",fill=YELLOW,font=font_mid)
 
     entry = float(data.get("entry",0))
     live = float(data.get("live_price",0))
     tp1 = float(data.get("tp1",0))
 
-    # RIGHT TOP
-    px = 900
-
-    draw.text((px,80),"GİRİŞ",fill=GRAY,font=font_small)
-    draw.text((px,110),f"{entry:.2f}",fill=WHITE,font=get_font(26))
-
-    draw.text((px+120,80),"ANLIK",fill=GRAY,font=font_small)
-    draw.text((px+120,110),f"{live:.2f}",fill=GREEN,font=get_font(26))
-
-    draw.text((px,150),"TP1",fill=GRAY,font=font_small)
-    draw.text((px,180),f"{tp1:.2f}",fill=BLUE,font=get_font(22))
-
-    # ---------------- 15M ----------------
+    # ---------------- GRAPH ----------------
     df15 = data.get("df15")
 
-    x,y,w,h = 40,180,800,250
+    x,y,w,h = 40,150,800,260
 
     draw_grid(draw,x,y,w,h)
     draw_candles(draw,df15,x,y,w,h)
@@ -271,84 +173,70 @@ def build_momentum_card(data):
     draw_ema(draw,df15,"ema50",x,y,w,h,YELLOW)
 
     draw_price_axis(draw,df15,x,y,w,h)
-    draw_time(draw,df15,x,y+h+5,w)
 
-    draw_level(draw,entry,df15,x,y,w,h,WHITE)
-    draw_level(draw,data.get("support"),df15,x,y,w,h,GREEN)
-    draw_level(draw,data.get("resistance"),df15,x,y,w,h,RED)
+    draw_price_line(draw,live,df15,x,y,w,h)
 
-    draw_current_price(draw,live,df15,x,y,w,h)
-
-    draw_volume(draw,df15,x,y+h+25,w,60)
-
-    # ---------------- 1H ----------------
-    df1h = data.get("df1h")
-
-    if df1h is not None:
-
-        x2,y2,w2,h2 = 40,500,800,200
-
-        draw_grid(draw,x2,y2,w2,h2)
-        draw_candles(draw,df1h,x2,y2,w2,h2)
-
-        draw_ema(draw,df1h,"ema20",x2,y2,w2,h2,BLUE)
-        draw_ema(draw,df1h,"ema50",x2,y2,w2,h2,YELLOW)
-
-        draw_price_axis(draw,df1h,x2,y2,w2,h2)
-        draw_time(draw,df1h,x2,y2+h2+5,w2)
-
-        draw_current_price(draw,live,df1h,x2,y2,w2,h2)
+    # LEVELS
+    for lvl,color in [
+        (entry,WHITE),
+        (data.get("support"),GREEN),
+        (data.get("resistance"),RED)
+    ]:
+        if lvl:
+            yy = py(lvl,*scale(df15),y,h)
+            draw.line([x,yy,x+w,yy], fill=color, width=2)
 
     # ---------------- RIGHT PANEL ----------------
+    px = 880
+    panel(draw,px,80,280,650)
+
+    draw.text((px+20,100),"GİRİŞ",fill=GRAY,font=font_small)
+    draw.text((px+20,130),f"{entry:.2f}",fill=WHITE,font=get_font(26))
+
+    draw.text((px+150,100),"ANLIK",fill=GRAY,font=font_small)
+    draw.text((px+150,130),f"{live:.2f}",fill=GREEN,font=get_font(26))
+
+    draw.text((px+20,170),"TP1",fill=GRAY,font=font_small)
+    draw.text((px+20,200),f"{tp1:.2f}",fill=BLUE,font=get_font(22))
+
     m = float(data.get("momentum",0))
     v = float(data.get("vwap",0))
 
-    draw.text((900,260),"Momentum",fill=GRAY,font=font_small)
-    draw.text((900,290),f"%{m:.2f}",fill=GREEN,font=get_font(20))
+    draw.text((px+20,260),"Momentum",fill=GRAY,font=font_small)
+    draw.text((px+20,290),f"%{m:.2f}",fill=GREEN,font=font_mid)
 
-    draw.text((900,330),"VWAP",fill=GRAY,font=font_small)
-    draw.text((900,360),f"%{v:.2f}",fill=YELLOW,font=get_font(20))
+    draw.text((px+20,330),"VWAP",fill=GRAY,font=font_small)
+    draw.text((px+20,360),f"%{v:.2f}",fill=YELLOW,font=font_mid)
 
-    draw.text((900,420),"DESTEK",fill=GRAY,font=font_small)
-    draw.text((900,450),f"{data.get('support','-')}",fill=GREEN,font=get_font(20))
+    draw.text((px+20,420),"DESTEK",fill=GRAY,font=font_small)
+    draw.text((px+20,450),str(data.get("support","-")),fill=GREEN,font=font_mid)
 
-    draw.text((900,490),"DİRENÇ",fill=GRAY,font=font_small)
-    draw.text((900,520),f"{data.get('resistance','-')}",fill=RED,font=get_font(20))
+    draw.text((px+20,490),"DİRENÇ",fill=GRAY,font=font_small)
+    draw.text((px+20,520),str(data.get("resistance","-")),fill=RED,font=font_mid)
 
     trend = data.get("trend","YATAY")
-    tcolor = GREEN if trend == "YUKARI" else RED
+    tcol = GREEN if trend=="YUKARI" else RED
 
-    draw.text((900,580),"TREND",fill=GRAY,font=font_small)
-    draw.text((900,610),trend,fill=tcolor,font=get_font(24))
+    draw.text((px+20,580),"TREND",fill=GRAY,font=font_small)
+    draw.text((px+20,610),trend,fill=tcol,font=get_font(24))
 
-    # ---------------- KARAR ----------------
-    decision = "RİSKLİ"
-    color = RED
+    # DECISION
+    decision="RİSKLİ"
+    col=RED
 
-    if m > 1.2 and v < 1.5:
-        decision = "GÜÇLÜ AL"
-        color = GREEN
-    elif m > 0.7:
-        decision = "TREND BAŞLIYOR"
-        color = YELLOW
+    if m>1.2 and v<1.5:
+        decision="GÜÇLÜ AL"
+        col=GREEN
+    elif m>0.7:
+        decision="TREND BAŞLIYOR"
+        col=YELLOW
 
-    draw.text((900,660),"KARAR",fill=GRAY,font=font_small)
-    draw.text((900,690),decision,fill=color,font=get_font(28))
-
-    desc = ""
-
-    if decision == "GÜÇLÜ AL":
-        desc = "Momentum güçlü, trend net."
-    elif decision == "TREND BAŞLIYOR":
-        desc = "Momentum artıyor, takip et."
-    else:
-        desc = "Zayıf yapı, dikkatli ol."
-
-    draw.text((900,725),desc,fill=GRAY,font=get_font(14))
+    draw.text((px+20,650),"KARAR",fill=GRAY,font=font_small)
+    draw.text((px+20,680),decision,fill=col,font=get_font(28))
 
     # SAVE
     os.makedirs("cards",exist_ok=True)
-    path = f"cards/{symbol}.png"
+    path=f"cards/{symbol}.png"
     img.save(path)
 
     return path
