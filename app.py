@@ -46,6 +46,7 @@ from kap_monitor import check_kap
 from kap_volume_signal import detect_kap_volume_momentum
 
 from utils import FALLBACK_SYMBOLS, get_last_resistance
+from utils import compute_sr
 import dashboard
 from bist_market_filters import get_brut_list
 from brut_tracker import (
@@ -56,6 +57,7 @@ from brut_tracker import (
 )
 from momentum_card import build_momentum_card
 from candle_engine import get_15m_df
+
 # ======================================================
 # ENV
 # ======================================================
@@ -1319,7 +1321,6 @@ Zarar: %{round((price-entry)/entry*100,2)}
                             # ===============================
                             try:
                                 
-
                                 r = None
 
                                 if item.get("tf", {}).get("1h"):
@@ -1334,6 +1335,29 @@ Zarar: %{round((price-entry)/entry*100,2)}
                                 print("RES ERROR:", e)
                                 kap_signal["resistance"] = None
 
+
+                            # ===============================
+                            # 🔥 PRO SR (FIBO + TF COMBO)
+                            # ===============================
+                            try:
+                                entry_price = kap_signal.get("entry_price")
+
+                                support, resistance, strength = compute_sr(
+                                    entry_price,
+                                    kap_signal.get("df15"),
+                                    kap_signal.get("df1h")
+                                )
+
+                                if support:
+                                    kap_signal["support"] = round(support, 2)
+
+                                if resistance:
+                                    kap_signal["resistance"] = round(resistance, 2)
+
+                                kap_signal["sr_strength"] = strength
+
+                            except Exception as e:
+                                print("SR ERROR:", e)
 
                             # ===============================
                             # 🔥 TREND (SMART)
