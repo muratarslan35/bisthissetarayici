@@ -56,7 +56,7 @@ from brut_tracker import (
     safe_get_brut
 )
 from momentum_card import build_momentum_card
-from candle_engine import get_15m_df
+from candle_engine import get_15m_df, get_1h_df
 
 # ======================================================
 # ENV
@@ -1286,39 +1286,43 @@ Zarar: %{round((price-entry)/entry*100,2)}
 
 
                             # ===============================
-                            # 🔥 1H DATA (SAFE + CLEAN)
+                            # 🔥 1H DATA (YENİ SİSTEM)
                             # ===============================
-                            try:
-                                df1h = item.get("tf", {}).get("1h", {}).get("df")
+                            df1h = get_1h_df(symbol, live_price=price)
 
-                                if df1h is not None:
+                            if df1h is not None:
 
-                                    if not isinstance(df1h, pd.DataFrame):
-                                        df1h = pd.DataFrame(df1h)
+                                if not isinstance(df1h, pd.DataFrame):
+                                    df1h = pd.DataFrame(df1h)
 
-                                    df1h = df1h.copy()
-                                    df1h.columns = [c.lower() for c in df1h.columns]
-                                    df1h = df1h.dropna()
+                                df1h = df1h.copy()
+                                df1h.columns = [c.lower() for c in df1h.columns]
+                                df1h = df1h.dropna(subset=["open","high","low","close"])
 
-                                    if len(df1h) > 20 and all(c in df1h.columns for c in ["open","high","low","close"]):
+                                # 🔥 SON BAR FORCE (TAM BURAYA)
+                                try:
+                                    last_idx = df1h.index[-1]
 
-                                        df1h = df1h.tail(120)
+                                    df1h.at[last_idx, "close"] = price
+                                    df1h.at[last_idx, "high"] = max(df1h.at[last_idx, "high"], price)
+                                    df1h.at[last_idx, "low"] = min(df1h.at[last_idx, "low"], price)
+                                except:
+                                    pass
 
-                                        df1h["ema20"] = df1h["close"].ewm(span=20, adjust=False).mean()
-                                        df1h["ema50"] = df1h["close"].ewm(span=50, adjust=False).mean()
+                                if len(df1h) > 20:
 
-                                        kap_signal["df1h"] = df1h
+                                    df1h = df1h.tail(120)
 
-                                    else:
-                                        kap_signal["df1h"] = None
+                                    df1h["ema20"] = df1h["close"].ewm(span=20, adjust=False).mean()
+                                    df1h["ema50"] = df1h["close"].ewm(span=50, adjust=False).mean()
+
+                                    kap_signal["df1h"] = df1h
 
                                 else:
                                     kap_signal["df1h"] = None
 
-                            except Exception as e:
-                                print("1H ERROR:", e)
+                            else:
                                 kap_signal["df1h"] = None
-
 
                             # ===============================
                             # 🔥 DİRENÇ (REAL SAFE)
@@ -1327,8 +1331,8 @@ Zarar: %{round((price-entry)/entry*100,2)}
                                 
                                 r = None
 
-                                if item.get("tf", {}).get("1h"):
-                                    r = get_last_resistance(item["tf"]["1h"]["df"])
+                                if kap_signal.get("df1h") is not None:
+                                    r = get_last_resistance(kap_signal["df1h"])
 
                                 if not r and item.get("tf", {}).get("4h"):
                                     r = get_last_resistance(item["tf"]["4h"]["df"])
