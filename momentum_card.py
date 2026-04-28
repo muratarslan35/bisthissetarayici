@@ -9,7 +9,6 @@ HEIGHT = 900
 
 TR = ZoneInfo("Europe/Istanbul")
 
-# COLORS
 BG_TOP = (10,15,25)
 BG_BOTTOM = (5,10,18)
 
@@ -22,14 +21,12 @@ GRAY = (120,130,150)
 GRID = (30,40,60)
 BOX = (15,20,30)
 
-# FONT
 def get_font(size):
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size)
     except:
         return ImageFont.load_default()
 
-# BG
 def draw_bg(img):
     draw = ImageDraw.Draw(img)
     for y in range(HEIGHT):
@@ -38,19 +35,17 @@ def draw_bg(img):
         b = int(BG_TOP[2]*(1-y/HEIGHT) + BG_BOTTOM[2]*(y/HEIGHT))
         draw.line([(0,y),(WIDTH,y)], fill=(r,g,b))
 
-# VALID DF
 def is_valid_df(df):
     try:
         return (
             df is not None
             and isinstance(df, pd.DataFrame)
-            and len(df) > 20
+            and len(df) >= 10
             and all(c in df.columns for c in ["open","high","low","close"])
         )
     except:
         return False
 
-# SCALE
 def safe_scale(df):
     try:
         high = float(df["high"].max())
@@ -64,20 +59,18 @@ def safe_scale(df):
 def py(p, high, low, y, h):
     return y + h - (p - low)/(high-low)*h
 
-# GRID
 def draw_grid(draw,x,y,w,h):
     for i in range(6):
         yy = y + i*(h/5)
         draw.line([x,yy,x+w,yy], fill=GRID, width=1)
 
-# AXIS
 def draw_price_axis(draw, df, x,y,w,h):
     high,low = safe_scale(df)
     step=(high-low)/5
     for i in range(6):
         price = low + i*step
         yy = py(price,high,low,y,h)
-        draw.text((x+w+10,yy-8),f"{price:.2f}",fill=GRAY,font=get_font(13))
+        draw.text((x+w+2,yy-8),f"{price:.2f}",fill=GRAY,font=get_font(12))
 
 def draw_time_axis(draw, df, x,y,w,h):
     try:
@@ -89,7 +82,6 @@ def draw_time_axis(draw, df, x,y,w,h):
     except:
         pass
 
-# CANDLES
 def draw_candles(draw, df, x,y,w,h):
     high, low = safe_scale(df)
     cw = w/len(df)
@@ -108,7 +100,6 @@ def draw_candles(draw, df, x,y,w,h):
 
         draw.rectangle([cx,top,cx+cw*0.7,bot], fill=color)
 
-# EMA
 def draw_ema(draw, df, col, x,y,w,h,color):
     if col not in df.columns:
         return
@@ -122,20 +113,17 @@ def draw_ema(draw, df, col, x,y,w,h,color):
     if len(pts)>1:
         draw.line(pts, fill=color, width=3)
 
-# PRICE LINE
 def draw_price_line(draw, price, df, x,y,w,h):
     high,low = safe_scale(df)
     yy = py(price,high,low,y,h)
 
     draw.line([x,yy,x+w,yy], fill=GREEN, width=2)
-    draw.rectangle([x+w+5,yy-10,x+w+80,yy+10], fill=GREEN)
-    draw.text((x+w+8,yy-8),f"{price:.2f}",fill=(0,0,0),font=get_font(13))
+    draw.rectangle([x+w+2,yy-10,x+w+70,yy+10], fill=GREEN)
+    draw.text((x+w+5,yy-8),f"{price:.2f}",fill=(0,0,0),font=get_font(12))
 
-# FIBO
 def draw_fibo(draw, df, x,y,w,h):
     try:
         high,low = safe_scale(df)
-
         fib_levels = [0.0,0.236,0.382,0.5,0.618,0.786,1.0]
 
         for lvl in fib_levels:
@@ -143,20 +131,18 @@ def draw_fibo(draw, df, x,y,w,h):
             yy = py(price,high,low,y,h)
 
             draw.line([x,yy,x+w,yy], fill=(80,80,120), width=1)
-            draw.text((x-55,yy-7),f"{lvl:.3f}",fill=GRAY,font=get_font(12))
+            draw.text((x-50,yy-7),f"{lvl:.3f}",fill=GRAY,font=get_font(11))
     except:
         pass
 
-# NO DATA
 def draw_no_data(draw, x, y, w, h):
     msg = "Grafik Verisi Alınamadı"
-    font = get_font(28)
+    font = get_font(26)
     bbox = draw.textbbox((0,0), msg, font=font)
     tx = x + (w - (bbox[2]-bbox[0]))/2
     ty = y + (h - (bbox[3]-bbox[1]))/2
     draw.text((tx,ty), msg, fill=RED, font=font)
 
-# LEGEND
 def draw_legend(draw,x,y):
     draw.rectangle([x,y,x+160,y+40], fill=BOX)
     draw.rectangle([x+10,y+10,x+30,y+20], fill=BLUE)
@@ -164,11 +150,18 @@ def draw_legend(draw,x,y):
     draw.rectangle([x+10,y+25,x+30,y+35], fill=YELLOW)
     draw.text((x+35,y+20),"EMA50",fill=WHITE,font=get_font(13))
 
-# PANEL
 def panel(draw,x,y,w,h):
     draw.rectangle([x,y,x+w,y+h], fill=BOX)
 
-# MAIN
+# ✅ YENİ BAR
+def draw_bar(draw, x, y, w, h, value, max_val, color, label):
+    draw.rectangle([x, y, x+w, y+h], outline=(60,80,100), width=1)
+    ratio = min(max(value / max_val, 0), 1)
+    fill_w = int(w * ratio)
+    draw.rectangle([x, y, x+fill_w, y+h], fill=color)
+    draw.text((x, y-15), label, fill=GRAY, font=get_font(12))
+    draw.text((x+w+5, y-3), f"{value:.2f}", fill=WHITE, font=get_font(12))
+
 def build_momentum_card(data):
 
     try:
@@ -180,6 +173,8 @@ def build_momentum_card(data):
         entry = float(data.get("entry",0))
         live = float(data.get("live_price",entry))
         tp1 = float(data.get("tp1",0))
+        support = data.get("support")
+        resistance = data.get("resistance")
 
         draw.text((40,20),symbol,fill=WHITE,font=get_font(42))
         draw.text((420,30),"MOMENTUM ANALİZ",fill=YELLOW,font=get_font(22))
@@ -193,8 +188,7 @@ def build_momentum_card(data):
         df15 = raw_df15.tail(120) if valid15 else None
         df1h = raw_df1h.tail(120) if valid1h else None
 
-        # 15M
-        x,y,w,h = 40,120,900,300
+        x,y,w,h = 50,120,860,300
         draw.rectangle([x,y,x+w,y+h], outline=(60,80,100), width=2)
 
         if valid15:
@@ -211,7 +205,6 @@ def build_momentum_card(data):
 
         draw.text((x,y-20),"15 DK",fill=GREEN,font=get_font(14))
 
-        # 1H
         y2 = 470
         h2 = 250
         draw.rectangle([x,y2,x+w,y2+h2], outline=(60,80,100), width=2)
@@ -231,7 +224,6 @@ def build_momentum_card(data):
 
         draw_legend(draw, x+10, y2+h2+20)
 
-        # PANEL
         px = 960
         panel(draw,px,80,220,720)
 
@@ -244,20 +236,24 @@ def build_momentum_card(data):
         draw.text((px+10,220),"TP1",fill=GRAY,font=get_font(12))
         draw.text((px+10,240),f"{tp1:.2f}",fill=BLUE,font=get_font(18))
 
+        draw.text((px+10,280),"DESTEK",fill=GRAY,font=get_font(12))
+        draw.text((px+10,300),str(support or "-"),fill=GREEN,font=get_font(16))
+
+        draw.text((px+10,330),"DİRENÇ",fill=GRAY,font=get_font(12))
+        draw.text((px+10,350),str(resistance or "-"),fill=RED,font=get_font(16))
+
         m = float(data.get("momentum",0))
         v = float(data.get("vwap",0))
 
-        draw.text((px+10,300),"Momentum",fill=GRAY,font=get_font(12))
-        draw.text((px+10,320),f"%{m:.2f}",fill=GREEN,font=get_font(16))
-
-        draw.text((px+10,360),"VWAP",fill=GRAY,font=get_font(12))
-        draw.text((px+10,380),f"%{v:.2f}",fill=YELLOW,font=get_font(16))
+        # ✅ BARLAR
+        draw_bar(draw, px+10, 400, 180, 12, m, 2.5, GREEN if m>1 else YELLOW, "Momentum")
+        draw_bar(draw, px+10, 440, 180, 12, v, 3.0, RED if v>2 else YELLOW, "VWAP")
 
         trend = data.get("trend","YATAY")
         tcol = GREEN if trend=="YUKARI" else RED
 
-        draw.text((px+10,440),"TREND",fill=GRAY,font=get_font(12))
-        draw.text((px+10,460),trend,fill=tcol,font=get_font(18))
+        draw.text((px+10,500),"TREND",fill=GRAY,font=get_font(12))
+        draw.text((px+10,520),trend,fill=tcol,font=get_font(18))
 
         decision="RİSKLİ"
         col=RED
@@ -268,8 +264,8 @@ def build_momentum_card(data):
             decision="TREND BAŞLIYOR"
             col=YELLOW
 
-        draw.text((px+10,520),"KARAR",fill=GRAY,font=get_font(12))
-        draw.text((px+10,540),decision,fill=col,font=get_font(20))
+        draw.text((px+10,580),"KARAR",fill=GRAY,font=get_font(12))
+        draw.text((px+10,600),decision,fill=col,font=get_font(20))
 
         now = datetime.now(TR)
         draw.text((40,860),now.strftime("%d.%m.%Y %H:%M"),fill=GRAY,font=get_font(14))
