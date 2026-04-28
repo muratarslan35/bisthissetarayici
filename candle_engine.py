@@ -121,7 +121,7 @@ def get_15m_df(symbol, live_price=None):
     return _fetch_df(
         symbol=symbol,
         interval="15m",
-        period="1d",
+        period="5d",
         live_price=live_price,
         cache_key=f"{symbol}_15m"
     )
@@ -135,7 +135,7 @@ def get_1h_df(symbol, live_price=None):
     return _fetch_df(
         symbol=symbol,
         interval="60m",
-        period="5d",   # 🔥 kritik (1d yetmez!)
+        period="10d",   # 🔥 kritik (1d yetmez!)
         live_price=live_price,
         cache_key=f"{symbol}_1h"
     )
